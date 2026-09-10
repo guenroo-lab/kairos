@@ -86,7 +86,7 @@ del operario; se diferencian en los campos de la cabecera y en qué pasa al cerr
 | Campo | Pedido cliente | Cesión | Refill |
 |---|---|---|---|
 | Nº de pedido (PC) | **obligatorio** | — | — |
-| Artículos: LM + cantidad | unidades | unidades | **nº de palets completos** |
+| Artículos: LM + cantidad | unidades (`ud`) | unidades (`ud`) | **nº de palets completos** (`palet`) |
 | Transporte sí/no | **obligatorio** | — | — |
 | Tienda destino | — | **obligatorio** (Marbella / Málaga / Mijas) | — |
 | Para qué es la petición | — | — | **obligatorio** |
@@ -119,21 +119,23 @@ Campos que la tienda **no** rellena (los pone el sistema):
 
 ### Usuarios de tienda
 
-- **Registro** (primera vez): LDAP + contraseña + tienda a la que pertenece.
+- **Identificador = número de empleado** (LDAP de Adeo, numérico, p. ej. `30092131`).
+- **Registro** (primera vez): número de empleado + contraseña + tienda.
 - **Aprobación**: cada registro nuevo queda **pendiente** hasta que el
-  administrador (guenroo) lo aprueba. Un LDAP no aprobado no puede crear peticiones.
-- **Login**: LDAP + contraseña.
-- El LDAP **no se valida** contra Adeo (su directorio está en la red privada
-  bloqueada, igual que myISO). Se guarda tal cual lo escribe la persona en el
-  registro.
-- El campo "quién solicita" de cada petición se rellena solo con el LDAP del
-  usuario logueado. No es editable.
+  administrador (guenroo) lo aprueba. Un usuario no aprobado no puede crear
+  peticiones.
+- **Login**: número de empleado + contraseña.
+- El número de empleado **no se valida** contra Adeo (su directorio está en la red
+  privada bloqueada, igual que myISO). Solo se valida el formato (numérico). Se
+  guarda tal cual lo escribe la persona.
+- El campo "quién solicita" de cada petición se rellena solo con el número de
+  empleado del usuario logueado. No es editable.
 
-**Implementación propuesta:** Supabase Auth con email sintético
-(`<ldap>@kairos.taisa` por debajo, invisible para el usuario, que solo ve y teclea
-su LDAP). Aporta gestión de sesión, hash de contraseña y JWT probados, e integra
-con Row Level Security. El estado `aprobado` vive en la fila de perfil
-(`usuarios_tienda`) y las políticas RLS lo comprueban.
+**Auth:** Supabase Auth con email sintético (`<numempleado>@kairos.taisa` por
+debajo, invisible para el usuario, que solo ve y teclea su número). Aporta gestión
+de sesión, hash de contraseña y JWT probados, e integra con Row Level Security. El
+estado `aprobado` vive en la fila de perfil (`usuarios_tienda`) y las políticas RLS
+lo comprueban.
 
 ### Operarios (lado Taisa)
 
@@ -200,7 +202,8 @@ en `pedido_cliente`, `tienda_destino` solo en `cesion`, `motivo` solo en `refill
 | `id` | uuid PK DEFAULT gen_random_uuid() | |
 | `peticion_id` | uuid NOT NULL FK → `peticiones.id` ON DELETE CASCADE | |
 | `codigo_lm` | text NOT NULL | lo teclea la tienda |
-| `cantidad` | numeric NOT NULL | unidades (pedido/cesión) o nº de palets (refill) |
+| `cantidad` | numeric NOT NULL | cuánto se pide |
+| `unidad_medida` | text NOT NULL | `ud` (pedido cliente, cesión) o `palet` (refill) |
 | `ean` | text | copiado del catálogo al crear (snapshot) |
 | `designacion` | text | snapshot |
 | `seccion` | text | snapshot |
@@ -219,8 +222,9 @@ en `pedido_cliente`, `tienda_destino` solo en `cesion`, `motivo` solo en `refill
 |---|---|---|
 | `codigo_lm` | text PK | |
 | `ean` | text | |
-| `designacion` | text | |
-| `seccion` | text | |
+| `designacion` | text | `Product name` del Excel |
+| `seccion` | text | `Department` del Excel (p. ej. `09 - JARDIN`) |
+| `foto_url` | text | `Product picture` del Excel — para mostrarla en el portal al buscar el LM |
 | `actualizado_en` | timestamptz | |
 
 Arregla que hoy Marbella y Mijas tengan cada una su propia hoja "Segmentación"
@@ -238,26 +242,47 @@ independiente.
 
 ## 7. Datos maestros
 
-### Inventario (SSCC / ubicación / stock / sección)
+### Inventario (Excel `014.xlsx` / `279.xlsx` en Drive)
 
-Se queda como está: los Excel `014.xlsx` / `279.xlsx` en la carpeta de Drive
-`InventarioSIE`, alimentados por el robot de Power BI existente. El backend de
-Kairos los lee igual que el sistema actual (Excel → hoja temporal vía Drive API v3
-→ caché troceada por tienda).
+Se queda como está: en la carpeta de Drive `InventarioSIE`
+(`10A5-v9FmN2MasXjbG3hvWdQeIYfPZGIg`), alimentados por el robot de Power BI
+existente (`014.xlsx` = stock de Marbella, `279.xlsx` = stock de Mijas). El backend
+de Kairos los lee igual que el sistema actual (Excel → hoja temporal vía Drive API
+v3 → caché troceada por tienda).
 
-**Confirmado por el usuario:** ese mismo Excel contiene la **sección** de cada
-artículo, además de dirección, SSCC, LM y stock.
+**Columnas reales del Excel** (verificado 2026-09-10 leyendo `014.xlsx`):
+
+| # | Columna | Uso en Kairos |
+|---|---|---|
+| 1 (A) | Export Address | dirección / ubicación del palet |
+| 2 (B) | Bloqueado | (no se usa) |
+| 3 (C) | Latest stocktake | (no se usa) |
+| 4 (D) | SSCC | SSCC del palet |
+| 5 (E) | Product Code | código LM |
+| 6 (F) | EAN code | EAN → catálogo |
+| 7 (G) | Product picture | URL de foto (posible uso futuro en el portal) |
+| 8 (H) | Product name | designación → catálogo |
+| 9 (I) | Department | sección (p. ej. `09 - JARDIN`, `12 - DECORACION`) → catálogo |
+| 10 (J) | Type | familia (p. ej. `RIELES`) — no se usa de momento |
+| 11–13 | AVS / Sale Price / Customer orders | (no se usan) |
+| 14 (N) | Qty | stock del palet |
+
+Una fila = un palet (SSCC) con su artículo, ubicación y stock. Solo aparecen LM con
+stock actual en ese almacén.
 
 ### Catálogo LM → EAN / designación / sección
 
-La tabla `preparacion.catalogo` se **deriva del Excel de inventario**:
+La tabla `preparacion.catalogo` se **deriva 100 % del Excel de inventario**. EAN,
+designación (`Product name`) y sección (`Department`) son atributos del producto,
+iguales en las dos tiendas; se toman de cualquiera de los dos Excel, con `codigo_lm`
+como clave. El stock y el SSCC siguen leyéndose en vivo de cada Excel por separado.
 
-- La **sección** sale del Excel (confirmado).
-- **A confirmar en implementación:** si el Excel trae también EAN y designación. Si
-  no, esos dos se cruzan con las hojas "Segmentación" actuales en la carga inicial.
+**La hoja "Segmentación" del sistema actual ya no hace falta** — el Excel de
+inventario la cubre entera.
 
-Si la tienda pide un LM que no está en el catálogo: la línea entra igual y el
-operario la cierra como incidencia "Sin Mercancía" (comportamiento actual).
+Si la tienda pide un LM que no está en ningún Excel (producto sin stock): la línea
+entra igual, sin catálogo, y el operario la cierra como incidencia "Sin Mercancía"
+(comportamiento actual). Si no hay stock, Taisa no puede prepararlo de todas formas.
 
 ---
 
@@ -315,19 +340,16 @@ para pedidos sin transporte, "todas las líneas preparadas" ya es `cerrada`.
 
 ---
 
-## 10. A confirmar durante la implementación
+## 10. Puntos cerrados con el usuario (2026-09-10)
 
-1. Columnas exactas del Excel de inventario: posición de la sección, y si trae EAN
-   y designación o hay que cruzar con "Segmentación".
-2. Supabase Auth con email sintético vs. tabla propia con hash: se propone email
-   sintético; validar que encaja con el flujo de aprobación y RLS.
-3. Formato real del LDAP (nº de empleado tipo `30092131`, `nombre.apellido`, o
-   ambos) — afecta solo a la validación de forma en el registro, no al modelo.
-4. Si `cantidad` para refill se guarda como "nº de palets" en la misma columna o
-   conviene una columna `unidad_medida` (`ud` / `palet`).
-5. "Preparado en silueta": ¿basta con el estado `cerrada`, o el sistema tiene que
-   registrar explícitamente que el material está físicamente en la silueta de
-   expedición (un paso/confirmación aparte del operario)?
+1. **Columnas del Excel de inventario** — verificadas leyendo `014.xlsx`. Trae EAN,
+   designación y sección. El catálogo se deriva 100 % del Excel; la hoja
+   "Segmentación" se retira. Ver §7.
+2. **Auth** — Supabase Auth con email sintético. Ver §5.
+3. **Identificador de usuario de tienda** — número de empleado (numérico). Ver §5.
+4. **Refill** — columna `unidad_medida` (`ud` / `palet`) aparte de `cantidad`. Ver §6.
+5. **"Preparado en silueta"** — basta el estado `cerrada`. No hay paso ni
+   confirmación de silueta aparte.
 
 ---
 
