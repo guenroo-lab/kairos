@@ -361,3 +361,24 @@ para pedidos sin transporte, "todas las líneas preparadas" ya es `cerrada`.
 - Seguimiento post-silueta (batea, camión, entrega) → sigue en HODOS.
 - El robot que alimenta los Excel de inventario → sigue como está.
 - SSO real contra Adeo → imposible (red privada bloqueada).
+
+---
+
+## Estado de implementación
+
+**2026-09-10 — base de datos hecha y verificada** (plan
+`docs/superpowers/plans/2026-09-10-kairos-fundacion.md`, rama `pieza-1-fundacion`):
+
+- Esquema `preparacion` en el proyecto Supabase de HODOS: 6 tablas, 8 políticas RLS,
+  función/triggers de estado. Migraciones 001–010.
+- Esquema expuesto en PostgREST (migración 010, por SQL).
+- `tiendas` (014/279/036) y `operarios` (los 4 actuales) sembrados.
+- Test de aislamiento RLS entre tiendas: verde.
+- HODOS (`public.*`) sin cambios (`cargas`/`contenido`/`etiquetas` intactas).
+- `usuarios_tienda`, `peticiones`, `lineas` vacías (las llenan las piezas 2 y 3).
+
+**Pendiente para cerrar la pieza 1:** cargar `preparacion.catalogo` desde los Excel
+de inventario. El proyecto Apps Script `kairos-sync`
+(`1PzUT_19ASC5qvFjjnhl2jmqTtvunzmaAaxJ3MM32drb94fY779TFLKJ0`) ya tiene el código
+subido; falta meter la `SUPABASE_SERVICE_KEY` en Propiedades del script y ejecutar
+`cargarCatalogo` + `instalarTriggerCatalogo` desde el editor.

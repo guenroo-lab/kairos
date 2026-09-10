@@ -14,7 +14,7 @@ un pedido de cliente.
 
 | # | Pieza | Estado |
 |---|---|---|
-| 1 | Fundación — modelo de datos y almacenamiento | spec aprobada en brainstorming |
+| 1 | Fundación — modelo de datos y almacenamiento | base de datos hecha y verificada; falta cargar el catálogo (ver `docs/superpowers/plans/2026-09-10-kairos-fundacion.md`, Tasks 13–15) |
 | 2 | Portal de tienda — crear peticiones + ver estado | pendiente |
 | 3 | App de operario — sobre el modelo nuevo + refill | pendiente |
 | 4 | Puentes — HODOS, myISO Gestión de Stock | pendiente |
