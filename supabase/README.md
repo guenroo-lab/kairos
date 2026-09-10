@@ -34,7 +34,8 @@ a añadir `preparacion`** o la API dejará de ver el esquema.
 
 ## Proyecto `kairos-sync` (Apps Script)
 
-scriptId: _(se anota al crearlo con `clasp create`)_
+scriptId: `1PzUT_19ASC5qvFjjnhl2jmqTtvunzmaAaxJ3MM32drb94fY779TFLKJ0`
+(editor: https://script.google.com/d/1PzUT_19ASC5qvFjjnhl2jmqTtvunzmaAaxJ3MM32drb94fY779TFLKJ0/edit )
 
 Carga `preparacion.catalogo` desde los Excel de inventario de Drive
 (`014.xlsx` / `279.xlsx`, carpeta `10A5-v9FmN2MasXjbG3hvWdQeIYfPZGIg`).
