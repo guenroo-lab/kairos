@@ -189,8 +189,9 @@ de trazabilidad, no de seguridad.
 | `tienda_destino` | text FK → `tiendas.codigo` | obligatorio si `tipo = cesion` |
 | `motivo` | text | obligatorio si `tipo = refill` |
 | `comentario` | text | opcional |
+| `ubicacion_consolidacion` | text | solo pedido cliente con transporte: dónde deja el operario el pedido preparado a la espera de consolidación (paso "A UBICAR"). `null` hasta ese paso. No es una dirección de cliente. |
 | `estado` | text NOT NULL DEFAULT `pendiente` | cache del estado derivado (ver §8) |
-| `cerrada_en` | timestamptz | cuando todas las líneas quedan preparadas |
+| `cerrada_en` | timestamptz | cuando la petición llega a `cerrada` |
 
 Constraint de integridad por tipo (CHECK): que `num_pedido`/`transporte` solo estén
 en `pedido_cliente`, `tienda_destino` solo en `cesion`, `motivo` solo en `refill`.
@@ -304,9 +305,10 @@ Se reutiliza la lógica de derivación del sistema actual, pero el resultado se
 - `pendiente` → ninguna línea en curso ni preparada.
 - `en_preparacion` → alguna línea en curso o preparada, pero no todas.
 - `a_ubicar` → **solo pedidos con transporte**: todas las líneas preparadas pero
-  falta que el operario ponga la ubicación (equivalente al "A UBICAR" de hoy).
-- `cerrada` → proceso terminado para Taisa. Sin transporte: todas las líneas
-  preparadas. Con transporte: todas preparadas **y** ubicación puesta.
+  `ubicacion_consolidacion` aún vacía (equivalente al "A UBICAR" de hoy).
+- `cerrada` → proceso terminado para Taisa. Sin transporte / cesión / refill: todas
+  las líneas preparadas. Con transporte: todas preparadas **y**
+  `ubicacion_consolidacion` puesta.
 
 El recálculo se hace en el servidor al cerrar/reabrir una línea o al guardar la
 ubicación, dentro de la misma transacción. No hay un estado `preparado` separado:
