@@ -21,6 +21,17 @@ Verificación posterior con `execute_sql` (mismo `project_id`).
   `create or replace`).
 - Numeración correlativa `NNN_nombre.sql`.
 
+## Exposición del esquema en la API (PostgREST)
+
+La migración `010_expose_preparacion_postgrest.sql` hace
+`alter role authenticator set pgrst.db_schemas = 'public, graphql_public, preparacion'`
++ `notify pgrst`. Eso es lo que hace por debajo el panel **Project Settings → API →
+Exposed schemas**.
+
+⚠️ El campo del panel puede mostrarse desactualizado (`public, graphql_public`), pero
+el ajuste del rol es el que manda. **Si editas "Exposed schemas" en el panel, vuelve
+a añadir `preparacion`** o la API dejará de ver el esquema.
+
 ## Proyecto `kairos-sync` (Apps Script)
 
 scriptId: _(se anota al crearlo con `clasp create`)_
