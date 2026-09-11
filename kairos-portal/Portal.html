@@ -324,3 +324,49 @@
     };
   }
 </script>
+<script>
+  function renderDetalle(id) {
+    app().innerHTML = '';
+    const c = el(
+      '<div class="wrap"><div class="card" id="detalle">' +
+        '<button class="btn btn-ghost" id="btnVolver">‹ Volver</button>' +
+        '<p style="color:var(--muted)">Cargando…</p>' +
+      '</div></div>'
+    );
+    app().appendChild(c);
+    c.querySelector('#btnVolver').onclick = renderCola;
+
+    gas('obtenerDetallePeticion', LDAP, id).then(function (r) {
+      const p = r.peticion;
+      var camposTipo = '';
+      if (p.tipo === 'pedido_cliente') {
+        camposTipo = '<div><b>Nº pedido</b> ' + escHtml(p.num_pedido) + '</div>' +
+          '<div><b>Transporte</b> ' + (p.transporte ? 'Sí (consolida en plataforma)' : 'No') + '</div>';
+      } else if (p.tipo === 'cesion') {
+        camposTipo = '<div><b>Destino</b> ' + escHtml(ETIQUETA_TIPO[p.tienda_destino] || p.tienda_destino) + '</div>';
+      } else {
+        camposTipo = '<div><b>Motivo</b> ' + escHtml(p.motivo) + '</div>';
+      }
+      const filasLineas = r.lineas.map(function (l) {
+        return '<div class="linea-chip"><span>' + escHtml(l.codigo_lm) + ' · ' + escHtml(l.designacion || '—') +
+          ' · ' + l.cantidad + ' ' + escHtml(l.unidad_medida) + '</span>' +
+          '<span class="estado">' + escHtml(l.estado_preparacion) + '</span></div>';
+      }).join('');
+      const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>HODOS</b> ' + escHtml(r.hodosTexto) + '</div>' : '';
+
+      const cont = app().querySelector('#detalle');
+      cont.innerHTML =
+        '<button class="btn btn-ghost" id="btnVolver2">‹ Volver</button>' +
+        '<h2>' + escHtml(ETIQUETA_TIPO[p.tipo]) + '</h2>' +
+        '<span class="estado">' + escHtml(p.estadoTexto) + '</span>' +
+        '<div style="margin-top:8px;">' + camposTipo + '</div>' +
+        hodosLinea +
+        (p.comentario ? '<div style="margin-top:8px;"><b>Comentario</b> ' + escHtml(p.comentario) + '</div>' : '') +
+        '<hr style="border-color:var(--line);margin:12px 0;">' +
+        filasLineas;
+      cont.querySelector('#btnVolver2').onclick = renderCola;
+    }).catch(function (e) {
+      app().querySelector('#detalle').innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
+    });
+  }
+</script>
