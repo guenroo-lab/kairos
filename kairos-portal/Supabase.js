@@ -8,7 +8,8 @@ function _supaKey_() {
 }
 
 function _supaHeaders_(metodo, schema) {
-  const h = { apikey: _supaKey_(), Authorization: 'Bearer ' + _supaKey_() };
+  const key = _supaKey_();
+  const h = { apikey: key, Authorization: 'Bearer ' + key };
   if (metodo === 'GET') {
     h['Accept-Profile'] = schema;
   } else {
@@ -22,7 +23,7 @@ function _supaFetch_(metodo, tabla, queryString, payload, schema) {
   schema = schema || CFG.SCHEMA_PREP;
   var url = CFG.SUPABASE_URL + '/rest/v1/' + tabla;
   if (queryString) url += '?' + queryString;
-  const headers = _supaHeaders_(metodo === 'GET' ? 'GET' : metodo, schema);
+  const headers = _supaHeaders_(metodo, schema);
   if (payload !== undefined) headers['Prefer'] = 'return=representation';
   const opciones = { method: metodo.toLowerCase(), headers: headers, muteHttpExceptions: true };
   if (payload !== undefined) opciones.payload = JSON.stringify(payload);
@@ -38,7 +39,9 @@ function supaSelect_(tabla, queryString, schema) {
   return _supaFetch_('GET', tabla, queryString, undefined, schema);
 }
 function supaInsert_(tabla, fila, schema) {
-  return _supaFetch_('POST', tabla, '', fila, schema)[0];
+  const filas = _supaFetch_('POST', tabla, '', fila, schema);
+  if (!filas || !filas.length) throw new Error('Supabase insert en "' + tabla + '" no devolvió ninguna fila.');
+  return filas[0];
 }
 function supaInsertMany_(tabla, filas, schema) {
   return _supaFetch_('POST', tabla, '', filas, schema);
