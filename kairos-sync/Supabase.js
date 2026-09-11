@@ -1,0 +1,51 @@
+/** Cliente mínimo de la API REST de Supabase (PostgREST) para el esquema preparacion. */
+
+function _supaKey_() {
+  const k = PropertiesService.getScriptProperties().getProperty('SUPABASE_SERVICE_KEY');
+  if (!k) throw new Error('Falta SUPABASE_SERVICE_KEY en Propiedades del script.');
+  return k;
+}
+
+function _supaHeaders_(metodo) {
+  const h = {
+    apikey: _supaKey_(),
+    Authorization: 'Bearer ' + _supaKey_(),
+  };
+  if (metodo === 'GET') {
+    h['Accept-Profile'] = CFG.SUPABASE_SCHEMA;
+  } else {
+    h['Content-Profile'] = CFG.SUPABASE_SCHEMA;
+    h['Content-Type'] = 'application/json';
+  }
+  return h;
+}
+
+/** upsert de un array de objetos en `tabla`, resolviendo conflictos por `onConflict`. */
+function supaUpsert_(tabla, filas, onConflict) {
+  if (!filas.length) return;
+  const url = CFG.SUPABASE_URL + '/rest/v1/' + tabla + '?on_conflict=' + encodeURIComponent(onConflict);
+  const headers = _supaHeaders_('POST');
+  headers['Prefer'] = 'resolution=merge-duplicates,return=minimal';
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: headers,
+    payload: JSON.stringify(filas),
+    muteHttpExceptions: true,
+  });
+  const code = resp.getResponseCode();
+  if (code >= 300) throw new Error('Supabase upsert ' + code + ': ' + resp.getContentText());
+}
+
+/** Ejecutar a mano desde el editor tras escribir el helper. */
+function test_supaPing() {
+  const resp = UrlFetchApp.fetch(CFG.SUPABASE_URL + '/rest/v1/tiendas?select=codigo', {
+    method: 'get',
+    headers: _supaHeaders_('GET'),
+    muteHttpExceptions: true,
+  });
+  Logger.log(resp.getResponseCode() + ' ' + resp.getContentText());
+  if (resp.getResponseCode() !== 200) throw new Error('Ping falló');
+  const filas = JSON.parse(resp.getContentText());
+  if (filas.length !== 3) throw new Error('Esperaba 3 tiendas, hay ' + filas.length);
+  Logger.log('OK: ' + filas.map(function (f) { return f.codigo; }).join(', '));
+}
