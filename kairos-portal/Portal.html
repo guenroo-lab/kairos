@@ -62,5 +62,82 @@
     renderCola();
   }
 
-  render();
+  document.addEventListener('DOMContentLoaded', render);
+</script>
+<script>
+  function renderEntrar() {
+    const c = el(
+      '<div class="wrap"><div class="card">' +
+        '<h2>Kairos</h2>' +
+        '<p style="color:var(--muted)">Escribe tu número de empleado para entrar.</p>' +
+        '<input class="entrada" id="inLdap" placeholder="Número de empleado" inputmode="numeric">' +
+        '<div class="error" id="errEntrar" style="display:none;"></div>' +
+        '<button class="btn btn-primary" id="btnEntrar">Entrar</button>' +
+      '</div></div>'
+    );
+    app().appendChild(c);
+    const input = c.querySelector('#inLdap');
+    const err = c.querySelector('#errEntrar');
+    const boton = c.querySelector('#btnEntrar');
+    function intentar() {
+      const ldap = input.value.trim();
+      err.style.display = 'none';
+      boton.disabled = true; boton.textContent = 'Comprobando…';
+      gas('entrar', ldap).then(function (r) {
+        if (r.estado === 'no_existe') { renderAlta(ldap); return; }
+        if (r.estado === 'pendiente') { renderPendiente(); return; }
+        LDAP = r.ldap; TIENDA = r.tienda; TIENDA_NOMBRE = r.tiendaNombre;
+        localStorage.setItem('kairos_ldap', LDAP);
+        localStorage.setItem('kairos_tienda', TIENDA);
+        localStorage.setItem('kairos_tienda_nombre', TIENDA_NOMBRE);
+        renderCola();
+      }).catch(function (e) {
+        err.textContent = e.message; err.style.display = 'block';
+        boton.disabled = false; boton.textContent = 'Entrar';
+      });
+    }
+    boton.onclick = intentar;
+    input.onkeydown = function (e) { if (e.key === 'Enter') intentar(); };
+  }
+
+  function renderAlta(ldap) {
+    app().innerHTML = '';
+    const c = el(
+      '<div class="wrap"><div class="card">' +
+        '<h2>Primera vez</h2>' +
+        '<p style="color:var(--muted)">No encontramos el número ' + escHtml(ldap) + '. Regístrate:</p>' +
+        '<select class="entrada" id="selTienda">' +
+          '<option value="014">Marbella</option>' +
+          '<option value="279">Mijas</option>' +
+        '</select>' +
+        '<div class="error" id="errAlta" style="display:none;"></div>' +
+        '<button class="btn btn-primary" id="btnAlta">Solicitar acceso</button>' +
+        '<button class="btn btn-ghost" id="btnVolver">‹ Volver</button>' +
+      '</div></div>'
+    );
+    app().appendChild(c);
+    c.querySelector('#btnVolver').onclick = renderEntrar;
+    c.querySelector('#btnAlta').onclick = function () {
+      const err = c.querySelector('#errAlta');
+      const tienda = c.querySelector('#selTienda').value;
+      gas('registrarUsuario', ldap, tienda).then(function () {
+        renderPendiente();
+      }).catch(function (e) {
+        err.textContent = e.message; err.style.display = 'block';
+      });
+    };
+  }
+
+  function renderPendiente() {
+    app().innerHTML = '';
+    const c = el(
+      '<div class="wrap"><div class="card">' +
+        '<h2>Pendiente de aprobación</h2>' +
+        '<p style="color:var(--muted)">Ya está registrado. En cuanto se apruebe podrás entrar.</p>' +
+        '<button class="btn btn-primary" id="btnComprobar">Comprobar de nuevo</button>' +
+      '</div></div>'
+    );
+    app().appendChild(c);
+    c.querySelector('#btnComprobar').onclick = renderEntrar;
+  }
 </script>
