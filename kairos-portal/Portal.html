@@ -141,3 +141,186 @@
     c.querySelector('#btnComprobar').onclick = renderEntrar;
   }
 </script>
+<script>
+  const ETIQUETA_TIPO = { pedido_cliente: 'Pedido cliente', cesion: 'Cesión', refill: 'Refill' };
+
+  function renderCola() {
+    app().innerHTML = '';
+    const top = el(
+      '<div class="top">' +
+        '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--muted)">· ' + escHtml(LDAP) + '</span></div>' +
+        '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
+      '</div>'
+    );
+    app().appendChild(top);
+    top.querySelector('#btnSalir').onclick = salir;
+
+    const wrap = el('<div class="wrap"></div>');
+    app().appendChild(wrap);
+    wrap.appendChild(el('<button class="btn btn-primary" id="btnNueva">+ Nueva petición</button>'));
+    const lista = el('<div class="card" id="lista"><p style="color:var(--muted)">Cargando…</p></div>');
+    wrap.appendChild(lista);
+    wrap.querySelector('#btnNueva').onclick = renderNueva;
+
+    gas('listarMisPeticiones', LDAP).then(function (filas) {
+      lista.innerHTML = '';
+      if (!filas.length) { lista.appendChild(el('<p style="color:var(--muted)">No hay peticiones todavía.</p>')); return; }
+      filas.forEach(function (p) {
+        const fila = el(
+          '<div class="fila">' +
+            '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
+              (p.num_pedido ? ' · ' + escHtml(p.num_pedido) : '') +
+              '<div style="color:var(--muted);font-size:12px;">' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
+            '</div>' +
+            '<span class="estado">' + escHtml(p.estadoTexto) + '</span>' +
+          '</div>'
+        );
+        fila.onclick = function () { renderDetalle(p.id); };
+        lista.appendChild(fila);
+      });
+    }).catch(function (e) {
+      lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
+    });
+  }
+</script>
+<script>
+  function renderNueva() {
+    app().innerHTML = '';
+    const c = el(
+      '<div class="wrap"><div class="card">' +
+        '<button class="btn btn-ghost" id="btnVolver">‹ Volver</button>' +
+        '<h2>Nueva petición</h2>' +
+        '<button class="btn btn-primary" id="btnPC">Pedido cliente</button>' +
+        '<button class="btn btn-primary" id="btnCesion">Cesión</button>' +
+        '<button class="btn btn-primary" id="btnRefill">Refill</button>' +
+      '</div></div>'
+    );
+    app().appendChild(c);
+    c.querySelector('#btnVolver').onclick = renderCola;
+    c.querySelector('#btnPC').onclick = function () { renderFormulario('pedido_cliente'); };
+    c.querySelector('#btnCesion').onclick = function () { renderFormulario('cesion'); };
+    c.querySelector('#btnRefill').onclick = function () { renderFormulario('refill'); };
+  }
+
+  function renderFormulario(tipo) {
+    app().innerHTML = '';
+    var camposTipo = '';
+    if (tipo === 'pedido_cliente') {
+      camposTipo =
+        '<input class="entrada" id="inNumPedido" placeholder="Nº de pedido">' +
+        '<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
+          '<input type="checkbox" id="inTransporte"> Con transporte (se consolida en plataforma)' +
+        '</label>';
+    } else if (tipo === 'cesion') {
+      camposTipo =
+        '<select class="entrada" id="inDestino">' +
+          '<option value="014">Marbella</option>' +
+          '<option value="279">Mijas</option>' +
+          '<option value="036">Málaga</option>' +
+        '</select>';
+    } else {
+      camposTipo = '<input class="entrada" id="inMotivo" placeholder="Motivo del refill">';
+    }
+
+    const unidadLabel = tipo === 'refill' ? 'nº de palets' : 'unidades';
+    const c = el(
+      '<div class="wrap"><div class="card">' +
+        '<button class="btn btn-ghost" id="btnVolver">‹ Volver</button>' +
+        '<h2>' + escHtml(ETIQUETA_TIPO[tipo]) + '</h2>' +
+        camposTipo +
+        '<hr style="border-color:var(--line);margin:12px 0;">' +
+        '<b>Artículos</b>' +
+        '<input class="entrada" id="inBuscar" placeholder="Código LM o nombre del artículo" autocomplete="off">' +
+        '<div id="resultadosBusqueda"></div>' +
+        '<div id="lineasAnadidas"></div>' +
+        '<input class="entrada" id="inComentario" placeholder="Comentario (opcional)">' +
+        '<div class="error" id="errForm" style="display:none;"></div>' +
+        '<button class="btn btn-primary" id="btnEnviar">Enviar petición</button>' +
+      '</div></div>'
+    );
+    app().appendChild(c);
+    c.querySelector('#btnVolver').onclick = renderCola;
+
+    var lineas = []; // { codigoLm, designacion, ean, seccion, cantidad }
+    var articuloElegido = null;
+
+    function pintarLineas() {
+      const cont = c.querySelector('#lineasAnadidas');
+      cont.innerHTML = '';
+      lineas.forEach(function (l, idx) {
+        const chip = el(
+          '<div class="linea-chip"><span>' + escHtml(l.codigoLm) + ' · ' + escHtml(l.designacion || '—') +
+            ' · ' + l.cantidad + ' ' + unidadLabel + '</span>' +
+            '<button class="btn-ghost" style="width:auto;padding:2px 8px;" data-idx="' + idx + '">Quitar</button></div>'
+        );
+        chip.querySelector('button').onclick = function () { lineas.splice(idx, 1); pintarLineas(); };
+        cont.appendChild(chip);
+      });
+    }
+
+    const inputBuscar = c.querySelector('#inBuscar');
+    const resultados = c.querySelector('#resultadosBusqueda');
+    var timerBuscar = null;
+    inputBuscar.oninput = function () {
+      articuloElegido = null;
+      clearTimeout(timerBuscar);
+      const texto = inputBuscar.value;
+      timerBuscar = setTimeout(function () {
+        if (texto.trim().length < 2) { resultados.innerHTML = ''; return; }
+        gas('buscarArticulos', texto).then(function (filas) {
+          resultados.innerHTML = '';
+          filas.forEach(function (a) {
+            const fila = el(
+              '<div class="articulo">' +
+                (a.foto_url ? '<img src="' + escHtml(a.foto_url) + '">' : '') +
+                '<div><div><b>' + escHtml(a.codigo_lm) + '</b> · ' + escHtml(a.designacion || '') + '</div>' +
+                '<div style="color:var(--muted);font-size:12px;">' + escHtml(a.seccion || '') + '</div></div>' +
+              '</div>'
+            );
+            fila.onclick = function () {
+              articuloElegido = a;
+              inputBuscar.value = a.codigo_lm + ' · ' + (a.designacion || '');
+              resultados.innerHTML = '';
+              pedirCantidad();
+            };
+            resultados.appendChild(fila);
+          });
+        });
+      }, 300);
+    };
+
+    function pedirCantidad() {
+      const cantidadTexto = prompt('¿Cuántas ' + unidadLabel + ' de ' + articuloElegido.codigo_lm + '?');
+      const cantidad = Number(cantidadTexto);
+      if (!cantidad || cantidad <= 0) return;
+      lineas.push({
+        codigoLm: articuloElegido.codigo_lm, designacion: articuloElegido.designacion,
+        ean: articuloElegido.ean, seccion: articuloElegido.seccion, cantidad: cantidad,
+      });
+      inputBuscar.value = ''; articuloElegido = null;
+      pintarLineas();
+    }
+
+    c.querySelector('#btnEnviar').onclick = function () {
+      const err = c.querySelector('#errForm');
+      err.style.display = 'none';
+      if (!lineas.length) { err.textContent = 'Añade al menos un artículo.'; err.style.display = 'block'; return; }
+      var datos = { comentario: c.querySelector('#inComentario').value.trim() || null };
+      if (tipo === 'pedido_cliente') {
+        datos.numPedido = c.querySelector('#inNumPedido').value.trim();
+        datos.transporte = c.querySelector('#inTransporte').checked;
+        if (!datos.numPedido) { err.textContent = 'Falta el número de pedido.'; err.style.display = 'block'; return; }
+      } else if (tipo === 'cesion') {
+        datos.tiendaDestino = c.querySelector('#inDestino').value;
+      } else {
+        datos.motivo = c.querySelector('#inMotivo').value.trim();
+        if (!datos.motivo) { err.textContent = 'Falta el motivo.'; err.style.display = 'block'; return; }
+      }
+      gas('crearPeticion', LDAP, tipo, datos, lineas).then(function () {
+        renderCola();
+      }).catch(function (e) {
+        err.textContent = e.message; err.style.display = 'block';
+      });
+    };
+  }
+</script>
