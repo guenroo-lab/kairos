@@ -143,6 +143,7 @@
 </script>
 <script>
   const ETIQUETA_TIPO = { pedido_cliente: 'Pedido cliente', cesion: 'Cesión', refill: 'Refill' };
+  const NOMBRE_TIENDA = { '014': 'Marbella', '279': 'Mijas', '036': 'Málaga' };
 
   function renderCola() {
     app().innerHTML = '';
@@ -343,7 +344,7 @@
         camposTipo = '<div><b>Nº pedido</b> ' + escHtml(p.num_pedido) + '</div>' +
           '<div><b>Transporte</b> ' + (p.transporte ? 'Sí (consolida en plataforma)' : 'No') + '</div>';
       } else if (p.tipo === 'cesion') {
-        camposTipo = '<div><b>Destino</b> ' + escHtml(ETIQUETA_TIPO[p.tienda_destino] || p.tienda_destino) + '</div>';
+        camposTipo = '<div><b>Destino</b> ' + escHtml(NOMBRE_TIENDA[p.tienda_destino] || p.tienda_destino) + '</div>';
       } else {
         camposTipo = '<div><b>Motivo</b> ' + escHtml(p.motivo) + '</div>';
       }

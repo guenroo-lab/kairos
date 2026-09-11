@@ -40,3 +40,13 @@ scriptId: `1PzUT_19ASC5qvFjjnhl2jmqTtvunzmaAaxJ3MM32drb94fY779TFLKJ0`
 Carga `preparacion.catalogo` desde los Excel de inventario de Drive
 (`014.xlsx` / `279.xlsx`, carpeta `10A5-v9FmN2MasXjbG3hvWdQeIYfPZGIg`).
 Necesita `SUPABASE_SERVICE_KEY` en Propiedades del script (service_role, no se versiona).
+
+## Proyecto `kairos-portal` (Apps Script)
+
+scriptId: `1hUEGvZ_-NyvR_oOFgKuFR-nJRx0t-o3TPf2SbqtxRFYB5lg3yHzx8eKQ`
+(editor: https://script.google.com/d/1hUEGvZ_-NyvR_oOFgKuFR-nJRx0t-o3TPf2SbqtxRFYB5lg3yHzx8eKQ/edit )
+
+Portal de tienda (pieza 2): login sin contraseña (solo LDAP), crear
+peticiones, ver estado + estado HODOS. `ADMIN_PASSWORD` y
+`SUPABASE_SERVICE_KEY` en Propiedades del script (no se versionan).
+Admin: `<url-exec>?admin=1`.

@@ -15,6 +15,6 @@ un pedido de cliente.
 | # | Pieza | Estado |
 |---|---|---|
 | 1 | Fundación — modelo de datos y almacenamiento | ✅ completa (catálogo: 7.168 referencias, trigger diario 11:00) |
-| 2 | Portal de tienda — crear peticiones + ver estado | pendiente |
+| 2 | Portal de tienda — crear peticiones + ver estado | ✅ completa |
 | 3 | App de operario — sobre el modelo nuevo + refill | pendiente |
 | 4 | Puentes — HODOS, myISO Gestión de Stock | pendiente |
