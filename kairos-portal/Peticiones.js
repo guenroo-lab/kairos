@@ -63,3 +63,31 @@ function listarMisPeticiones(ldap) {
   filas.forEach(function (p) { p.estadoTexto = TRADUCCION_ESTADO[p.estado] || p.estado; });
   return _json_(filas);
 }
+
+function obtenerDetallePeticion(ldap, peticionId) {
+  const tienda = _tiendaDe_(ldap);
+
+  const cab = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(peticionId) + '&tienda_origen=eq.' + encodeURIComponent(tienda));
+  if (!cab.length) throw new Error('Petición no encontrada.');
+  const peticion = cab[0];
+  peticion.estadoTexto = TRADUCCION_ESTADO[peticion.estado] || peticion.estado;
+
+  const lineas = supaSelect_('lineas', 'peticion_id=eq.' + encodeURIComponent(peticionId) + '&order=id.asc');
+
+  var hodosTexto = null;
+  const generaEtiqueta = (peticion.tipo === 'pedido_cliente' && !peticion.transporte) || peticion.tipo === 'cesion';
+  if (generaEtiqueta) {
+    const conHodosId = lineas.filter(function (l) { return l.hodos_id; });
+    if (!conHodosId.length) {
+      hodosTexto = 'Generando etiqueta…';
+    } else {
+      const idUnico = conHodosId[0].hodos_id;
+      const etiquetas = supaSelect_('etiquetas', 'id_unico=eq.' + encodeURIComponent(idUnico) + '&select=pendiente_impresion_incpc', CFG.SCHEMA_HODOS);
+      if (etiquetas.length) {
+        hodosTexto = etiquetas[0].pendiente_impresion_incpc ? 'Etiqueta pendiente de imprimir' : 'Etiqueta impresa';
+      }
+    }
+  }
+
+  return _json_({ peticion: peticion, lineas: lineas, hodosTexto: hodosTexto });
+}
