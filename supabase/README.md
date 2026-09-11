@@ -50,3 +50,22 @@ Portal de tienda (pieza 2): login sin contraseña (solo LDAP), crear
 peticiones, ver estado + estado HODOS. `ADMIN_PASSWORD` y
 `SUPABASE_SERVICE_KEY` en Propiedades del script (no se versionan).
 Admin: `<url-exec>?admin=1`.
+
+## Proyecto `kairos-operario` (Apps Script)
+
+scriptId: `18FBN2dvxp7Xz664jDBumSUsUhelgWGttL9l6lns4ynk8vYtYmc8YMfPE`
+(editor: https://script.google.com/d/18FBN2dvxp7Xz664jDBumSUsUhelgWGttL9l6lns4ynk8vYtYmc8YMfPE/edit )
+
+App de almacén (pieza 3): cola de peticiones, marcar líneas preparadas,
+consolidación ("a ubicar"), disparo automático de etiqueta HODOS. Sin login
+LDAP — desplegable de operario. Propiedades del script necesarias:
+`SUPABASE_SERVICE_KEY`, `HODOS_WEBAPP_URL`, `INCPC_SHARED_TOKEN` (mismos
+valores que las demás apps del ecosistema).
+
+Deployment: `AKfycbzdmLGTnMMueEn6gu__NGxlnkqjkNci1Lb8rAnLoNXfJ8mkjVNzk5BqxeNDAlf2Vav55A`
+(`clasp deploy -i <id>` para reutilizarlo en despliegues futuros).
+
+⚠️ **Verificación E2E (Task 9 del plan) pendiente** — bloqueada el
+2026-09-11 porque el navegador disponible no tenía sesión con acceso al
+dominio `ext.leroymerlin.es`. Código y deploy ya están hechos; falta probar
+en vivo antes de dar la pieza por cerrada.
