@@ -76,45 +76,57 @@ WHERE id = <peticion_id>
 
 El trigger `peticiones_recalc_estado` cierra la petición (`estado = 'cerrada'`).
 
-## Auto-etiqueta HODOS (pedido_cliente sin transporte)
+## Auto-etiqueta HODOS (pedido_cliente sin transporte + cesión)
 
-Cuando se cierra la última línea de un `pedido_cliente` con `transporte = false`,
-la app crea automáticamente una etiqueta HODOS "Petición Reserva" — mismo
-comportamiento que `_intentarCrearEtiquetaHodos_` en
+**Corrección tras revisar código ya construido en Pieza 2:** `Peticiones.js:78`
+(`obtenerDetallePeticion`) ya calcula
+`generaEtiqueta = (tipo === 'pedido_cliente' && !transporte) || tipo === 'cesion'`
+y lee `lineas.hodos_id` para mostrar "Etiqueta pendiente/impresa" en el portal.
+Pieza 3 tiene que cumplir ese contrato ya existente, no el que se había
+esbozado antes (que dejaba fuera la cesión).
+
+Cuando se cierra la última línea de un `pedido_cliente` con `transporte = false`
+**o de una `cesion`**, la app crea automáticamente una etiqueta HODOS "Petición
+Reserva" — mismo comportamiento que `_intentarCrearEtiquetaHodos_` en
 `PreparacionPedidosPC/PreparacionBackend.js:566`.
 
-Trigger: tras el `UPDATE` de línea que la deja `preparado`, comprobar si es la
-última línea pendiente de su petición (mismo cálculo que hace el trigger SQL,
-o simplemente re-consultar `peticiones.estado` tras el update — si pasó a
-`cerrada` y `tipo='pedido_cliente'` y `transporte=false`, disparar).
+Trigger: tras el `UPDATE` de línea que la deja `preparado`, re-consultar
+`peticiones.estado` — si pasó a `cerrada` y (`tipo='pedido_cliente'` y
+`transporte=false`) o `tipo='cesion'`, disparar.
 
-Payload igual que hoy: `destino` (nombre tienda), `pedido` (`num_pedido`),
-`tipo: 'Petición Reserva'`, `origenIntegracion: 'preparacion'`, `operario`,
-`items` (líneas de la petición, todas — en Kairos todas están "limpias" porque
-Pieza 3 no maneja incidencias todavía).
+Payload: `destino` = nombre de la tienda que debe recibir el material —
+`tienda_origen` para `pedido_cliente` sin transporte, **`tienda_destino`** para
+`cesion` (es la tienda distinta a la que la pide). `pedido` = `num_pedido` si
+existe (cesión no tiene). `tipo: 'Petición Reserva'`, `origenIntegracion:
+'preparacion'`, `operario`, `items` (líneas de la petición — todas, en Kairos
+todas están "limpias" porque Pieza 3 no maneja incidencias todavía).
 
 Reusa `HODOS_WEBAPP_URL` e `INCPC_SHARED_TOKEN` en Properties del script nuevo
 (mismos valores que ya existen en otras apps del ecosistema — copiar, no
 reinventar).
 
-Idempotencia: guardar el `idUnico` devuelto en un campo `hodos_id` a nivel de
-petición (**nuevo**, no existe hoy — `lineas.hodos_id` ya existe pero es por
-línea; para Kairos, con una etiqueta por pedido completo, conviene un
-`peticiones.hodos_id` para no duplicar en reintentos). Ver tarea de migración
-en el plan.
+Idempotencia: **reusa `lineas.hodos_id`** (ya existe desde Pieza 1, sin
+migración nueva) — guardar el mismo `idUnico` devuelto en todas las líneas de
+la petición, igual que hace hoy `_intentarCrearEtiquetaHodos_` con
+`colHodosId`. Antes de disparar, comprobar que ninguna línea de la petición ya
+tenga `hodos_id` (evita duplicar en reintentos/carreras).
 
-## Refill y Cesión — sin puente myISO en Pieza 3
+## Refill — sin puente myISO en Pieza 3
 
-Ambas cierran solas en Kairos cuando se completan sus líneas (trigger SQL ya
+Cierra sola en Kairos cuando se completa su única línea (trigger SQL ya
 existente, sin acción extra de la app).
 
-**Decisión explícita:** ninguna dispara todavía la llamada real a myISO
-Gestión de Stock:
-- **Refill:** al completar, el palet queda "listo" en Kairos pero el
-  move-to-address a la ubicación XP1 (silueta para tienda) sigue siendo manual
-  en myISO, como hoy.
-- **Cesión:** necesita también una acción de puente con myISO — **la acción
-  exacta se define más adelante**, no en esta pieza.
+**Decisión explícita:** no dispara todavía la llamada real a myISO Gestión de
+Stock. Al completar, el palet queda "listo" en Kairos pero el move-to-address
+a la ubicación XP1 (silueta para tienda) sigue siendo manual en myISO, como
+hoy. Ese puente es Pieza 4.
+
+## Cesión — HODOS ya en Pieza 3, myISO más adelante
+
+La etiqueta HODOS (arriba) sí se dispara ya en Pieza 3. Lo que queda fuera es
+una **acción de puente con myISO** que la cesión también necesita — el usuario
+ha indicado explícitamente que esa acción se define más adelante, no ahora.
+Pieza 3 no bloquea ni condiciona nada a que ese puente exista.
 
 Ambos puentes son Pieza 4 (Puentes — HODOS, myISO Gestión de Stock), reusando
 el patrón ya construido en `CartaPortesSIE` (ver
