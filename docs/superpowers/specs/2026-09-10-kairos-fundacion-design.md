@@ -377,8 +377,17 @@ para pedidos sin transporte, "todas las líneas preparadas" ya es `cerrada`.
 - HODOS (`public.*`) sin cambios (`cargas`/`contenido`/`etiquetas` intactas).
 - `usuarios_tienda`, `peticiones`, `lineas` vacías (las llenan las piezas 2 y 3).
 
-**Pendiente para cerrar la pieza 1:** cargar `preparacion.catalogo` desde los Excel
-de inventario. El proyecto Apps Script `kairos-sync`
-(`1PzUT_19ASC5qvFjjnhl2jmqTtvunzmaAaxJ3MM32drb94fY779TFLKJ0`) ya tiene el código
-subido; falta meter la `SUPABASE_SERVICE_KEY` en Propiedades del script y ejecutar
-`cargarCatalogo` + `instalarTriggerCatalogo` desde el editor.
+**2026-09-11 — PIEZA 1 COMPLETA.** Catálogo cargado: **7.168 referencias** desde
+`014.xlsx` + `279.xlsx`. Trigger diario de refresco instalado (11:00 Europe/Madrid).
+
+Gotcha real encontrado: la `service_role` key nueva de Supabase (formato
+`sb_secret_...`) rechaza las llamadas de `UrlFetchApp` de Apps Script con
+`401 Forbidden use of secret API key in browser` (el gateway de Supabase las
+confunde con tráfico de navegador). Solución: usar la key **legacy JWT** de
+`service_role` (Project Settings → API → "Legacy API keys", empieza por `eyJ...`),
+que no tiene ese bloqueo. Anotado también como memoria de proyecto.
+
+También hizo falta añadir el scope `https://www.googleapis.com/auth/script.scriptapp`
+al manifiesto (`appsscript.json`) para poder usar `ScriptApp.newTrigger`/
+`getProjectTriggers` — al declarar `oauthScopes` explícitamente, Apps Script deja de
+autodetectar scopes por el código usado.
