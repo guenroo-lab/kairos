@@ -62,7 +62,7 @@
     renderCola();
   }
 
-  document.addEventListener('DOMContentLoaded', render);
+  document.addEventListener('DOMContentLoaded', function () { render(); });
 </script>
 <script>
   function renderEntrar() {
@@ -368,5 +368,68 @@
     }).catch(function (e) {
       app().querySelector('#detalle').innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });
+  }
+</script>
+<script>
+  if (<?= esAdmin ?>) {
+    render = renderAdminLogin; // sustituye el router normal en esta pestaña
+  }
+
+  function renderAdminLogin() {
+    app().innerHTML = '';
+    const c = el(
+      '<div class="wrap"><div class="card">' +
+        '<h2>Kairos · Admin</h2>' +
+        '<input class="entrada" id="inPass" type="password" placeholder="Contraseña de administrador">' +
+        '<div class="error" id="errAdmin" style="display:none;"></div>' +
+        '<button class="btn btn-primary" id="btnAdminEntrar">Entrar</button>' +
+      '</div></div>'
+    );
+    app().appendChild(c);
+    c.querySelector('#btnAdminEntrar').onclick = function () {
+      const pass = c.querySelector('#inPass').value;
+      renderAdmin(pass);
+    };
+  }
+
+  function renderAdmin(passwordAdmin) {
+    app().innerHTML = '';
+    const c = el(
+      '<div class="wrap"><div class="card">' +
+        '<h2>Pendientes de aprobar</h2>' +
+        '<div id="listaAdmin"><p style="color:var(--muted)">Cargando…</p></div>' +
+      '</div></div>'
+    );
+    app().appendChild(c);
+    const lista = c.querySelector('#listaAdmin');
+
+    function cargar() {
+      gas('listarPendientesAprobacion', passwordAdmin).then(function (filas) {
+        lista.innerHTML = '';
+        if (!filas.length) { lista.appendChild(el('<p style="color:var(--muted)">No hay nadie pendiente.</p>')); return; }
+        filas.forEach(function (u) {
+          const fila = el(
+            '<div class="fila" style="cursor:default;">' +
+              '<div><b>' + escHtml(u.ldap) + '</b> · ' + escHtml(u.tiendaNombre) + '</div>' +
+              '<div>' +
+                '<button class="btn-ghost" style="width:auto;padding:6px 10px;" data-a="ap">Aprobar</button> ' +
+                '<button class="btn-ghost" style="width:auto;padding:6px 10px;color:var(--danger);" data-a="re">Rechazar</button>' +
+              '</div>' +
+            '</div>'
+          );
+          fila.querySelector('[data-a="ap"]').onclick = function () {
+            gas('aprobarUsuario', passwordAdmin, u.id).then(cargar);
+          };
+          fila.querySelector('[data-a="re"]').onclick = function () {
+            if (!confirm('¿Rechazar a ' + u.ldap + '?')) return;
+            gas('rechazarUsuario', passwordAdmin, u.id).then(cargar);
+          };
+          lista.appendChild(fila);
+        });
+      }).catch(function (e) {
+        lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
+      });
+    }
+    cargar();
   }
 </script>

@@ -6,7 +6,9 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.debug === 'test') {
     return _responderDebug_(e);
   }
-  return HtmlService.createHtmlOutputFromFile('Portal')
+  const plantilla = HtmlService.createTemplateFromFile('Portal');
+  plantilla.esAdmin = !!(e && e.parameter && e.parameter.admin === '1');
+  return plantilla.evaluate()
     .setTitle('Kairos · Portal de tienda')
     .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=5');
 }
