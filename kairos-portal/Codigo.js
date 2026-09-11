@@ -6,7 +6,9 @@ function doGet(e) {
   if (e && e.parameter && e.parameter.debug === 'test') {
     return _responderDebug_(e);
   }
-  return HtmlService.createHtmlOutput('Portal.html pendiente (Task 9).');
+  return HtmlService.createHtmlOutputFromFile('Portal')
+    .setTitle('Kairos · Portal de tienda')
+    .addMetaTag('viewport', 'width=device-width, initial-scale=1, maximum-scale=5');
 }
 
 function _responderDebug_(e) {

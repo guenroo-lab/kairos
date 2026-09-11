@@ -1,0 +1,66 @@
+<title>Kairos · Portal de tienda</title>
+<style>
+  :root { --bg:#0b0f14; --card:#131a22; --line:#232d38; --text:#e7edf3; --muted:#93a1b0;
+          --marbella:#3b82f6; --mijas:#8b5cf6; --ok:#22c55e; --warn:#f59e0b; --danger:#ef4444; }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:720px; margin:0 auto; padding:16px; }
+  .top { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--line); }
+  .pill { display:inline-block; padding:4px 10px; border-radius:999px; font-weight:700; font-size:12px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:12px; }
+  .btn { width:100%; padding:12px; border-radius:8px; border:none; font-weight:700; font-size:14px; cursor:pointer; margin-top:8px; }
+  .btn-primary { background:var(--ok); color:#04150a; }
+  .btn-ghost { background:transparent; color:var(--text); border:1px solid var(--line); }
+  .btn-danger { background:var(--danger); color:#fff; }
+  .entrada { width:100%; padding:10px; border-radius:8px; border:1px solid var(--line); background:#0f1620; color:var(--text); margin-bottom:8px; }
+  .fila { display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); cursor:pointer; }
+  .fila:last-child { border-bottom:none; }
+  .estado { font-size:12px; padding:3px 8px; border-radius:6px; background:#1c2733; color:var(--muted); }
+  .error { color:var(--danger); font-size:13px; margin-top:6px; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+  .articulo { display:flex; gap:8px; align-items:center; padding:6px; border-radius:8px; cursor:pointer; }
+  .articulo:hover { background:#0f1620; }
+  .articulo img { width:36px; height:36px; object-fit:cover; border-radius:4px; background:#000; }
+  .linea-chip { display:flex; justify-content:space-between; background:#0f1620; border-radius:8px; padding:8px; margin-top:6px; font-size:13px; }
+</style>
+<div id="app"></div>
+<script>
+  function el(html) { const d = document.createElement('div'); d.innerHTML = html.trim(); return d.firstChild; }
+  function escHtml(s) { return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c];
+  }); }
+  function gas(fn) {
+    const args = Array.prototype.slice.call(arguments, 1);
+    return new Promise(function (resolve, reject) {
+      google.script.run
+        .withSuccessHandler(function (texto) {
+          const obj = JSON.parse(texto);
+          if (obj && obj.error) { reject(new Error(obj.error)); return; }
+          resolve(obj);
+        })
+        .withFailureHandler(function (err) { reject(err); })[fn].apply(null, args);
+    });
+  }
+
+  var LDAP = localStorage.getItem('kairos_ldap') || '';
+  var TIENDA = localStorage.getItem('kairos_tienda') || '';
+  var TIENDA_NOMBRE = localStorage.getItem('kairos_tienda_nombre') || '';
+
+  function salir() {
+    localStorage.removeItem('kairos_ldap');
+    localStorage.removeItem('kairos_tienda');
+    localStorage.removeItem('kairos_tienda_nombre');
+    LDAP = ''; TIENDA = ''; TIENDA_NOMBRE = '';
+    render();
+  }
+
+  function app() { return document.getElementById('app'); }
+
+  function render() {
+    app().innerHTML = '';
+    if (!LDAP) { renderEntrar(); return; }
+    renderCola();
+  }
+
+  render();
+</script>
