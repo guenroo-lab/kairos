@@ -1,6 +1,6 @@
 /** Funciones del servidor que el arnés de pruebas puede invocar por nombre.
  *  Se amplía en tasks siguientes según se van escribiendo. */
-const FUNCIONES_DEBUG_PERMITIDAS = ['test_supaSmoke', 'entrar', 'registrarUsuario', 'listarPendientesAprobacion', 'aprobarUsuario', 'rechazarUsuario', 'buscarArticulos'];
+const FUNCIONES_DEBUG_PERMITIDAS = ['test_supaSmoke', 'entrar', 'registrarUsuario', 'listarPendientesAprobacion', 'aprobarUsuario', 'rechazarUsuario', 'buscarArticulos', 'crearPeticion', 'listarMisPeticiones'];
 
 function doGet(e) {
   if (e && e.parameter && e.parameter.debug === 'test') {
