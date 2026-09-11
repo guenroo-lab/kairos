@@ -371,7 +371,7 @@
   }
 </script>
 <script>
-  if (<?= esAdmin ?>) {
+  if (String(<?= esAdmin ?>) === 'true') {
     render = renderAdminLogin; // sustituye el router normal en esta pestaña
   }
 
