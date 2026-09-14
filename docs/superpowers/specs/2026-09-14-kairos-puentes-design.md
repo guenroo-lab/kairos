@@ -193,26 +193,41 @@ falta refresco bajo demanda en esta pieza.
 ## Cambios sobre Pieza 3 (kairos-operario)
 
 **No cambia la interacción del operario** en pedido_cliente (sigue siendo un
-checkbox por línea). Cambia lo que pasa por debajo al marcarla:
+checkbox por línea). Cambia lo que pasa por debajo.
 
-1. `marcarLineaPreparada` (ya existe) pasa a, antes de guardar
-   `estado_preparacion='preparado'`: resolver SSCC/ubicación (algoritmo de
-   arriba) y guardarlos también en la misma escritura. Si no hay stock
-   suficiente, lanza error y no marca nada (transacción todo-o-nada a nivel
-   de línea).
-2. Tras guardar, si la línea marcada era la **última sin incidencia** de una
-   petición `pedido_cliente` o `cesion`: el cliente arma el `TRANSFERS` con
-   **todas** las líneas de esa petición y navega a
-   `http-shortcuts://STOCK_SHORTCUT_ID?...` en el mismo gesto de clic.
-3. Si la petición es `refill`: tras marcar su única línea, el cliente navega
-   a `http-shortcuts://<SHORTCUT_ID_REFILL>?SSCC_LIST=...` (destino XP1) en
-   el mismo gesto de clic.
+**Corrección de diseño importante (regla del gesto de clic):** el deep-link
+`http-shortcuts://` tiene que dispararse **síncronamente**, dentro del mismo
+`onclick` — si se dispara desde el callback async de `google.script.run`
+(tras esperar la respuesta del servidor), el navegador lo bloquea en
+silencio (regla ya documentada arriba). El sistema viejo lo cumple porque el
+SSCC de cada línea **ya está asignado de antemano** (se calcula al escribir
+el código LM en la fila, mucho antes de marcar "preparado") — el cliente ya
+lo tiene en memoria/DOM en el momento del clic, no necesita pedírselo al
+servidor ahí mismo.
 
-**Importante:** los pasos 2 y 3 son **client-side** (`Index.html`), no
-server-side — el servidor solo puede devolver los datos necesarios (SSCC
-asignado, lista de líneas del pedido) en la respuesta de
-`marcarLineaPreparada`; el propio navegador arma la URL y navega, dentro del
-mismo `onclick` que originó la llamada a `google.script.run`.
+Kairos replica esto asignando el SSCC **al abrir el detalle de la
+petición**, no al marcar la línea:
+
+1. `obtenerPeticion` (ya existe): para cada línea de tipo `pedido_cliente`,
+   `cesion` o `refill` que aún no tenga `sscc` asignado, ejecuta el
+   algoritmo de asignación (arriba) y **persiste** `sscc`/`ubicacion` en esa
+   misma llamada, antes de devolver la petición. Si no hay stock suficiente
+   para alguna línea, se lo indica igual en la respuesta (la línea queda sin
+   `sscc`, el operario lo ve en la pantalla como aviso) — no bloquea ver el
+   resto de la petición.
+2. El cliente (`Index.html`) guarda `data.lineas` (ya con `sscc`/`ubicacion`)
+   en una variable JS al renderizar el detalle.
+3. Al marcar una línea preparada (clic en el checkbox), el `onclick`:
+   - Llama a `marcarLineaPreparada` (como hoy) para persistir
+     `estado_preparacion`/`operario`/`preparada_en` — **ya no** recalcula
+     SSCC, ese trabajo ya está hecho.
+   - **En el mismo gesto**, usando los datos ya en memoria (no la respuesta
+     del `google.script.run`): si es la última línea sin incidencia de un
+     `pedido_cliente`/`cesion`, arma `TRANSFERS` con todas las líneas de la
+     petición y navega a `http-shortcuts://STOCK_SHORTCUT_ID?...`. Si es
+     `refill`, navega a `http-shortcuts://<SHORTCUT_ID_REFILL>?SSCC_LIST=...`
+     (destino XP1). Ambas llamadas — la de guardar y la de navegar — se
+     disparan en paralelo desde el mismo evento, no una tras otra.
 
 ## Fuera de alcance (explícito)
 
