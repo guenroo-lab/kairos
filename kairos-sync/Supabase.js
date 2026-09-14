@@ -36,6 +36,34 @@ function supaUpsert_(tabla, filas, onConflict) {
   if (code >= 300) throw new Error('Supabase upsert ' + code + ': ' + resp.getContentText());
 }
 
+/** Borra filas de `tabla` que cumplan `queryString` (filtro PostgREST). */
+function supaDelete_(tabla, queryString) {
+  const url = CFG.SUPABASE_URL + '/rest/v1/' + tabla + '?' + queryString;
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'delete',
+    headers: _supaHeaders_('DELETE'),
+    muteHttpExceptions: true,
+  });
+  const code = resp.getResponseCode();
+  if (code >= 300) throw new Error('Supabase delete ' + code + ': ' + resp.getContentText());
+}
+
+/** Inserta un array de objetos en `tabla` (sin resolución de conflictos). */
+function supaInsertMany_(tabla, filas) {
+  if (!filas.length) return;
+  const url = CFG.SUPABASE_URL + '/rest/v1/' + tabla;
+  const headers = _supaHeaders_('POST');
+  headers['Prefer'] = 'return=minimal';
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: headers,
+    payload: JSON.stringify(filas),
+    muteHttpExceptions: true,
+  });
+  const code = resp.getResponseCode();
+  if (code >= 300) throw new Error('Supabase insert ' + code + ': ' + resp.getContentText());
+}
+
 /** Ejecutar a mano desde el editor tras escribir el helper. */
 function test_supaPing() {
   const resp = UrlFetchApp.fetch(CFG.SUPABASE_URL + '/rest/v1/tiendas?select=codigo', {
