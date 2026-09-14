@@ -330,6 +330,36 @@
         .guardarUbicacionConsolidacion(peticionId, ubicacion);
     }
 
+    function renderStock() {
+      document.getElementById('app').innerHTML = renderTabsBar_() +
+        '<h1>Stock</h1>' +
+        '<input type="text" id="inBuscarStock" placeholder="Código LM"> ' +
+        '<button onclick="buscarStockUI()">Buscar</button>' +
+        '<div id="resultadoStock"></div>';
+      document.getElementById('inBuscarStock').onkeydown = function (e) { if (e.key === 'Enter') buscarStockUI(); };
+      document.getElementById('inBuscarStock').focus();
+    }
+
+    function buscarStockUI() {
+      const codigo = document.getElementById('inBuscarStock').value.trim();
+      const cont = document.getElementById('resultadoStock');
+      if (!codigo) { cont.innerHTML = ''; return; }
+      cont.innerHTML = '<p class="meta">Buscando…</p>';
+      google.script.run
+        .withSuccessHandler(function (json) {
+          const filas = JSON.parse(json);
+          if (!filas.length) { cont.innerHTML = '<p>Sin stock para ese código.</p>'; return; }
+          const total = filas.reduce(function (s, f) { return s + Number(f.cantidad); }, 0);
+          cont.innerHTML = '<p><strong>Total: ' + total + ' ud</strong></p>' +
+            filas.map(function (f) {
+              return '<div class="linea"><div>' + (CFG_TIENDA_NOMBRE[f.tienda] || f.tienda) + ' — ' + f.cantidad + ' ud</div>' +
+                '<div class="meta">' + f.sscc + ' · ' + f.ubicacion + '</div></div>';
+            }).join('');
+        })
+        .withFailureHandler(function (err) { cont.innerHTML = '<p style="color:#c62828;">' + err.message + '</p>'; })
+        .buscarStock(codigo);
+    }
+
     document.addEventListener('DOMContentLoaded', function () { render(); });
   </script>
 </body>
