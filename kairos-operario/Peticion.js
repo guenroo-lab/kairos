@@ -7,6 +7,16 @@ function obtenerPeticion(peticionId) {
 
   const lineas = supaSelect_('lineas', 'peticion_id=eq.' + encodeURIComponent(peticionId) + '&order=id.asc');
 
+  lineas.forEach(function (l) {
+    if (l.sscc || l.estado_preparacion === 'preparado') return;
+    try {
+      const asignado = asignarSsccSiFalta_(l, peticion);
+      if (asignado) { l.sscc = asignado.sscc; l.ubicacion = asignado.ubicacion; }
+    } catch (err) {
+      l.avisoStock = err.message;
+    }
+  });
+
   return _json_({ peticion: peticion, lineas: lineas });
 }
 
