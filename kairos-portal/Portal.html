@@ -150,11 +150,13 @@
     const top = el(
       '<div class="top">' +
         '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--muted)">· ' + escHtml(LDAP) + '</span></div>' +
-        '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
+        '<div><button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnTrazabilidad">Trazabilidad</button> ' +
+        '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button></div>' +
       '</div>'
     );
     app().appendChild(top);
     top.querySelector('#btnSalir').onclick = salir;
+    top.querySelector('#btnTrazabilidad').onclick = renderTrazabilidad;
 
     const wrap = el('<div class="wrap"></div>');
     app().appendChild(wrap);
@@ -177,6 +179,46 @@
           '</div>'
         );
         fila.onclick = function () { renderDetalle(p.id); };
+        lista.appendChild(fila);
+      });
+    }).catch(function (e) {
+      lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
+    });
+  }
+
+  function renderTrazabilidad() {
+    app().innerHTML = '';
+    const top = el(
+      '<div class="top">' +
+        '<div><b>Trazabilidad</b></div>' +
+        '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnVolverCola">‹ Mis peticiones</button>' +
+      '</div>'
+    );
+    app().appendChild(top);
+    top.querySelector('#btnVolverCola').onclick = renderCola;
+
+    const wrap = el('<div class="wrap"></div>');
+    app().appendChild(wrap);
+    const lista = el('<div class="card" id="listaTraza"><p style="color:var(--muted)">Cargando…</p></div>');
+    wrap.appendChild(lista);
+
+    gas('listarTrazabilidad', LDAP).then(function (filas) {
+      lista.innerHTML = '';
+      if (!filas.length) { lista.appendChild(el('<p style="color:var(--muted)">No hay peticiones todavía.</p>')); return; }
+      filas.forEach(function (p) {
+        var detalle;
+        if (p.camino === 'a_ubicar') detalle = p.estadoTexto;
+        else if (p.camino === 'porte') detalle = 'Carta de Portes: ' + p.porteEstado;
+        else detalle = 'HODOS: ' + p.hodosTexto;
+        const fila = el(
+          '<div class="fila" style="cursor:default;">' +
+            '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
+              (p.num_pedido ? ' · ' + escHtml(p.num_pedido) : '') +
+              '<div style="color:var(--muted);font-size:12px;">' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
+            '</div>' +
+            '<span class="estado">' + escHtml(detalle) + '</span>' +
+          '</div>'
+        );
         lista.appendChild(fila);
       });
     }).catch(function (e) {

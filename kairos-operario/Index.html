@@ -54,6 +54,7 @@
       if (VISTA.nombre === 'stock') return renderStock();
       if (VISTA.nombre === 'estado') return renderEstado();
       if (VISTA.nombre === 'panel') return renderPanel();
+      if (VISTA.nombre === 'volumenes') return renderVolumenes();
     }
 
     function renderTabsBar_() {
@@ -63,6 +64,7 @@
         { nombre: 'stock', label: 'Stock' },
         { nombre: 'estado', label: 'Estado' },
         { nombre: 'panel', label: 'Panel' },
+        { nombre: 'volumenes', label: 'Volúmenes' },
       ];
       return '<div class="tabs">' + tabs.map(function (t) {
         return '<a href="#" class="' + (VISTA.nombre === t.nombre ? 'activa' : '') +
@@ -118,13 +120,20 @@
         const peticiones = JSON.parse(json);
         const cont = document.getElementById('listaCola');
         if (!peticiones.length) { cont.innerHTML = '<p>No hay peticiones pendientes.</p>'; return; }
-        cont.innerHTML = peticiones.map(function (p) {
+        const normales = peticiones.filter(function (p) { return !p.cola_individual; });
+        const individuales = peticiones.filter(function (p) { return p.cola_individual; });
+        function filaHtml(p) {
           const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión → ' + p.tiendaDestinoNombre : 'Refill');
           return '<div class="fila" style="border-left-color:' + (CFG_TIENDA_COLOR[p.tienda_origen] || '#ccc') + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
             '<div class="tipo">' + etiquetaTipo + '</div>' +
             '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas</div>' +
             '</div>';
-        }).join('');
+        }
+        var html = normales.map(filaHtml).join('');
+        if (individuales.length) {
+          html += '<h3>Individual</h3>' + individuales.map(filaHtml).join('');
+        }
+        cont.innerHTML = html;
       }).listarCola(tienda || null, tipo || null);
     }
 
@@ -411,9 +420,14 @@
           if (p.necesitaHodos && !p.tieneHodos && p.estado === 'cerrada') {
             botonReintentar = ' <button class="secundario" onclick="event.stopPropagation(); reintentarHodosUI(\'' + p.id + '\', this)">Reintentar HODOS</button>';
           }
+          var botonIndividual = '';
+          if (p.tipo !== 'refill' && (p.estado === 'pendiente' || p.estado === 'en_preparacion')) {
+            botonIndividual = ' <button class="secundario" onclick="event.stopPropagation(); marcarColaIndividualUI(\'' + p.id + '\', ' + (!p.cola_individual) + ', this)">' +
+              (p.cola_individual ? 'Volver a normal' : 'Mover a individual') + '</button>';
+          }
           return '<div class="fila" onclick="abrirDetalle(\'' + p.id + '\')">' +
             '<div class="tipo">' + etiquetaTipo + '</div>' +
-            '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + p.estado + botonReintentar + '</div></div>';
+            '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + p.estado + (p.cola_individual ? ' · individual' : '') + botonReintentar + botonIndividual + '</div></div>';
         }).join('');
       }).listarTodasPeticiones();
     }
@@ -436,6 +450,52 @@
         .withSuccessHandler(function () { cargarTodasPeticiones_(); cargarEtiquetasHodos_(); })
         .withFailureHandler(function (err) { alert(err.message); boton.disabled = false; boton.textContent = 'Reintentar HODOS'; })
         .reintentarHodos(peticionId);
+    }
+
+    function marcarColaIndividualUI(peticionId, valor, boton) {
+      boton.disabled = true;
+      google.script.run
+        .withSuccessHandler(function () { cargarTodasPeticiones_(); })
+        .withFailureHandler(function (err) { alert(err.message); boton.disabled = false; })
+        .marcarColaIndividual(peticionId, valor);
+    }
+
+    function renderVolumenes() {
+      document.getElementById('app').innerHTML = renderTabsBar_() +
+        '<h1>Volúmenes de trabajo</h1>' +
+        '<h3>Hoy</h3><div id="volHoy">Cargando…</div>' +
+        '<h3>Últimos 14 días</h3><div id="volHistorico">Cargando…</div>';
+
+      google.script.run.withSuccessHandler(function (json) {
+        const datos = JSON.parse(json);
+        const cont = document.getElementById('volHoy');
+        if (!datos.filas.length) { cont.innerHTML = '<p>Sin líneas preparadas hoy todavía.</p>'; return; }
+        var html = '<table style="width:100%;border-collapse:collapse;background:#fff;"><tr><th style="text-align:left;padding:4px;">Operario</th>' +
+          datos.horas.map(function (h) { return '<th style="padding:4px;">' + h + 'h</th>'; }).join('') +
+          '<th style="padding:4px;">Total</th></tr>';
+        html += datos.filas.map(function (f) {
+          return '<tr><td style="padding:4px;">' + f.operario + '</td>' +
+            f.porHora.map(function (n) { return '<td style="padding:4px;text-align:center;">' + (n || '') + '</td>'; }).join('') +
+            '<td style="padding:4px;text-align:center;font-weight:bold;">' + f.total + '</td></tr>';
+        }).join('');
+        html += '</table>';
+        cont.innerHTML = html;
+      }).listarVolumenesHoy();
+
+      google.script.run.withSuccessHandler(function (json) {
+        const dias = JSON.parse(json);
+        const cont = document.getElementById('volHistorico');
+        if (!dias.length) { cont.innerHTML = '<p>Sin datos todavía.</p>'; return; }
+        const max = Math.max.apply(null, dias.map(function (d) { return d.total; }));
+        cont.innerHTML = '<div style="display:flex;align-items:flex-end;gap:4px;height:120px;background:#fff;padding:8px;border-radius:6px;">' +
+          dias.map(function (d) {
+            const alturaPct = max ? Math.round((d.total / max) * 100) : 0;
+            return '<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;">' +
+              '<div style="font-size:11px;">' + d.total + '</div>' +
+              '<div style="width:100%;background:#1565c0;height:' + alturaPct + '%;min-height:2px;"></div>' +
+              '<div style="font-size:10px;color:#666;">' + d.dia.slice(5) + '</div></div>';
+          }).join('') + '</div>';
+      }).listarVolumenesHistorico();
     }
 
     document.addEventListener('DOMContentLoaded', function () { render(); });

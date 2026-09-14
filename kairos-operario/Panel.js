@@ -3,7 +3,7 @@
 
 function listarTodasPeticiones() {
   const peticiones = supaSelect_('peticiones',
-    'select=id,tipo,tienda_origen,tienda_destino,num_pedido,transporte,estado,creada_en&order=creada_en.desc&limit=300');
+    'select=id,tipo,tienda_origen,tienda_destino,num_pedido,transporte,estado,cola_individual,creada_en&order=creada_en.desc&limit=300');
   if (!peticiones.length) return _json_([]);
 
   const ids = peticiones.map(function (p) { return p.id; }).join(',');
@@ -33,5 +33,16 @@ function listarEtiquetasHodos() {
 
 function reintentarHodos(peticionId) {
   _dispararEtiquetaSiProcede_(peticionId);
+  return _json_({ ok: true });
+}
+
+/** Cola individual (Pieza 6): jefe de equipo mueve una petición ligera a una
+ *  cola aparte, sin asignar a una persona concreta. Solo pedido_cliente y
+ *  cesión — refill ya lo prepara un único operario por naturaleza. */
+function marcarColaIndividual(peticionId, valor) {
+  const cab = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(peticionId) + '&select=tipo');
+  if (!cab.length) throw new Error('Petición no encontrada.');
+  if (cab[0].tipo === 'refill') throw new Error('Refill no admite cola individual.');
+  supaUpdate_('peticiones', 'id=eq.' + encodeURIComponent(peticionId), { cola_individual: !!valor });
   return _json_({ ok: true });
 }

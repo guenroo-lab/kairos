@@ -1,6 +1,6 @@
 function listarCola(filtroTienda, filtroTipo) {
   var q = 'estado=in.(pendiente,en_preparacion)' +
-    '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,transporte,motivo,creada_en' +
+    '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,transporte,motivo,cola_individual,creada_en' +
     '&order=creada_en.asc&limit=200';
   if (filtroTienda) q += '&tienda_origen=eq.' + encodeURIComponent(filtroTienda);
   if (filtroTipo) q += '&tipo=eq.' + encodeURIComponent(filtroTipo);
