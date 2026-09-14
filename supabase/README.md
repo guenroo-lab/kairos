@@ -79,3 +79,41 @@ marca preparada y la petición cierra igual, solo `lineas.hodos_id` se queda
 vacío. Hay que revisar con quien mantiene `PreparacionPedidosPC` si esa URL
 sigue siendo el deployment correcto (podría haberse redesplegado con un ID
 nuevo sin actualizar la Propiedad compartida).
+
+## Pieza 4 — Puentes myISO (2026-09-14)
+
+Reutiliza `kairos-operario` (mismo scriptId de arriba). Dos mecanismos,
+ambos vía deep-link `http-shortcuts://` (myISO es red privada Adeo,
+inalcanzable desde Apps Script):
+
+- **TRANSFERS** (consumo de stock, pedido_cliente + cesión): reutiliza el
+  shortcut YA configurado en el dispositivo Android del operario para
+  `PreparacionPedidosPC` (`STOCK_SHORTCUT_ID`,
+  `b02c92a5-ca50-418f-93e9-4a7e8770cdfb`). No hace falta nada nuevo.
+- **move-to-address** (refill, destino fijo `05-XP1-A-1-10-A`): shortcut
+  **nuevo**, pendiente de crear con Pedro (mismo procedimiento que el de RC1
+  en CartaPortesSIE). Hasta entonces `SHORTCUT_ID_REFILL` en
+  `kairos-operario/Index.html` vale `'PENDIENTE-crear-con-Pedro'` y
+  `dispararMoveToAddress_` no navega a ningún sitio (no-op silencioso).
+
+**Nueva tabla `preparacion.stock_fisico`**: snapshot diario (11:00, mismo
+trigger que el catálogo) del inventario físico edificio 05, sincronizado por
+`kairos-sync/StockFisicoLoader.js` (`cargarStockFisico`). La asignación
+automática de SSCC (`kairos-operario/StockAsignacion.js`) replica el
+algoritmo real de `PreparacionPedidosPC/SSCC y Ubicacion.js`
+(`buscarYAsignarSSCC_`) contra esta tabla.
+
+⚠️ **Limitación conocida:** cuando un refill se lleva un palet completo, el
+cálculo de remanente para otras líneas del mismo código/tienda sigue
+contando solo la cantidad "consumida" (1 palet), no la cantidad real del
+stock. Si el mismo día otra línea (pedido_cliente/cesión) compite por ese
+mismo palet después de un refill, podría asignársele remanente que en
+realidad ya no existe físicamente. Edge case raro (mismo LM, mismo día,
+refill + picking cruzándose) — no bloqueante, pendiente de revisar si se
+convierte en problema real.
+
+Verificado E2E en vivo 2026-09-14: asignación simple, reparto entre 2
+palets, aviso + checkbox bloqueado sin stock suficiente, refill (palet
+completo sin reparto), cesión (reparto por cantidad). Spec:
+`docs/superpowers/specs/2026-09-14-kairos-puentes-design.md`. Plan:
+`docs/superpowers/plans/2026-09-14-kairos-puentes.md`.
