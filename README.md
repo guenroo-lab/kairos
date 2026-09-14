@@ -16,5 +16,5 @@ un pedido de cliente.
 |---|---|---|
 | 1 | Fundación — modelo de datos y almacenamiento | ✅ completa (catálogo: 7.168 referencias, trigger diario 11:00) |
 | 2 | Portal de tienda — crear peticiones + ver estado | ✅ completa |
-| 3 | App de operario — cola de peticiones, líneas, HODOS auto-etiqueta | código + deploy hechos, falta verificación E2E |
+| 3 | App de operario — cola de peticiones, líneas, HODOS auto-etiqueta | ✅ completa (bug de URL HODOS compartida pendiente de arreglar aparte) |
 | 4 | Puentes — HODOS, myISO Gestión de Stock | pendiente |

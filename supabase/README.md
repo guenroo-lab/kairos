@@ -65,7 +65,17 @@ valores que las demás apps del ecosistema).
 Deployment: `AKfycbzdmLGTnMMueEn6gu__NGxlnkqjkNci1Lb8rAnLoNXfJ8mkjVNzk5BqxeNDAlf2Vav55A`
 (`clasp deploy -i <id>` para reutilizarlo en despliegues futuros).
 
-⚠️ **Verificación E2E (Task 9 del plan) pendiente** — bloqueada el
-2026-09-11 porque el navegador disponible no tenía sesión con acceso al
-dominio `ext.leroymerlin.es`. Código y deploy ya están hechos; falta probar
-en vivo antes de dar la pieza por cerrada.
+✅ **Verificación E2E completa (2026-09-14)** — los 4 casos probados en vivo:
+pedido_cliente sin transporte, pedido_cliente con transporte (→ a_ubicar →
+ubicación → cerrada), cesión, refill. Todos cierran y actualizan estado
+correctamente.
+
+⚠️ **Bug de infraestructura compartida encontrado (no es de esta pieza):** el
+disparo de etiqueta HODOS (pedido_cliente sin transporte y cesión) falla —
+`HODOS_WEBAPP_URL` en Propiedades del script (copiada de
+`PreparacionPedidosPC`) devuelve "Página no encontrada" en vez de ejecutar.
+El `try/catch` en `_dispararEtiquetaSiProcede_` lo contiene: la línea se
+marca preparada y la petición cierra igual, solo `lineas.hodos_id` se queda
+vacío. Hay que revisar con quien mantiene `PreparacionPedidosPC` si esa URL
+sigue siendo el deployment correcto (podría haberse redesplegado con un ID
+nuevo sin actualizar la Propiedad compartida).
