@@ -9,6 +9,7 @@
  */
 
 const SUBTIPO_HODOS_PREPARACION_ = 'Petición Reserva';
+const INCIDENCIAS_ = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'];
 
 function _dispararEtiquetaSiProcede_(peticionId) {
   try {
@@ -24,6 +25,9 @@ function _dispararEtiquetaSiProcede_(peticionId) {
     if (!lineas.length) return;
     if (lineas.some(function (l) { return l.hodos_id; })) return; // ya se creó (reintentos/carreras)
 
+    const limpias = lineas.filter(function (l) { return INCIDENCIAS_.indexOf(l.estado_negocio) === -1; });
+    if (!limpias.length) return; // todo incidencia, no hay nada que enviar a HODOS
+
     const destino = peticion.tipo === 'cesion'
       ? (CFG.TIENDAS[peticion.tienda_destino] || peticion.tienda_destino)
       : (CFG.TIENDAS[peticion.tienda_origen] || peticion.tienda_origen);
@@ -33,11 +37,12 @@ function _dispararEtiquetaSiProcede_(peticionId) {
       pedido: peticion.num_pedido || null,
       tipo: SUBTIPO_HODOS_PREPARACION_,
       origenIntegracion: 'preparacion',
-      operario: (lineas[0].operario || ''),
-      items: lineas.map(function (l) { return { referencia: String(l.codigo_lm), cantidad: Number(l.cantidad) }; }),
+      operario: (limpias[0].operario || ''),
+      items: limpias.map(function (l) { return { referencia: String(l.codigo_lm), cantidad: Number(l.cantidad) }; }),
     });
 
-    supaUpdate_('lineas', 'peticion_id=eq.' + encodeURIComponent(peticionId), { hodos_id: idUnico });
+    const idsLimpias = limpias.map(function (l) { return l.id; }).join(',');
+    supaUpdate_('lineas', 'id=in.(' + idsLimpias + ')', { hodos_id: idUnico });
   } catch (err) {
     // No debe romper el marcado de línea (ya guardado) — solo se pierde la
     // etiqueta HODOS; reintentable (hodos_id queda vacío, sin bloqueo).
