@@ -27,6 +27,16 @@
     var OPERARIO = localStorage.getItem('kairos_operario') || '';
     var VISTA = { nombre: 'cola', peticionId: null };
     var CFG_TIENDA_COLOR = { '036': '#2e7d32', '014': '#1565c0', '279': '#6a1b9a' };
+    var ultimoDetalle = null; // {peticion, lineas} con sscc ya asignado — usado por el clic de marcar
+
+    var CFG_SHORTCUTS = {
+      // TRANSFERS — reutiliza el shortcut YA configurado en el dispositivo
+      // Android del operario para PreparacionPedidosPC (misma operación).
+      STOCK_SHORTCUT_ID: 'b02c92a5-ca50-418f-93e9-4a7e8770cdfb',
+      // move-to-address a 05-XP1-A-1-10-A — shortcut NUEVO, pendiente de
+      // crear con Pedro. Rellenar el ID real tras crearlo.
+      SHORTCUT_ID_REFILL: 'PENDIENTE-crear-con-Pedro',
+    };
 
     function render() {
       if (!OPERARIO) return renderElegirOperario();
@@ -101,15 +111,20 @@
 
     function pintarDetalle(json) {
       const data = JSON.parse(json);
+      ultimoDetalle = data;
       const p = data.peticion;
       var titulo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? ('Cesión → ' + p.tiendaDestinoNombre) : ('Refill: ' + (p.motivo || '')));
 
       var html = '<h1>' + titulo + '</h1><p class="meta">' + p.tiendaNombre + '</p>';
       html += data.lineas.map(function (l) {
         const preparada = l.estado_preparacion === 'preparado';
+        const bloqueada = !preparada && !l.sscc; // sin stock asignado, no se puede preparar
+        var extra = '';
+        if (l.avisoStock) extra = '<div class="meta" style="color:#c62828;">⚠️ ' + l.avisoStock + '</div>';
+        else if (l.ubicacion) extra = '<div class="meta">📍 ' + l.ubicacion + '</div>';
         return '<div class="linea' + (preparada ? ' preparada' : '') + '">' +
-          '<label><input type="checkbox" ' + (preparada ? 'checked disabled' : '') + ' onchange="marcarLinea(\'' + l.id + '\', this)"> ' +
-          l.codigo_lm + ' — ' + (l.designacion || '') + ' (' + l.cantidad + ' ' + l.unidad_medida + ')</label>' +
+          '<label><input type="checkbox" ' + (preparada ? 'checked disabled' : (bloqueada ? 'disabled' : '')) + ' onchange="marcarLinea(\'' + l.id + '\', this)"> ' +
+          l.codigo_lm + ' — ' + (l.designacion || '') + ' (' + l.cantidad + ' ' + l.unidad_medida + ')' + extra + '</label>' +
           '</div>';
       }).join('');
 
@@ -124,10 +139,77 @@
 
     function marcarLinea(lineaId, checkbox) {
       checkbox.disabled = true;
+      dispararPuenteMyIsoSiProcede_(lineaId);
       google.script.run
         .withSuccessHandler(function () { renderDetalle(); })
         .withFailureHandler(function (err) { alert(err.message); checkbox.disabled = false; checkbox.checked = false; })
         .marcarLineaPreparada(lineaId, OPERARIO);
+    }
+
+    // Debe llamarse SÍNCRONAMENTE dentro del onclick — si se dispara tras la
+    // respuesta de google.script.run (async), el navegador bloquea el salto
+    // a http-shortcuts:// en silencio. Por eso usa ultimoDetalle (ya en
+    // memoria desde que se abrió el detalle) y no espera nada del servidor.
+    function dispararPuenteMyIsoSiProcede_(lineaIdMarcada) {
+      if (!ultimoDetalle) return;
+      const p = ultimoDetalle.peticion;
+      const lineas = ultimoDetalle.lineas;
+
+      if (p.tipo === 'refill') {
+        const l = lineas.filter(function (x) { return x.id === lineaIdMarcada; })[0];
+        if (!l || !l.sscc) return;
+        dispararMoveToAddress_([limpiarSscc(l.sscc)], p.tienda_origen);
+        return;
+      }
+
+      if (p.tipo === 'pedido_cliente' || p.tipo === 'cesion') {
+        const quedanPendientes = lineas.some(function (x) {
+          return x.id !== lineaIdMarcada && x.estado_preparacion !== 'preparado';
+        });
+        if (quedanPendientes) return;
+
+        const transfers = [];
+        lineas.forEach(function (l) {
+          parsearSsccMulti(l.sscc, l.cantidad).forEach(function (parte) {
+            if (!parte.sscc || !parte.cantidad) return;
+            transfers.push({
+              source: limpiarSscc(parte.sscc), sourceType: 'CONTAINER',
+              stock: { productId: l.codigo_lm, quantity: parte.cantidad, measureUnit: 'EA', lotId: null, expirationDate: null, blocking: null },
+            });
+          });
+        });
+        dispararTransfers_(transfers, p.tienda_origen);
+      }
+    }
+
+    function limpiarSscc(sscc) { return String(sscc || '').replace(/^0+/, ''); }
+
+    // Espejo de _parseSsccMulti_ (StockAsignacion.js) — "sscc1 (Xud) + sscc2 (Yud)".
+    function parsearSsccMulti(valorSscc, cantidadFila) {
+      var raw = String(valorSscc || '').trim();
+      if (!raw) return [];
+      var partes = raw.indexOf(' + ') === -1 ? [raw] : raw.split(' + ');
+      return partes.map(function (parte) {
+        var m = parte.trim().match(/^(.+?)\s*\((\d+(?:[.,]\d+)?)\s*ud\)$/);
+        if (m) return { sscc: m[1].trim(), cantidad: Number(m[2].replace(',', '.')) || 0 };
+        return { sscc: parte.trim(), cantidad: partes.length === 1 ? (Number(cantidadFila) || 0) : 0 };
+      });
+    }
+
+    function dispararTransfers_(transfers, tienda) {
+      if (!transfers.length) return;
+      var url = 'http-shortcuts://' + CFG_SHORTCUTS.STOCK_SHORTCUT_ID +
+        '?TRANSFERS=' + encodeURIComponent(JSON.stringify(transfers)) +
+        '&TIENDA=' + encodeURIComponent(tienda);
+      window.location.href = url;
+    }
+
+    function dispararMoveToAddress_(ssccList, tienda) {
+      if (!CFG_SHORTCUTS.SHORTCUT_ID_REFILL || CFG_SHORTCUTS.SHORTCUT_ID_REFILL.indexOf('PENDIENTE') === 0) return;
+      var url = 'http-shortcuts://' + CFG_SHORTCUTS.SHORTCUT_ID_REFILL +
+        '?SSCC_LIST=' + encodeURIComponent(JSON.stringify(ssccList)) +
+        '&TIENDA=' + encodeURIComponent(tienda);
+      window.location.href = url;
     }
 
     function guardarUbicacion(peticionId) {
