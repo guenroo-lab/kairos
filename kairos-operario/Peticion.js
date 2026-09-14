@@ -20,20 +20,60 @@ function obtenerPeticion(peticionId) {
   return _json_({ peticion: peticion, lineas: lineas });
 }
 
-function marcarLineaPreparada(lineaId, operarioNombre) {
+function marcarLineaPreparada(lineaId, operarioNombre, incidencia, motivo) {
   operarioNombre = String(operarioNombre || '').trim();
   if (!operarioNombre) throw new Error('Selecciona tu nombre antes de preparar líneas.');
+  incidencia = String(incidencia || '').trim();
+  motivo = String(motivo || '').trim();
+
+  const lineaActual = supaSelect_('lineas', 'id=eq.' + encodeURIComponent(lineaId) + '&select=peticion_id');
+  if (!lineaActual.length) throw new Error('Línea no encontrada.');
+  const peticionId = lineaActual[0].peticion_id;
+
+  var estadoNegocio, incidenciaMotivo;
+  if (incidencia) {
+    if (['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'].indexOf(incidencia) === -1) {
+      throw new Error('Incidencia desconocida: ' + incidencia);
+    }
+    estadoNegocio = incidencia;
+    if (incidencia === 'Otras Incidencias') {
+      if (!motivo) throw new Error('Falta el motivo para la incidencia "Otras Incidencias".');
+      incidenciaMotivo = motivo;
+    } else {
+      incidenciaMotivo = null;
+    }
+  } else {
+    const cab = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(peticionId) + '&select=tipo,transporte');
+    const peticion = cab[0];
+    estadoNegocio = (peticion.tipo === 'pedido_cliente' && peticion.transporte === true) ? 'Consolidado' : 'Preparado';
+    incidenciaMotivo = null;
+  }
 
   const filas = supaUpdate_('lineas', 'id=eq.' + encodeURIComponent(lineaId), {
     estado_preparacion: 'preparado',
-    estado_negocio: 'Preparado',
+    estado_negocio: estadoNegocio,
+    incidencia_motivo: incidenciaMotivo,
     operario: operarioNombre,
     preparada_en: new Date().toISOString(),
   });
   if (!filas.length) throw new Error('Línea no encontrada.');
 
-  _dispararEtiquetaSiProcede_(filas[0].peticion_id);
+  _dispararEtiquetaSiProcede_(peticionId);
 
+  return _json_({ ok: true });
+}
+
+function deshacerLineaPreparada(lineaId, operarioNombre) {
+  operarioNombre = String(operarioNombre || '').trim();
+  if (!operarioNombre) throw new Error('Selecciona tu nombre.');
+
+  const filas = supaUpdate_('lineas', 'id=eq.' + encodeURIComponent(lineaId), {
+    estado_preparacion: 'en_curso',
+    estado_negocio: null,
+    incidencia_motivo: null,
+    operario: operarioNombre,
+  });
+  if (!filas.length) throw new Error('Línea no encontrada.');
   return _json_({ ok: true });
 }
 
