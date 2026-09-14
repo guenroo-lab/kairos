@@ -47,6 +47,17 @@ copia filas de la hoja activa de "Carta de Porte" a otro libro Google
 `Cargado`+`Recepcionado`) y borra la hoja. No hay ninguna base de datos
 digital consultable hoy — el cruce con Kairos no existe.
 
+**Clave de cruce real (verificada abriendo el Sheet en vivo, no asumida):**
+la Carta de Porte NO tiene campo "expedición" ni "número de pedido" — sus
+campos son Fecha, Nº de Precinto, Origen/Destino, Transportista/Matrículas
+y una tabla de **Número de Palet** por fila (columna A, filas 9-40). Se
+comprobó contra el histórico real (`Gestor de Solicitudes de Mercancía
+Historicos`, pestaña "Cargado") que ese "Número de Palet" **es el mismo
+SSCC de 20 dígitos que Kairos ya guarda en `lineas.sscc`** (mismo prefijo
+`00184000201400...`, mismo formato) — es el dato que `SSCC y Ubicacion.js`
+asigna en el sistema viejo y que `kairos-operario` replica en
+`StockAsignacion.js`. Cruce directo por SSCC, sin campo manual nuevo.
+
 **Cambio (aditivo, sin quitar nada de lo que hace hoy):** al final de
 `cerrarCartaDePorte()`, tras escribir en el Sheet como siempre, un bloque
 `try/catch` hace `upsert` a una tabla nueva `preparacion.estado_porte`, una
@@ -55,16 +66,15 @@ fila por palet:
 ```sql
 create table preparacion.estado_porte (
   id uuid primary key default gen_random_uuid(),
-  expedicion text not null,
-  num_palet text not null,
+  sscc text not null,
   estado_carga text,
   estado_recepcion text,
   carta_nombre text,
   cerrado_en timestamptz not null default now(),
   creado_en timestamptz not null default now(),
-  unique (expedicion, num_palet)
+  unique (sscc)
 );
-create index estado_porte_expedicion_idx on preparacion.estado_porte (expedicion);
+create index estado_porte_sscc_idx on preparacion.estado_porte (sscc);
 ```
 
 **Riesgo y por qué es aditivo:** `PreparacionPedidosPC` es código en
@@ -73,12 +83,6 @@ alrededor de la llamada a Supabase — si falla (red, credenciales, lo que
 sea), se registra el error con `console.error` y el cierre de la carta
 **sigue funcionando exactamente igual que hoy**. Nunca bloquea ni retrasa el
 flujo real.
-
-**Dato pendiente de confirmar en el plan:** qué celda exacta de la plantilla
-"Carta de Porte" contiene el número de expedición (candidatas por lo visto
-en el código: `C2`/`C3`, que hoy se copian tal cual a las columnas D/E del
-libro de cierre) — se confirma abriendo el Sheet real al implementar esta
-tarea, no se adivina aquí.
 
 `PreparacionPedidosPC` necesita sus propias credenciales de Supabase
 (`SUPABASE_URL` + `SUPABASE_SERVICE_KEY` en Script Properties, apuntando al
@@ -93,10 +97,10 @@ Dentro del detalle de una petición, para `pedido_cliente` sin transporte y
 - **HODOS**: si `lineas.hodos_id` está relleno → "Etiqueta creada" +
   `idUnico`; si no y la petición está cerrada → "Sin etiqueta" (posible
   fallo, ver Panel).
-- **Carta de Portes**: `select * from preparacion.estado_porte where
-  expedicion = ?` (la expedición se guarda ya en `public.etiquetas` de
-  HODOS, columna `expedicion`, confirmado por consulta directa) — si hay
-  fila, "Cargado"/"Recepcionado" según estado; si no, "Sin carta de porte
+- **Carta de Portes**: por cada SSCC de las líneas de la petición (mismo
+  parseo multi-SSCC ya existente, `parsearSsccMulti`/`limpiarSscc`),
+  `select * from preparacion.estado_porte where sscc = ?` — si hay fila,
+  "Cargado"/"Recepcionado" según estado; si no, "Sin carta de porte
   todavía".
 
 ## 5. Panel jefe de equipo
