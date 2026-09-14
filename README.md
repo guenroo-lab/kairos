@@ -18,3 +18,5 @@ un pedido de cliente.
 | 2 | Portal de tienda — crear peticiones + ver estado | ✅ completa |
 | 3 | App de operario — cola de peticiones, líneas, HODOS auto-etiqueta | ✅ completa (bug de URL HODOS compartida pendiente de arreglar aparte) |
 | 4 | Puentes — TRANSFERS (consumo stock) + move-to-address (refill) | código completo; falta crear shortcut Android XP1 con Pedro |
+
+Pulido: incidencias en preparación (kairos-operario) — completo 2026-09-14.
