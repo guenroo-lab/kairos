@@ -391,6 +391,53 @@
       }).listarEstadoPeticiones();
     }
 
+    function renderPanel() {
+      document.getElementById('app').innerHTML = renderTabsBar_() +
+        '<h1>Panel</h1>' +
+        '<h3>Todas las peticiones</h3><div id="listaTodas">Cargando…</div>' +
+        '<h3>Etiquetas HODOS creadas</h3><div id="listaEtiquetas">Cargando…</div>';
+      cargarTodasPeticiones_();
+      cargarEtiquetasHodos_();
+    }
+
+    function cargarTodasPeticiones_() {
+      google.script.run.withSuccessHandler(function (json) {
+        const peticiones = JSON.parse(json);
+        const cont = document.getElementById('listaTodas');
+        if (!peticiones.length) { cont.innerHTML = '<p>No hay peticiones.</p>'; return; }
+        cont.innerHTML = peticiones.map(function (p) {
+          const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
+          var botonReintentar = '';
+          if (p.necesitaHodos && !p.tieneHodos && p.estado === 'cerrada') {
+            botonReintentar = ' <button class="secundario" onclick="event.stopPropagation(); reintentarHodosUI(\'' + p.id + '\', this)">Reintentar HODOS</button>';
+          }
+          return '<div class="fila" onclick="abrirDetalle(\'' + p.id + '\')">' +
+            '<div class="tipo">' + etiquetaTipo + '</div>' +
+            '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + p.estado + botonReintentar + '</div></div>';
+        }).join('');
+      }).listarTodasPeticiones();
+    }
+
+    function cargarEtiquetasHodos_() {
+      google.script.run.withSuccessHandler(function (json) {
+        const etiquetas = JSON.parse(json);
+        const cont = document.getElementById('listaEtiquetas');
+        if (!etiquetas.length) { cont.innerHTML = '<p>Sin etiquetas todavía.</p>'; return; }
+        cont.innerHTML = etiquetas.map(function (e) {
+          return '<div class="linea"><div>' + (e.numero_pedido || '(sin nº)') + ' → ' + e.destino + '</div>' +
+            '<div class="meta">' + e.id_unico + ' · ' + e.estado + ' · ' + new Date(e.fecha_creacion).toLocaleString('es-ES') + '</div></div>';
+        }).join('');
+      }).listarEtiquetasHodos();
+    }
+
+    function reintentarHodosUI(peticionId, boton) {
+      boton.disabled = true; boton.textContent = 'Enviando…';
+      google.script.run
+        .withSuccessHandler(function () { cargarTodasPeticiones_(); cargarEtiquetasHodos_(); })
+        .withFailureHandler(function (err) { alert(err.message); boton.disabled = false; boton.textContent = 'Reintentar HODOS'; })
+        .reintentarHodos(peticionId);
+    }
+
     document.addEventListener('DOMContentLoaded', function () { render(); });
   </script>
 </body>
