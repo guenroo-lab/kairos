@@ -42,25 +42,54 @@
   html, body { background:var(--ink-950); }
   body {
     background-image:
-      radial-gradient(700px 420px at 8% -8%, var(--accent-dim), transparent 60%),
-      radial-gradient(600px 500px at 110% 15%, var(--ink-800), transparent 55%),
-      radial-gradient(circle, var(--ink-800) 1px, transparent 1.4px);
-    background-size: auto, auto, 22px 22px;
+      radial-gradient(900px 620px at -10% -15%, var(--accent) 0%, transparent 55%),
+      radial-gradient(800px 700px at 115% 10%, var(--accent-line) 0%, transparent 50%),
+      linear-gradient(160deg, var(--ink-950) 0%, var(--ink-900) 55%, var(--ink-950) 100%);
+    background-size: auto, auto, 100% 100%;
     background-position: 0 0, 0 0, 0 0;
-    background-repeat: no-repeat, no-repeat, repeat;
+    background-repeat: no-repeat;
     background-attachment: fixed;
+  }
+  [data-kmode="light"] body {
+    background-image:
+      radial-gradient(900px 620px at -10% -15%, var(--accent) 0%, transparent 50%),
+      radial-gradient(800px 700px at 115% 10%, var(--accent-line) 0%, transparent 42%),
+      linear-gradient(160deg, var(--ink-950) 0%, var(--ink-800) 55%, var(--ink-950) 100%);
   }
   body { margin:0; color:var(--text-100); font-family:'Inter',system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased; transition:background .15s ease,color .15s ease; }
   h2 { font-size:18px; font-weight:800; margin:0 0 10px; letter-spacing:-.01em; }
   .wrap { max-width:720px; margin:0 auto; padding:16px; }
   .top { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--ink-800); }
-  .card { background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:16px; margin-bottom:12px; box-shadow:var(--shadow-card); }
-  .btn { width:100%; padding:14px; min-height:52px; border-radius:var(--radius-btn); border:none; font-weight:700; font-size:15px; cursor:pointer; margin-top:8px; }
-  .tabs { display:flex; background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:4px; margin:0 16px 12px; gap:2px; }
-  .tabs a { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:10px 2px; border-radius:calc(var(--radius-card) - 4px); text-decoration:none; color:var(--text-500); font-size:12px; font-weight:700; min-height:54px; }
+  .card {
+    background: linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%);
+    border:1px solid var(--ink-800); border-top:1px solid rgba(255,255,255,.07);
+    border-radius:18px; padding:18px; margin-bottom:14px;
+    box-shadow: 0 1px 0 rgba(255,255,255,.04) inset, 0 14px 34px -16px rgba(0,0,0,.65);
+  }
+  .btn {
+    width:100%; padding:14px; min-height:52px; border-radius:14px; border:none;
+    font-weight:800; font-size:15px; letter-spacing:.01em; cursor:pointer; margin-top:8px;
+    transition: transform .12s ease, filter .12s ease;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn-primary {
+    background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 70%, #000) 100%);
+    color: var(--accent-ink);
+    box-shadow: 0 10px 24px -10px color-mix(in srgb, var(--accent) 70%, transparent), 0 1px 0 rgba(255,255,255,.25) inset;
+  }
+  .btn-primary:active { filter: brightness(.94); }
+  .tabs {
+    display:flex; background: linear-gradient(160deg, var(--ink-850), var(--ink-900));
+    border:1px solid var(--ink-800); border-radius:22px; padding:6px; margin:0 16px 14px; gap:4px;
+    box-shadow: 0 10px 26px -14px rgba(0,0,0,.6);
+  }
+  .tabs a { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:10px 2px; border-radius:16px; text-decoration:none; color:var(--text-500); font-size:12px; font-weight:700; min-height:56px; transition: background .15s ease, color .15s ease; }
   .tabs a svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
-  .tabs a.activa { background:var(--accent-dim); color:var(--accent-ink); }
-  [data-kmode="light"] .tabs a.activa { color:var(--accent); }
+  .tabs a.activa {
+    background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 65%, #000) 100%);
+    color: var(--accent-ink);
+    box-shadow: 0 8px 18px -8px color-mix(in srgb, var(--accent) 70%, transparent);
+  }
   .btn-primary { background:var(--accent); color:var(--accent-ink); }
   .btn-ghost { background:var(--ink-800); color:var(--text-300); border:1px solid var(--ink-700); }
   .btn-danger { background:var(--danger-bg); color:var(--danger-fg); border:1px solid var(--danger-line); }
