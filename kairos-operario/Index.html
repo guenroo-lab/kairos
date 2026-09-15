@@ -466,7 +466,7 @@
       var html = '<h1>' + titulo + '</h1><p class="meta">' + p.tiendaNombre + '</p>';
       html += ultimoDetalle.lineas.map(function (l) { return renderLineaHtml_(p, l); }).join('');
 
-      if (p.tipo === 'cesion' || (p.tipo === 'pedido_cliente' && !p.transporte)) {
+      if (p.tipo === 'cesion' || p.tipo === 'refill' || (p.tipo === 'pedido_cliente' && !p.transporte)) {
         html += '<h3>Estado</h3><div id="estadoDetalle" class="meta">Cargando…</div>';
       }
 
@@ -482,9 +482,9 @@
       if (contEstado) {
         google.script.run.withSuccessHandler(function (json) {
           const fila = JSON.parse(json).filter(function (x) { return x.id === p.id; })[0];
-          contEstado.textContent = fila
-            ? ('HODOS: ' + (fila.hodosOk ? 'etiqueta creada' : 'sin etiqueta'))
-            : 'Sin datos.';
+          contEstado.textContent = !fila ? 'Sin datos.'
+            : p.tipo === 'refill' ? ('Refill: ' + fila.refillEstado + (fila.refillFecha ? ' (entrega ' + fila.refillFecha + ')' : ''))
+            : ('HODOS: ' + (fila.hodosOk ? 'etiqueta creada' : 'sin etiqueta'));
         }).listarEstadoPeticiones();
       }
     }
@@ -701,7 +701,7 @@
           const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
           const detalle = p.camino === 'hodos' ? ('HODOS: ' + (p.hodosOk ? '✓' : '—'))
             : p.camino === 'a_ubicar' ? ('A ubicar: ' + p.estado)
-            : ('Seguimiento interno: ' + p.estado);
+            : ('Refill: ' + p.refillEstado + (p.refillFecha ? ' (entrega ' + p.refillFecha + ')' : ''));
           return '<div class="fila" onclick="abrirDetalle(\'' + p.id + '\')">' +
             '<div class="tipo">' + etiquetaTipo + '</div>' +
             '<div class="meta">' + p.tiendaNombre + ' · ' + detalle + '</div></div>';

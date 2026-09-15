@@ -373,7 +373,7 @@
         var detalle;
         if (p.camino === 'a_ubicar') detalle = p.estadoTexto;
         else if (p.camino === 'hodos') detalle = 'HODOS: ' + p.hodosTexto;
-        else detalle = 'Seguimiento interno: ' + p.estadoTexto;
+        else detalle = 'Refill: ' + p.refillTexto;
         const fila = el(
           '<div class="fila" style="cursor:default;">' +
             '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
