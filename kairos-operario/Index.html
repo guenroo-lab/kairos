@@ -316,7 +316,7 @@
       var html = '<h1>' + titulo + '</h1><p class="meta">' + p.tiendaNombre + '</p>';
       html += ultimoDetalle.lineas.map(function (l) { return renderLineaHtml_(p, l); }).join('');
 
-      if (p.tipo === 'pedido_cliente' || p.tipo === 'cesion') {
+      if (p.tipo === 'cesion' || (p.tipo === 'pedido_cliente' && !p.transporte)) {
         html += '<h3>Estado</h3><div id="estadoDetalle" class="meta">Cargando…</div>';
       }
 
@@ -333,7 +333,7 @@
         google.script.run.withSuccessHandler(function (json) {
           const fila = JSON.parse(json).filter(function (x) { return x.id === p.id; })[0];
           contEstado.textContent = fila
-            ? ('HODOS: ' + (fila.hodosOk ? 'etiqueta creada' : 'sin etiqueta') + ' · Carta de Portes: ' + (fila.porteEstado || 'sin carta todavía'))
+            ? ('HODOS: ' + (fila.hodosOk ? 'etiqueta creada' : 'sin etiqueta'))
             : 'Sin datos.';
         }).listarEstadoPeticiones();
       }
@@ -541,7 +541,7 @@
 
     function renderEstado() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
-        '<h1>Estado (HODOS + Carta de Portes)</h1><div id="listaEstado">Cargando…</div>';
+        '<h1>Estado</h1><div id="listaEstado">Cargando…</div>';
       sincronizarPickers_();
       google.script.run.withSuccessHandler(function (json) {
         const peticiones = JSON.parse(json);
@@ -549,10 +549,12 @@
         if (!peticiones.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
         cont.innerHTML = peticiones.map(function (p) {
           const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
+          const detalle = p.camino === 'hodos' ? ('HODOS: ' + (p.hodosOk ? '✓' : '—'))
+            : p.camino === 'a_ubicar' ? ('A ubicar: ' + p.estado)
+            : ('Seguimiento interno: ' + p.estado);
           return '<div class="fila" onclick="abrirDetalle(\'' + p.id + '\')">' +
             '<div class="tipo">' + etiquetaTipo + '</div>' +
-            '<div class="meta">' + p.tiendaNombre + ' · HODOS: ' + (p.hodosOk ? '✓' : '—') +
-            ' · Porte: ' + (p.porteEstado || '—') + '</div></div>';
+            '<div class="meta">' + p.tiendaNombre + ' · ' + detalle + '</div></div>';
         }).join('');
       }).listarEstadoPeticiones();
     }

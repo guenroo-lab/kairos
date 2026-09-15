@@ -334,8 +334,8 @@
       filas.forEach(function (p) {
         var detalle;
         if (p.camino === 'a_ubicar') detalle = p.estadoTexto;
-        else if (p.camino === 'porte') detalle = 'Carta de Portes: ' + p.porteEstado;
-        else detalle = 'HODOS: ' + p.hodosTexto;
+        else if (p.camino === 'hodos') detalle = 'HODOS: ' + p.hodosTexto;
+        else detalle = 'Seguimiento interno: ' + p.estadoTexto;
         const fila = el(
           '<div class="fila" style="cursor:default;">' +
             '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
