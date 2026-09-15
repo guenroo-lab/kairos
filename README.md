@@ -25,7 +25,7 @@ un pedido de cliente.
 | 9 | Validación stock edificio 5 + alertas duplicado | ✅ completa, fusionada y en producción |
 | 10 | Formulario petición — orden, nº cesión, multi-artículo | ✅ completa, fusionada y en producción |
 | 11 | Entrada operario — 1-2 personas, tienda, filtros | ✅ completa, fusionada y en producción |
-| 12 | Trazabilidad Refill real (puente CartadePortesSIE) | pendiente |
+| 12 | Trazabilidad Refill real (HODOS: palets/cargas) | ✅ completa, fusionada y en producción |
 | 13 | Buscador de peticiones realizadas | pendiente |
 
 Pulido: incidencias en preparación (kairos-operario) — completo 2026-09-14.
