@@ -22,7 +22,7 @@ un pedido de cliente.
 | 6 | Trazabilidad (portal) + volúmenes de trabajo + cola individual | ✅ completa, fusionada y en producción |
 | 7 | Rediseño visual — tema (4 acentos + claro/oscuro), logos | ✅ completa, fusionada y en producción |
 | 8 | Pulido UX — modales in-página, pestañas, logos grandes, botones | ✅ completa, fusionada y en producción |
-| 9 | Validación stock edificio 5 + alertas duplicado | pendiente |
+| 9 | Validación stock edificio 5 + alertas duplicado | ✅ completa, fusionada y en producción |
 | 10 | Formulario petición — orden, nº cesión, multi-artículo | pendiente |
 | 11 | Entrada operario — 1-2 personas, tienda, filtros | pendiente |
 | 12 | Trazabilidad Refill real (puente CartadePortesSIE) | pendiente |
