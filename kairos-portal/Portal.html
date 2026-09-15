@@ -499,15 +499,30 @@
     };
 
     function pedirCantidad() {
-      kPedirTexto('¿Cuántas ' + unidadLabel + ' de ' + articuloElegido.codigo_lm + '?', { numerico: true }).then(function (cantidadTexto) {
-      const cantidad = Number(cantidadTexto);
-      if (!cantidad || cantidad <= 0) return;
-      lineas.push({
-        codigoLm: articuloElegido.codigo_lm, designacion: articuloElegido.designacion,
-        ean: articuloElegido.ean, seccion: articuloElegido.seccion, cantidad: cantidad,
-      });
-      inputBuscar.value = ''; articuloElegido = null;
-      pintarLineas();
+      const articulo = articuloElegido;
+      kPedirTexto('¿Cuántas ' + unidadLabel + ' de ' + articulo.codigo_lm + '?', { numerico: true }).then(function (cantidadTexto) {
+        const cantidad = Number(cantidadTexto);
+        if (!cantidad || cantidad <= 0) return;
+        gas('verificarAntesDeAnadir', LDAP, articulo.codigo_lm, cantidad).then(function (chk) {
+          if (cantidad > chk.disponible) {
+            kAlerta('Solo hay ' + chk.disponible + ' ' + unidadLabel + ' disponibles de ' + articulo.codigo_lm + ' en almacén.');
+            return;
+          }
+          function anadir() {
+            lineas.push({
+              codigoLm: articulo.codigo_lm, designacion: articulo.designacion,
+              ean: articulo.ean, seccion: articulo.seccion, cantidad: cantidad,
+            });
+            inputBuscar.value = ''; articuloElegido = null;
+            pintarLineas();
+          }
+          if (chk.duplicados.length) {
+            kAlerta('Ya hay una petición abierta (' + (ETIQUETA_TIPO[chk.duplicados[0].tipo] || chk.duplicados[0].tipo) +
+              ') con este artículo — se añadirá de todas formas.').then(anadir);
+          } else {
+            anadir();
+          }
+        });
       });
     }
 

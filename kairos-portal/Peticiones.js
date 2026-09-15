@@ -5,12 +5,50 @@ const TRADUCCION_ESTADO = {
   cerrada: 'Completada',
 };
 
+/** Unidades disponibles ahora mismo en edificio 5 (stock_fisico) para esa
+ *  tienda + código LM, sumando todos los SSCC. */
+function _stockDisponible_(tienda, codigoLm) {
+  const filas = supaSelect_('stock_fisico',
+    'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(codigoLm) + '&select=cantidad');
+  return filas.reduce(function (s, f) { return s + Number(f.cantidad); }, 0);
+}
+
+/** Peticiones abiertas (no cerradas) de la misma tienda que ya llevan ese
+ *  código LM — aviso de posible duplicado, no bloqueante. */
+function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
+  const tienda = _tiendaDe_(ldap);
+  const disponible = _stockDisponible_(tienda, codigoLm);
+
+  const abiertas = supaSelect_('peticiones',
+    'tienda_origen=eq.' + encodeURIComponent(tienda) + '&estado=in.(pendiente,en_preparacion,a_ubicar)&select=id,tipo,creada_en');
+  var duplicados = [];
+  if (abiertas.length) {
+    const ids = abiertas.map(function (p) { return p.id; }).join(',');
+    const lineasAbiertas = supaSelect_('lineas',
+      'peticion_id=in.(' + ids + ')&codigo_lm=eq.' + encodeURIComponent(codigoLm) + '&select=peticion_id');
+    const idsConLinea = lineasAbiertas.map(function (l) { return l.peticion_id; });
+    duplicados = abiertas.filter(function (p) { return idsConLinea.indexOf(p.id) !== -1; });
+  }
+
+  return _json_({
+    disponible: disponible,
+    duplicados: duplicados.map(function (p) { return { tipo: p.tipo, fecha: p.creada_en }; }),
+  });
+}
+
 function crearPeticion(ldap, tipo, datos, lineas) {
   const tienda = _tiendaDe_(ldap);
   if (['pedido_cliente', 'cesion', 'refill'].indexOf(tipo) === -1) {
     throw new Error('Tipo de petición no válido.');
   }
   if (!lineas || !lineas.length) throw new Error('Añade al menos una línea.');
+
+  lineas.forEach(function (l) {
+    const disponible = _stockDisponible_(tienda, String(l.codigoLm || '').trim());
+    if (Number(l.cantidad) > disponible) {
+      throw new Error('No hay stock suficiente de ' + l.codigoLm + ' en almacén (' + disponible + ' disponibles).');
+    }
+  });
 
   const cabecera = {
     tipo: tipo,
