@@ -97,6 +97,7 @@ function listarMisPeticiones(ldap) {
   const filas = supaSelect_(
     'peticiones',
     'tienda_origen=eq.' + encodeURIComponent(tienda) +
+      '&estado=neq.cerrada' +
       '&select=id,tipo,num_pedido,num_cesion,tienda_destino,estado,creada_en,solicitante_ldap' +
       '&order=creada_en.desc&limit=200'
   );
