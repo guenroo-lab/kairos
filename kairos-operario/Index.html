@@ -54,16 +54,25 @@
     h1 { font-size:19px; font-weight:800; margin:0 0 4px; letter-spacing:-.01em; }
     h3 { font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-500); margin:16px 0 6px; }
     select, input { font-size:15px; padding:9px 11px; margin:4px 0; background:var(--ink-900); border:1px solid var(--ink-700); border-radius:var(--radius-btn); color:var(--text-100); }
-    button { cursor:pointer; border:none; border-radius:var(--radius-btn); padding:10px 15px; font-size:13.5px; font-weight:700; background:var(--accent); color:var(--accent-ink); }
+    button { cursor:pointer; border:none; border-radius:var(--radius-btn); padding:10px 15px; min-height:44px; font-size:13.5px; font-weight:700; background:var(--accent); color:var(--accent-ink); }
     button.secundario { background:var(--ink-800); color:var(--text-300); }
-    button.aviso { background:var(--warn-bg); color:var(--warn-fg); border:1px solid var(--warn-line); }
-    button.peligro { background:var(--danger-bg); color:var(--danger-fg); border:1px solid var(--danger-line); }
+    /* Botones de acción de línea (preparar/incidencia): paleta pastel calcada
+       de PreparacionPedidosPC (Preparacion.html .btn-color) a propósito — el
+       operario ya los reconoce así, distinto del resto del sistema oscuro. */
+    button.aviso, button.peligro, button.ok, button.neutro { color:#0b1220; min-height:56px; box-shadow:0 3px 0 rgba(0,0,0,.18); }
+    button.aviso   { background:linear-gradient(155deg,#ffe2ad,#ffc063); }
+    button.peligro { background:linear-gradient(155deg,#ffc7ce,#ff96a3); }
+    button.ok      { background:linear-gradient(155deg,#baf2cd,#7fe0a0); }
+    button.neutro  { background:linear-gradient(155deg,#e4e6ee,#c3c7d6); }
+    button.aviso:active, button.peligro:active, button.ok:active, button.neutro:active { transform:scale(.96); }
     .fila { background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:12px 14px; margin-bottom:8px; cursor:pointer; border-left:4px solid var(--ink-700); box-shadow:var(--shadow-card); }
     .fila .tipo { font-weight:700; font-size:14px; }
     .fila .meta { color:var(--text-500); font-size:12.5px; margin-top:2px; }
     .linea { background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:11px 12px; margin-bottom:6px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:7px; }
     .linea.preparada { opacity:.6; }
     .linea label { flex:1; color:var(--text-100); }
+    .linea .desc { font-weight:700; font-size:15px; line-height:1.35; }
+    .linea .meta { font-size:13.5px; }
     .meta { color:var(--text-500); font-size:12.5px; }
     .filtros { margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap; }
     .volver { margin-bottom:12px; display:inline-block; }
@@ -72,21 +81,30 @@
     [data-kmode="light"] #operarioBar { color:var(--accent); }
     #operarioBar a { color:inherit; opacity:.85; font-weight:600; }
     #app { max-width:480px; margin:0 auto; }
-    .tabs { display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; }
-    .tabs a { padding:6px 12px; border-radius:var(--radius-chip); text-decoration:none; color:var(--text-300); background:var(--ink-800); font-size:13px; font-weight:600; }
-    .tabs a.activa { background:var(--accent-dim); color:var(--accent-ink); border:1px solid var(--accent-line); }
+    .tabs { display:flex; background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:4px; margin-bottom:14px; gap:2px; }
+    .tabs a { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:8px 2px; border-radius:calc(var(--radius-card) - 4px); text-decoration:none; color:var(--text-500); font-size:10.5px; font-weight:700; min-height:52px; }
+    .tabs a svg { width:20px; height:20px; }
+    .tabs a.activa { background:var(--accent-dim); color:var(--accent-ink); }
     [data-kmode="light"] .tabs a.activa { color:var(--accent); }
     .chip { font-size:11px; font-weight:700; padding:3px 9px; border-radius:var(--radius-chip); white-space:nowrap; display:inline-block; }
     .chip-marbella { background:var(--chip-marbella-bg); color:var(--chip-marbella-fg); }
     .chip-mijas { background:var(--chip-mijas-bg); color:var(--chip-mijas-fg); }
     .chip-malaga { background:var(--chip-malaga-bg); color:var(--chip-malaga-fg); }
 
-    .brand-head { display:flex; align-items:center; gap:8px; margin-bottom:10px; }
-    .brand-badge { background:#fff; border-radius:8px; padding:4px 7px; display:flex; align-items:center; box-shadow:0 2px 8px -3px rgba(0,0,0,.4); }
-    .brand-badge img { display:block; height:18px; width:auto; }
-    .brand-x { color:var(--text-600); font-size:12px; font-weight:600; }
+    .brand-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
+    .brand-badge { background:#fff; border-radius:10px; padding:6px 10px; display:flex; align-items:center; box-shadow:0 2px 8px -3px rgba(0,0,0,.4); }
+    .brand-badge img { display:block; height:30px; width:auto; }
+    .brand-x { color:var(--text-600); font-size:14px; font-weight:600; }
     .theme-toggle { margin-left:auto; }
-    button.theme-btn { background:var(--ink-800); color:var(--text-300); padding:7px 10px; font-size:12px; }
+    button.theme-btn { background:var(--ink-800); color:var(--text-300); padding:7px 10px; font-size:12px; display:flex; align-items:center; gap:5px; min-height:36px; }
+    .theme-btn svg { width:16px; height:16px; }
+
+    .koverlay { position:fixed; inset:0; background:rgba(5,7,10,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1000; }
+    .kmodal { background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:18px; max-width:360px; width:100%; box-shadow:var(--shadow-card); }
+    .kmodal p { margin:0 0 14px; font-size:14.5px; line-height:1.45; color:var(--text-100); }
+    .kmodal input { width:100%; }
+    .kmodal .fila-botones { display:flex; gap:8px; justify-content:flex-end; margin-top:6px; }
+    .kmodal .fila-botones button { min-width:84px; }
     .theme-panel { background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:12px; margin-bottom:12px; display:none; }
     .theme-panel.abierto { display:block; }
     .picker-row { display:flex; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:8px; }
@@ -113,6 +131,8 @@
     .bars .fill { width:100%; background:var(--accent); border-radius:3px 3px 0 0; min-height:2px; }
     .bars .n { font-size:10px; color:var(--text-500); }
     .bars .d { font-size:9.5px; color:var(--text-600); }
+
+    .tabs a svg, .theme-btn svg { stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
   </style>
 </head>
 <body>
@@ -143,12 +163,51 @@
     // ——— Tema: modo (claro/oscuro) + acento (4 colores), persistente por dispositivo ———
     var TEMAS_MODOS = { indigo: ['dark'], lmgreen: ['dark', 'light'], taisared: ['dark', 'light'], amber: ['dark'] };
 
+    // ——— Modal in-página (sustituye prompt/confirm/alert nativos) ———
+    function kModal_(opts) {
+      return new Promise(function (resolve) {
+        var overlay = document.createElement('div');
+        overlay.className = 'koverlay';
+        var inputHtml = opts.input
+          ? '<input type="' + (opts.numerico ? 'number' : 'text') + '" id="kmodalInput" value="' + (opts.valorInicial || '') + '">'
+          : '';
+        var botonesHtml = opts.cancelar
+          ? '<button class="secundario" id="kmodalCancelar">Cancelar</button><button id="kmodalAceptar">' + (opts.textoAceptar || 'Aceptar') + '</button>'
+          : '<button id="kmodalAceptar">' + (opts.textoAceptar || 'Aceptar') + '</button>';
+        overlay.innerHTML = '<div class="kmodal"><p>' + opts.mensaje + '</p>' + inputHtml + '<div class="fila-botones">' + botonesHtml + '</div></div>';
+        document.body.appendChild(overlay);
+        var input = overlay.querySelector('#kmodalInput');
+        if (input) { input.focus(); input.select(); }
+        function cerrar(valor) { document.body.removeChild(overlay); resolve(valor); }
+        overlay.querySelector('#kmodalAceptar').onclick = function () { cerrar(opts.input ? input.value : true); };
+        var btnCancelar = overlay.querySelector('#kmodalCancelar');
+        if (btnCancelar) btnCancelar.onclick = function () { cerrar(opts.input ? null : false); };
+        if (input) input.onkeydown = function (e) { if (e.key === 'Enter') overlay.querySelector('#kmodalAceptar').click(); };
+      });
+    }
+    function kAlerta(mensaje) { return kModal_({ mensaje: mensaje, cancelar: false }); }
+    function kConfirmar(mensaje) { return kModal_({ mensaje: mensaje, cancelar: true }); }
+    function kPedirTexto(mensaje, opts) {
+      opts = opts || {};
+      return kModal_({ mensaje: mensaje, input: true, numerico: opts.numerico, valorInicial: opts.valorInicial, cancelar: true });
+    }
+
+    // ——— Iconos SVG (sin emoji, trazo fino) ———
+    var ICONO_TABS = {
+      cola: '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>',
+      stock: '<svg viewBox="0 0 24 24"><path d="M21 8l-9-5-9 5 9 5 9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg>',
+      estado: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',
+      panel: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
+      volumenes: '<svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
+    };
+    var ICONO_TEMA = '<svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>';
+
     function renderBrandHeaderHtml_() {
       return '<div class="brand-head">' +
         '<div class="brand-badge"><img src="' + LOGO_TAISA_B64 + '" alt="Taisa"></div>' +
         '<span class="brand-x">×</span>' +
         '<div class="brand-badge"><img src="data:image/png;base64,' + LOGO_LM_B64 + '" alt="Leroy Merlin"></div>' +
-        '<div class="theme-toggle"><button class="theme-btn" onclick="toggleThemePanel()" type="button">🎨 Tema</button></div>' +
+        '<div class="theme-toggle"><button class="theme-btn" onclick="toggleThemePanel()" type="button">' + ICONO_TEMA + 'Tema</button></div>' +
         '</div>' +
         '<div class="theme-panel" id="themePanel">' +
         '<div class="picker-row"><span class="picker-label">Modo</span>' +
@@ -217,7 +276,8 @@
       ];
       return '<div class="tabs">' + tabs.map(function (t) {
         return '<a href="#" class="' + (VISTA.nombre === t.nombre ? 'activa' : '') +
-          '" onclick="event.preventDefault(); VISTA={nombre:\'' + t.nombre + '\',peticionId:null}; render();">' + t.label + '</a>';
+          '" onclick="event.preventDefault(); VISTA={nombre:\'' + t.nombre + '\',peticionId:null}; render();">' +
+          ICONO_TABS[t.nombre] + '<span>' + t.label + '</span></a>';
       }).join('') + '</div>';
     }
 
@@ -352,42 +412,42 @@
         if (p.tipo === 'pedido_cliente' || p.tipo === 'cesion') {
           botonDeshacer = ' <button class="secundario" onclick="deshacerLinea(\'' + l.id + '\')">Deshacer</button>';
         }
-        return '<div class="linea preparada"><div>' + cabecera + '</div>' + extraInfo +
+        return '<div class="linea preparada"><div class="desc">' + cabecera + '</div>' + extraInfo +
           '<div class="meta">✓ Preparada' + (resumen ? ' · ' + resumen : '') + '</div>' + botonDeshacer + '</div>';
       }
 
       const bloqueada = !l.sscc;
 
       if (p.tipo === 'refill') {
-        return '<div class="linea"><label><input type="checkbox" ' + (bloqueada ? 'disabled' : '') + ' onchange="marcarLinea(\'' + l.id + '\', this)"> ' + cabecera + '</label>' + extraInfo + '</div>';
+        return '<div class="linea"><label><input type="checkbox" ' + (bloqueada ? 'disabled' : '') + ' onchange="marcarLinea(\'' + l.id + '\', this)"> <span class="desc">' + cabecera + '</span></label>' + extraInfo + '</div>';
       }
 
       // pedido_cliente / cesion: flujo de incidencia
       if (bloqueada) {
-        return '<div class="linea"><div>' + cabecera + '</div>' + extraInfo + '</div>';
+        return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo + '</div>';
       }
 
       const vista = vistaLinea[l.id];
 
       if (vista === 'motivo') {
-        return '<div class="linea"><div>' + cabecera + '</div>' +
+        return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
           '<input type="text" id="motivo-' + l.id + '" placeholder="Motivo de la incidencia"> ' +
-          '<button onclick="confirmarOtrasIncidencias(\'' + l.id + '\')">Confirmar</button> ' +
+          '<button class="ok" onclick="confirmarOtrasIncidencias(\'' + l.id + '\')">Confirmar</button> ' +
           '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">‹ Volver</button></div>';
       }
       if (vista === 'tipos') {
-        return '<div class="linea"><div>' + cabecera + '</div>' +
+        return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
           '<button class="aviso" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Palet\', \'\')">Sin Palet</button> ' +
           '<button class="peligro" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Mercancía\', \'\')">Sin Mercancía</button> ' +
-          '<button class="secundario" onclick="verIncidenciaMotivo(\'' + l.id + '\')">Otras Incidencias</button> ' +
+          '<button class="neutro" onclick="verIncidenciaMotivo(\'' + l.id + '\')">Otras Incidencias</button> ' +
           '<button class="secundario" onclick="verIncidenciaPregunta(\'' + l.id + '\')">‹ Volver</button></div>';
       }
       if (vista === 'pregunta') {
-        return '<div class="linea"><div>' + cabecera + '</div>' +
-          '<button onclick="cerrarLinea(\'' + l.id + '\', \'\', \'\')">Sin incidencia</button> ' +
-          '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">⚠ Con incidencia</button></div>';
+        return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
+          '<button class="ok" onclick="cerrarLinea(\'' + l.id + '\', \'\', \'\')">Sin incidencia</button> ' +
+          '<button class="aviso" onclick="verIncidenciaTipos(\'' + l.id + '\')">⚠ Con incidencia</button></div>';
       }
-      return '<div class="linea"><div>' + cabecera + '</div>' + extraInfo +
+      return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
         '<button onclick="verIncidenciaPregunta(\'' + l.id + '\')">Marcar preparada</button></div>';
     }
 
@@ -407,14 +467,14 @@
       dispararPuenteMyIsoSiProcede_(lineaId, !!incidencia);
       google.script.run
         .withSuccessHandler(function () { renderDetalle(); })
-        .withFailureHandler(function (err) { alert(err.message); })
+        .withFailureHandler(function (err) { kAlerta(err.message); })
         .marcarLineaPreparada(lineaId, OPERARIO, incidencia, motivo);
     }
 
     function deshacerLinea(lineaId) {
       google.script.run
         .withSuccessHandler(function () { renderDetalle(); })
-        .withFailureHandler(function (err) { alert(err.message); })
+        .withFailureHandler(function (err) { kAlerta(err.message); })
         .deshacerLineaPreparada(lineaId, OPERARIO);
     }
 
@@ -423,7 +483,7 @@
       dispararPuenteMyIsoSiProcede_(lineaId, false);
       google.script.run
         .withSuccessHandler(function () { renderDetalle(); })
-        .withFailureHandler(function (err) { alert(err.message); checkbox.disabled = false; checkbox.checked = false; })
+        .withFailureHandler(function (err) { kAlerta(err.message); checkbox.disabled = false; checkbox.checked = false; })
         .marcarLineaPreparada(lineaId, OPERARIO);
     }
 
@@ -504,7 +564,7 @@
       const ubicacion = document.getElementById('ubicacion').value;
       google.script.run
         .withSuccessHandler(function () { renderDetalle(); })
-        .withFailureHandler(function (err) { alert(err.message); })
+        .withFailureHandler(function (err) { kAlerta(err.message); })
         .guardarUbicacionConsolidacion(peticionId, ubicacion);
     }
 
@@ -608,7 +668,7 @@
       boton.disabled = true; boton.textContent = 'Enviando…';
       google.script.run
         .withSuccessHandler(function () { cargarTodasPeticiones_(); cargarEtiquetasHodos_(); })
-        .withFailureHandler(function (err) { alert(err.message); boton.disabled = false; boton.textContent = 'Reintentar HODOS'; })
+        .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; boton.textContent = 'Reintentar HODOS'; })
         .reintentarHodos(peticionId);
     }
 
@@ -616,7 +676,7 @@
       boton.disabled = true;
       google.script.run
         .withSuccessHandler(function () { cargarTodasPeticiones_(); })
-        .withFailureHandler(function (err) { alert(err.message); boton.disabled = false; })
+        .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; })
         .marcarColaIndividual(peticionId, valor);
     }
 
