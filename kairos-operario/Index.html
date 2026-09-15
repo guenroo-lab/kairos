@@ -133,6 +133,19 @@
     .bars .d { font-size:9.5px; color:var(--text-600); }
 
     .tabs a svg, .theme-btn svg { stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+
+    /* Pantallas de selección (operario/tienda) — mismo lenguaje visual
+       grande y pastel que PreparacionPedidosPC para que se reconozca. */
+    .grid-operarios { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:14px; }
+    .btn-operario { min-height:72px; border-radius:16px; border:2px solid var(--ink-700); background:var(--ink-900); color:var(--text-100); font-size:16px; font-weight:800; cursor:pointer; padding:10px; }
+    .btn-operario.activo { background:var(--accent-dim); border-color:var(--accent); color:var(--accent-ink); }
+    [data-kmode="light"] .btn-operario.activo { color:var(--accent); }
+    .grid-tiendas { display:grid; grid-template-columns:1fr 1fr; gap:14px; margin-bottom:8px; }
+    .btn-tienda { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; min-height:168px; border-radius:20px; border:none; padding:16px; font-size:18px; font-weight:900; letter-spacing:.02em; text-transform:uppercase; color:#0b1220; cursor:pointer; box-shadow:0 4px 0 rgba(0,0,0,.18); }
+    .btn-tienda .avatar { width:56px; height:56px; border-radius:50%; background:rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:900; }
+    .btn-tienda.marbella { background:linear-gradient(155deg,#d3ecff,#8fcdff); }
+    .btn-tienda.mijas { background:linear-gradient(155deg,#ecdcff,#c298ff); }
+    .contador-tienda { font-size:11px; font-weight:800; text-transform:none; letter-spacing:normal; background:rgba(11,18,32,.18); padding:3px 10px; border-radius:20px; color:#0b1220; }
   </style>
 </head>
 <body>
@@ -144,6 +157,7 @@
 
     var OPERARIO = localStorage.getItem('kairos_operario') || '';
     var ROL = localStorage.getItem('kairos_rol') || 'operario';
+    var TIENDA_ACTIVA = localStorage.getItem('kairos_tienda_activa') || '';
     var VISTA = { nombre: 'cola', peticionId: null };
     var CFG_TIENDA_COLOR = { '036': '#2e7d32', '014': '#1565c0', '279': '#6a1b9a' };
     var CFG_TIENDA_NOMBRE = { '036': 'Málaga', '014': 'Marbella', '279': 'Mijas' };
@@ -256,7 +270,9 @@
     }
 
     function render() {
-      if (!OPERARIO) return renderElegirOperario();
+      if (!OPERARIO) return renderElegirOperarios();
+      if (!TIENDA_ACTIVA) return renderElegirTienda();
+      if (VISTA.nombre === 'elegirTienda') return renderElegirTienda();
       if (VISTA.nombre === 'cola') return renderCola();
       if (VISTA.nombre === 'detalle') return renderDetalle();
       if (VISTA.nombre === 'stock') return renderStock();
@@ -281,24 +297,66 @@
       }).join('') + '</div>';
     }
 
-    function renderElegirOperario() {
+    function renderElegirOperarios() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
-        '<h1>Kairos · Operario</h1><p class="meta">¿Quién eres?</p><select id="selOperario"><option value="">Cargando…</option></select>';
+        '<h1>Kairos · Operario</h1><p class="meta">¿Quién va a preparar? (1 o 2)</p>' +
+        '<div class="grid-operarios" id="gridOperarios">Cargando…</div>' +
+        '<button id="btnContinuarOperarios" style="display:none;width:100%;">Continuar</button>';
       sincronizarPickers_();
+      var seleccion = [];
       google.script.run.withSuccessHandler(function (json) {
         const operarios = JSON.parse(json);
-        const sel = document.getElementById('selOperario');
-        sel.innerHTML = '<option value="">-- elige --</option>' +
-          operarios.map(function (o) { return '<option value="' + o.nombre + '" data-rol="' + o.rol + '">' + o.nombre + '</option>'; }).join('');
-        sel.onchange = function () {
-          if (!sel.value) return;
-          OPERARIO = sel.value;
-          ROL = sel.options[sel.selectedIndex].getAttribute('data-rol') || 'operario';
+        const grid = document.getElementById('gridOperarios');
+        grid.innerHTML = operarios.map(function (o, i) {
+          return '<button class="btn-operario" data-i="' + i + '">' + o.nombre + '</button>';
+        }).join('');
+        const botones = grid.querySelectorAll('.btn-operario');
+        botones.forEach(function (b, i) {
+          b.onclick = function () {
+            const o = operarios[i];
+            const idx = seleccion.indexOf(o);
+            if (idx !== -1) {
+              seleccion.splice(idx, 1);
+              b.classList.remove('activo');
+            } else {
+              if (seleccion.length >= 2) { kAlerta('Máximo 2 personas por preparación.'); return; }
+              seleccion.push(o);
+              b.classList.add('activo');
+            }
+            document.getElementById('btnContinuarOperarios').style.display = seleccion.length ? 'block' : 'none';
+          };
+        });
+        document.getElementById('btnContinuarOperarios').onclick = function () {
+          OPERARIO = seleccion.map(function (s) { return s.nombre; }).join(' + ');
+          ROL = seleccion.some(function (s) { return s.rol === 'jefe_equipo'; }) ? 'jefe_equipo' : 'operario';
           localStorage.setItem('kairos_operario', OPERARIO);
           localStorage.setItem('kairos_rol', ROL);
+          VISTA = { nombre: 'elegirTienda', peticionId: null };
           render();
         };
       }).listarOperarios();
+    }
+
+    function renderElegirTienda() {
+      document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
+        '<h1>Kairos · Operario</h1><p class="meta">' + OPERARIO + ' — ¿qué tienda?</p>' +
+        '<div class="grid-tiendas" id="gridTiendas">Cargando…</div>';
+      sincronizarPickers_();
+      google.script.run.withSuccessHandler(function (json) {
+        const conteo = JSON.parse(json);
+        document.getElementById('gridTiendas').innerHTML =
+          '<button class="btn-tienda marbella" id="btnMarbella"><span class="avatar">M</span>Marbella<span class="contador-tienda">' + (conteo['014'] || 0) + ' peticiones</span></button>' +
+          '<button class="btn-tienda mijas" id="btnMijas"><span class="avatar">Mi</span>Mijas<span class="contador-tienda">' + (conteo['279'] || 0) + ' peticiones</span></button>';
+        document.getElementById('btnMarbella').onclick = function () { elegirTienda_('014'); };
+        document.getElementById('btnMijas').onclick = function () { elegirTienda_('279'); };
+      }).contarPeticionesPorTienda();
+    }
+
+    function elegirTienda_(codigo) {
+      TIENDA_ACTIVA = codigo;
+      localStorage.setItem('kairos_tienda_activa', codigo);
+      VISTA = { nombre: 'cola', peticionId: null };
+      render();
     }
 
     function renderCola() {
@@ -306,48 +364,80 @@
         renderBrandHeaderHtml_() +
         renderTabsBar_() +
         '<h1>Kairos · Operario</h1>' +
-        '<div id="operarioBar">' + OPERARIO + ' — <a href="#" id="cambiarOperario">cambiar</a></div>' +
+        '<div id="operarioBar">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) + ' — <a href="#" id="cambiarOperario">cambiar</a></div>' +
         '<div class="filtros">' +
-        '<select id="filtroTienda"><option value="">Todas las tiendas</option><option value="014">Marbella</option><option value="279">Mijas</option><option value="036">Málaga</option></select> ' +
-        '<select id="filtroTipo"><option value="">Todos los tipos</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option><option value="refill">Refill</option></select>' +
+        '<select id="filtroTipo"><option value="">Todos los tipos</option><option value="refill">Refill</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option></select>' +
+        '<select id="filtroSeccion"><option value="">Todas las secciones</option></select>' +
+        '<input type="date" id="filtroFecha">' +
         '</div>' +
         '<div id="listaCola">Cargando…</div>';
       sincronizarPickers_();
 
       document.getElementById('cambiarOperario').onclick = function (e) {
         e.preventDefault();
-        OPERARIO = ''; ROL = 'operario';
+        OPERARIO = ''; ROL = 'operario'; TIENDA_ACTIVA = '';
         localStorage.removeItem('kairos_operario');
         localStorage.removeItem('kairos_rol');
+        localStorage.removeItem('kairos_tienda_activa');
         render();
       };
-      document.getElementById('filtroTienda').onchange = cargarCola;
-      document.getElementById('filtroTipo').onchange = cargarCola;
+      document.getElementById('filtroTipo').onchange = pintarCola_;
+      document.getElementById('filtroSeccion').onchange = pintarCola_;
+      document.getElementById('filtroFecha').onchange = pintarCola_;
       cargarCola();
     }
 
+    var PETICIONES_CACHE_ = [];
+
     function cargarCola() {
-      const tienda = document.getElementById('filtroTienda').value;
-      const tipo = document.getElementById('filtroTipo').value;
       google.script.run.withSuccessHandler(function (json) {
-        const peticiones = JSON.parse(json);
-        const cont = document.getElementById('listaCola');
-        if (!peticiones.length) { cont.innerHTML = '<p class="meta">No hay peticiones pendientes.</p>'; return; }
-        const normales = peticiones.filter(function (p) { return !p.cola_individual; });
-        const individuales = peticiones.filter(function (p) { return p.cola_individual; });
-        function filaHtml(p) {
-          const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre : 'Refill');
-          return '<div class="fila" style="border-left-color:' + (CFG_TIENDA_COLOR[p.tienda_origen] || '#ccc') + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
-            '<div class="tipo">' + etiquetaTipo + '</div>' +
-            '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas</div>' +
-            '</div>';
-        }
-        var html = normales.map(filaHtml).join('');
-        if (individuales.length) {
-          html += '<h3>Individual</h3>' + individuales.map(filaHtml).join('');
-        }
-        cont.innerHTML = html;
-      }).listarCola(tienda || null, tipo || null);
+        PETICIONES_CACHE_ = JSON.parse(json);
+        const secciones = [];
+        PETICIONES_CACHE_.forEach(function (p) {
+          (p.secciones || []).forEach(function (s) { if (s && secciones.indexOf(s) === -1) secciones.push(s); });
+        });
+        secciones.sort();
+        document.getElementById('filtroSeccion').innerHTML = '<option value="">Todas las secciones</option>' +
+          secciones.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
+        pintarCola_();
+      }).listarCola(TIENDA_ACTIVA, null);
+    }
+
+    function pintarCola_() {
+      const tipo = document.getElementById('filtroTipo').value;
+      const seccion = document.getElementById('filtroSeccion').value;
+      const fecha = document.getElementById('filtroFecha').value;
+      const filtradas = PETICIONES_CACHE_.filter(function (p) {
+        if (tipo && p.tipo !== tipo) return false;
+        if (seccion && (p.secciones || []).indexOf(seccion) === -1) return false;
+        if (fecha && p.creada_en.slice(0, 10) !== fecha) return false;
+        return true;
+      });
+      const cont = document.getElementById('listaCola');
+      if (!filtradas.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
+
+      function filaHtml(p) {
+        const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre : 'Refill');
+        return '<div class="fila" style="border-left-color:' + (CFG_TIENDA_COLOR[p.tienda_origen] || '#ccc') + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
+          '<div class="tipo">' + etiquetaTipo + '</div>' +
+          '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas</div>' +
+          '</div>';
+      }
+      const GRUPOS = [
+        { tipo: 'refill', label: 'Refill' },
+        { tipo: 'pedido_cliente', label: 'Pedido cliente' },
+        { tipo: 'cesion', label: 'Cesión' },
+      ];
+      var html = '';
+      GRUPOS.forEach(function (g) {
+        const deEsteGrupo = filtradas.filter(function (p) { return p.tipo === g.tipo; });
+        if (!deEsteGrupo.length) return;
+        const normales = deEsteGrupo.filter(function (p) { return !p.cola_individual; });
+        const individuales = deEsteGrupo.filter(function (p) { return p.cola_individual; });
+        html += '<h3>' + g.label + '</h3>' + normales.map(filaHtml).join('');
+        if (individuales.length) html += '<h3>' + g.label + ' · Individual</h3>' + individuales.map(filaHtml).join('');
+      });
+      cont.innerHTML = html || '<p class="meta">No hay peticiones con esos filtros.</p>';
     }
 
     function abrirDetalle(id) {
