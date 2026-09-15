@@ -23,7 +23,7 @@ un pedido de cliente.
 | 7 | Rediseño visual — tema (4 acentos + claro/oscuro), logos | ✅ completa, fusionada y en producción |
 | 8 | Pulido UX — modales in-página, pestañas, logos grandes, botones | ✅ completa, fusionada y en producción |
 | 9 | Validación stock edificio 5 + alertas duplicado | ✅ completa, fusionada y en producción |
-| 10 | Formulario petición — orden, nº cesión, multi-artículo | pendiente |
+| 10 | Formulario petición — orden, nº cesión, multi-artículo | ✅ completa, fusionada y en producción |
 | 11 | Entrada operario — 1-2 personas, tienda, filtros | pendiente |
 | 12 | Trazabilidad Refill real (puente CartadePortesSIE) | pendiente |
 | 13 | Buscador de peticiones realizadas | pendiente |
