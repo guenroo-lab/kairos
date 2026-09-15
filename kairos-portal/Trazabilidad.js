@@ -10,7 +10,7 @@ function listarTrazabilidad(ldap) {
   const tienda = _tiendaDe_(ldap);
   const peticiones = supaSelect_('peticiones',
     'tienda_origen=eq.' + encodeURIComponent(tienda) +
-    '&select=id,tipo,num_pedido,tienda_destino,transporte,estado,creada_en&order=creada_en.desc&limit=200');
+    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en&order=creada_en.desc&limit=200');
   if (!peticiones.length) return _json_([]);
 
   peticiones.forEach(function (p) {

@@ -3,7 +3,7 @@
 
 function listarTodasPeticiones() {
   const peticiones = supaSelect_('peticiones',
-    'select=id,tipo,tienda_origen,tienda_destino,num_pedido,transporte,estado,cola_individual,creada_en&order=creada_en.desc&limit=300');
+    'select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,estado,cola_individual,creada_en&order=creada_en.desc&limit=300');
   if (!peticiones.length) return _json_([]);
 
   const ids = peticiones.map(function (p) { return p.id; }).join(',');

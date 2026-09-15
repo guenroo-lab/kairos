@@ -64,7 +64,9 @@ function crearPeticion(ldap, tipo, datos, lineas) {
     cabecera.transporte = datos.transporte;
   } else if (tipo === 'cesion') {
     if (!datos.tiendaDestino) throw new Error('Falta la tienda destino.');
+    if (!datos.numCesion) throw new Error('Falta el número de cesión.');
     cabecera.tienda_destino = datos.tiendaDestino;
+    cabecera.num_cesion = String(datos.numCesion).trim();
   } else {
     if (!datos.motivo) throw new Error('Falta el motivo del refill.');
     cabecera.motivo = String(datos.motivo).trim();
@@ -95,7 +97,7 @@ function listarMisPeticiones(ldap) {
   const filas = supaSelect_(
     'peticiones',
     'tienda_origen=eq.' + encodeURIComponent(tienda) +
-      '&select=id,tipo,num_pedido,tienda_destino,estado,creada_en,solicitante_ldap' +
+      '&select=id,tipo,num_pedido,num_cesion,tienda_destino,estado,creada_en,solicitante_ldap' +
       '&order=creada_en.desc&limit=200'
   );
   filas.forEach(function (p) { p.estadoTexto = TRADUCCION_ESTADO[p.estado] || p.estado; });

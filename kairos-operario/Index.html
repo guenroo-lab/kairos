@@ -336,7 +336,7 @@
         const normales = peticiones.filter(function (p) { return !p.cola_individual; });
         const individuales = peticiones.filter(function (p) { return p.cola_individual; });
         function filaHtml(p) {
-          const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión → ' + p.tiendaDestinoNombre : 'Refill');
+          const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre : 'Refill');
           return '<div class="fila" style="border-left-color:' + (CFG_TIENDA_COLOR[p.tienda_origen] || '#ccc') + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
             '<div class="tipo">' + etiquetaTipo + '</div>' +
             '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas</div>' +
@@ -371,7 +371,7 @@
 
     function renderDetalleBody_() {
       const p = ultimoDetalle.peticion;
-      var titulo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? ('Cesión → ' + p.tiendaDestinoNombre) : ('Refill: ' + (p.motivo || '')));
+      var titulo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? ('Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre) : ('Refill: ' + (p.motivo || '')));
 
       var html = '<h1>' + titulo + '</h1><p class="meta">' + p.tiendaNombre + '</p>';
       html += ultimoDetalle.lineas.map(function (l) { return renderLineaHtml_(p, l); }).join('');
@@ -608,7 +608,7 @@
         const cont = document.getElementById('listaEstado');
         if (!peticiones.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
         cont.innerHTML = peticiones.map(function (p) {
-          const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
+          const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
           const detalle = p.camino === 'hodos' ? ('HODOS: ' + (p.hodosOk ? '✓' : '—'))
             : p.camino === 'a_ubicar' ? ('A ubicar: ' + p.estado)
             : ('Seguimiento interno: ' + p.estado);
@@ -635,7 +635,7 @@
         const cont = document.getElementById('listaTodas');
         if (!peticiones.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
         cont.innerHTML = peticiones.map(function (p) {
-          const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
+          const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
           var botonReintentar = '';
           if (p.necesitaHodos && !p.tieneHodos && p.estado === 'cerrada') {
             botonReintentar = ' <button class="secundario" onclick="event.stopPropagation(); reintentarHodosUI(\'' + p.id + '\', this)">Reintentar HODOS</button>';

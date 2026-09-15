@@ -335,7 +335,7 @@
         const fila = el(
           '<div class="fila">' +
             '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
-              (p.num_pedido ? ' · ' + escHtml(p.num_pedido) : '') +
+              ((p.num_pedido || p.num_cesion) ? ' · ' + escHtml(p.num_pedido || p.num_cesion) : '') +
               '<div style="color:var(--text-500);font-size:12px;">' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
             '</div>' +
             '<span class="estado">' + escHtml(p.estadoTexto) + '</span>' +
@@ -377,7 +377,7 @@
         const fila = el(
           '<div class="fila" style="cursor:default;">' +
             '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
-              (p.num_pedido ? ' · ' + escHtml(p.num_pedido) : '') +
+              ((p.num_pedido || p.num_cesion) ? ' · ' + escHtml(p.num_pedido || p.num_cesion) : '') +
               '<div style="color:var(--text-500);font-size:12px;">' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
             '</div>' +
             '<span class="estado">' + escHtml(detalle) + '</span>' +
@@ -398,9 +398,9 @@
       '<div class="wrap"><div class="card">' +
         '<button class="btn btn-ghost" id="btnVolver">‹ Volver</button>' +
         '<h2>Nueva petición</h2>' +
+        '<button class="btn btn-primary" id="btnRefill">Refill</button>' +
         '<button class="btn btn-primary" id="btnPC">Pedido cliente</button>' +
         '<button class="btn btn-primary" id="btnCesion">Cesión</button>' +
-        '<button class="btn btn-primary" id="btnRefill">Refill</button>' +
       '</div></div>'
     );
     app().appendChild(c);
@@ -422,6 +422,7 @@
         '</label>';
     } else if (tipo === 'cesion') {
       camposTipo =
+        '<input class="entrada" id="inNumCesion" placeholder="Nº de cesión">' +
         '<select class="entrada" id="inDestino">' +
           '<option value="014">Marbella</option>' +
           '<option value="279">Mijas</option>' +
@@ -537,6 +538,8 @@
         if (!datos.numPedido) { err.textContent = 'Falta el número de pedido.'; err.style.display = 'block'; return; }
       } else if (tipo === 'cesion') {
         datos.tiendaDestino = c.querySelector('#inDestino').value;
+        datos.numCesion = c.querySelector('#inNumCesion').value.trim();
+        if (!datos.numCesion) { err.textContent = 'Falta el número de cesión.'; err.style.display = 'block'; return; }
       } else {
         datos.motivo = c.querySelector('#inMotivo').value.trim();
         if (!datos.motivo) { err.textContent = 'Falta el motivo.'; err.style.display = 'block'; return; }
@@ -569,7 +572,8 @@
         camposTipo = '<div><b>Nº pedido</b> ' + escHtml(p.num_pedido) + '</div>' +
           '<div><b>Transporte</b> ' + (p.transporte ? 'Sí (consolida en plataforma)' : 'No') + '</div>';
       } else if (p.tipo === 'cesion') {
-        camposTipo = '<div><b>Destino</b> ' + escHtml(NOMBRE_TIENDA[p.tienda_destino] || p.tienda_destino) + '</div>';
+        camposTipo = '<div><b>Nº cesión</b> ' + escHtml(p.num_cesion) + '</div>' +
+          '<div><b>Destino</b> ' + escHtml(NOMBRE_TIENDA[p.tienda_destino] || p.tienda_destino) + '</div>';
       } else {
         camposTipo = '<div><b>Motivo</b> ' + escHtml(p.motivo) + '</div>';
       }
