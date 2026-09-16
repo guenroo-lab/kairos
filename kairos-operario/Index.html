@@ -103,7 +103,7 @@
     .brand-badge { background:#fff; border-radius:10px; padding:6px 10px; display:flex; align-items:center; box-shadow:0 2px 8px -3px rgba(0,0,0,.4); }
     .brand-badge img { display:block; height:30px; width:auto; }
     .brand-x { color:var(--text-600); font-size:14px; font-weight:600; }
-    .theme-toggle { margin-left:auto; }
+    .theme-toggle { margin-left:auto; display:flex; gap:6px; }
     button.theme-btn { background:var(--ink-800); color:var(--text-300); padding:7px 10px; font-size:12px; display:flex; align-items:center; gap:5px; min-height:36px; }
     .theme-btn svg { width:16px; height:16px; }
 
@@ -226,13 +226,17 @@
       volumenes: '<svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
     };
     var ICONO_TEMA = '<svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>';
+    var ICONO_REFRESCAR = '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>';
+
+    function actualizarPantalla() { render(); }
 
     function renderBrandHeaderHtml_() {
       return '<div class="brand-head">' +
         '<div class="brand-badge"><img src="' + LOGO_TAISA_B64 + '" alt="Taisa"></div>' +
         '<span class="brand-x">×</span>' +
         '<div class="brand-badge"><img src="data:image/png;base64,' + LOGO_LM_B64 + '" alt="Leroy Merlin"></div>' +
-        '<div class="theme-toggle"><button class="theme-btn" onclick="toggleThemePanel()" type="button">' + ICONO_TEMA + 'Tema</button></div>' +
+        '<div class="theme-toggle"><button class="theme-btn" onclick="actualizarPantalla()" type="button">' + ICONO_REFRESCAR + 'Actualizar</button>' +
+        '<button class="theme-btn" onclick="toggleThemePanel()" type="button">' + ICONO_TEMA + 'Tema</button></div>' +
         '</div>' +
         '<div class="theme-panel" id="themePanel">' +
         '<div class="picker-row"><span class="picker-label">Modo</span>' +
