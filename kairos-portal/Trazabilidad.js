@@ -126,7 +126,7 @@ function listarTrazabilidad(ldap, historico) {
       } else if (propias.length && propias.every(function (l) { return l.estado_preparacion === 'preparado'; })) {
         p.refillTexto = 'En silueta, esperando carga';
       } else {
-        p.refillTexto = 'Petición enviada';
+        p.refillTexto = 'Petición Realizada';
       }
     });
   }

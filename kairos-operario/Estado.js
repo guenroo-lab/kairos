@@ -103,7 +103,7 @@ function listarEstadoPeticiones() {
       } else if (propias.length && propias.every(function (l) { return l.estado_preparacion === 'preparado'; })) {
         p.refillEstado = 'En silueta, esperando carga';
       } else {
-        p.refillEstado = 'Petición enviada';
+        p.refillEstado = 'Petición Realizada';
       }
     });
   }
