@@ -240,6 +240,28 @@
     });
   }
 
+  /** Refill por SSCC: lista de LM que contiene ese palet, se elige uno con
+   *  un click (resuelve a esa fila, o null si se cancela). */
+  function elegirLmDePaletModal_(filas) {
+    return new Promise(function (resolve) {
+      var overlay = document.createElement('div');
+      overlay.className = 'koverlay';
+      overlay.innerHTML = '<div class="kmodal">' +
+        '<p>SSCC ' + escHtml(filas[0].sscc) + ' · ' + escHtml(filas[0].ubicacion || '—') + ' — ¿qué LM pides?</p>' +
+        filas.map(function (f, idx) {
+          return '<button class="btn btn-ghost" style="width:100%;margin-bottom:6px;text-align:left;" data-idx="' + idx + '">' +
+            escHtml(f.codigo_lm) + ' · ' + escHtml(f.designacion || '—') + ' · ' + f.cantidad + ' ud</button>';
+        }).join('') +
+        '<div class="fila-botones"><button class="btn btn-ghost" id="klmCancelar">Cancelar</button></div></div>';
+      function cerrar(valor) { document.body.removeChild(overlay); resolve(valor); }
+      overlay.querySelectorAll('[data-idx]').forEach(function (btn) {
+        btn.onclick = function () { cerrar(filas[Number(btn.getAttribute('data-idx'))]); };
+      });
+      overlay.querySelector('#klmCancelar').onclick = function () { cerrar(null); };
+      document.body.appendChild(overlay);
+    });
+  }
+
   /** Elegir uno o varios SSCC concretos (con ubicación + stock) para cubrir
    *  la cantidad pedida. Resuelve al reparto {sscc, ubicacion, cantidad}[]
    *  ya recortado a lo necesario, o null si se omite (lo asigna el almacén). */
@@ -549,7 +571,7 @@
         else if (p.camino === 'hodos') detalle = 'HODOS: ' + p.hodosTexto;
         else detalle = 'Refill: ' + p.refillTexto;
         const fila = el(
-          '<div class="fila" style="cursor:default;">' +
+          '<div class="fila">' +
             '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
               ((p.num_pedido || p.num_cesion) ? ' · ' + escHtml(p.num_pedido || p.num_cesion) : '') +
               '<div style="color:var(--text-500);font-size:12px;">' + escHtml(p.articulo || '') + (p.motivo ? ' · ' + escHtml(p.motivo) : '') + '</div>' +
@@ -559,6 +581,7 @@
             '<span class="estado">' + escHtml(detalle) + '</span>' +
           '</div>'
         );
+        fila.onclick = function () { renderDetalle(p.id, renderTrazabilidad); };
         lista.appendChild(fila);
       });
     }
@@ -611,7 +634,8 @@
         '<input class="entrada" id="inNumPedido" placeholder="Nº de pedido">' +
         '<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
           '<input type="checkbox" id="inTransporte"> Con transporte (se consolida en plataforma)' +
-        '</label>';
+        '</label>' +
+        '<input class="entrada" id="inMotivo" placeholder="Motivo de la petición">';
     } else if (tipo === 'cesion') {
       camposTipo =
         '<input class="entrada" id="inNumCesion" placeholder="Nº de cesión">' +
@@ -619,7 +643,8 @@
           '<option value="014">Marbella</option>' +
           '<option value="279">Mijas</option>' +
           '<option value="036">Málaga</option>' +
-        '</select>';
+        '</select>' +
+        '<input class="entrada" id="inMotivo" placeholder="Motivo de la petición">';
     } else {
       camposTipo = '<input class="entrada" id="inMotivo" placeholder="Motivo del refill">';
     }
@@ -633,6 +658,7 @@
         '<hr style="border-color:var(--ink-800);margin:12px 0;">' +
         '<b>Artículos</b>' +
         '<input class="entrada" id="inBuscar" placeholder="Código LM o nombre del artículo" autocomplete="off">' +
+        (tipo === 'refill' ? '<button class="btn btn-ghost" id="btnBuscarSscc" style="width:auto;padding:6px 10px;margin:4px 0 8px;">📦 Buscar por SSCC en vez de LM</button>' : '') +
         '<div id="resultadosBusqueda"></div>' +
         '<div id="lineasAnadidas"></div>' +
         '<input class="entrada" id="inComentario" placeholder="Comentario (opcional)">' +
@@ -658,6 +684,29 @@
         chip.querySelector('button').onclick = function () { lineas.splice(idx, 1); pintarLineas(); };
         cont.appendChild(chip);
       });
+    }
+
+    const btnBuscarSscc = c.querySelector('#btnBuscarSscc');
+    if (btnBuscarSscc) {
+      btnBuscarSscc.onclick = function () {
+        kPedirTexto('SSCC del palet:').then(function (ssccTexto) {
+          const ssccBuscado = (ssccTexto || '').trim();
+          if (!ssccBuscado) return;
+          gas('buscarPaletPorSscc', LDAP, ssccBuscado).then(function (filas) {
+            if (!filas.length) { kAlerta('No se ha encontrado ese SSCC con stock en almacén.'); return; }
+            elegirLmDePaletModal_(filas).then(function (elegido) {
+              if (!elegido) return;
+              lineas.push({
+                codigoLm: elegido.codigo_lm, designacion: elegido.designacion,
+                ean: elegido.ean, seccion: elegido.seccion, cantidad: 1,
+                sscc: elegido.sscc + ' (' + elegido.cantidad + 'ud)',
+                ubicacion: elegido.ubicacion,
+              });
+              pintarLineas();
+            });
+          });
+        });
+      };
     }
 
     const inputBuscar = c.querySelector('#inBuscar');
@@ -760,6 +809,8 @@
       err.style.display = 'none';
       if (!lineas.length) { err.textContent = 'Añade al menos un artículo.'; err.style.display = 'block'; return; }
       var datos = { comentario: c.querySelector('#inComentario').value.trim() || null };
+      datos.motivo = c.querySelector('#inMotivo').value.trim();
+      if (!datos.motivo) { err.textContent = 'Falta el motivo de la petición.'; err.style.display = 'block'; return; }
       if (tipo === 'pedido_cliente') {
         datos.numPedido = c.querySelector('#inNumPedido').value.trim();
         datos.transporte = c.querySelector('#inTransporte').checked;
@@ -768,9 +819,6 @@
         datos.tiendaDestino = c.querySelector('#inDestino').value;
         datos.numCesion = c.querySelector('#inNumCesion').value.trim();
         if (!datos.numCesion) { err.textContent = 'Falta el número de cesión.'; err.style.display = 'block'; return; }
-      } else {
-        datos.motivo = c.querySelector('#inMotivo').value.trim();
-        if (!datos.motivo) { err.textContent = 'Falta el motivo.'; err.style.display = 'block'; return; }
       }
       gas('crearPeticion', LDAP, tipo, datos, lineas).then(function () {
         renderCola();
@@ -781,7 +829,8 @@
   }
 </script>
 <script>
-  function renderDetalle(id) {
+  function renderDetalle(id, origen) {
+    origen = origen || renderCola;
     app().innerHTML = '';
     pintarCabecera_();
     const c = el(
@@ -791,7 +840,7 @@
       '</div></div>'
     );
     app().appendChild(c);
-    c.querySelector('#btnVolver').onclick = renderCola;
+    c.querySelector('#btnVolver').onclick = origen;
 
     gas('obtenerDetallePeticion', LDAP, id).then(function (r) {
       const p = r.peticion;
@@ -802,12 +851,12 @@
       } else if (p.tipo === 'cesion') {
         camposTipo = '<div><b>Nº cesión</b> ' + escHtml(p.num_cesion) + '</div>' +
           '<div><b>Destino</b> ' + escHtml(NOMBRE_TIENDA[p.tienda_destino] || p.tienda_destino) + '</div>';
-      } else {
-        camposTipo = '<div><b>Motivo</b> ' + escHtml(p.motivo) + '</div>';
       }
       const filasLineas = r.lineas.map(function (l) {
         return '<div class="linea-chip"><span>' + escHtml(l.codigo_lm) + ' · ' + escHtml(l.designacion || '—') +
-          ' · ' + l.cantidad + ' ' + escHtml(l.unidad_medida) + '</span>' +
+          ' · ' + l.cantidad + ' ' + escHtml(l.unidad_medida) +
+          (l.sscc ? ' · SSCC ' + escHtml(l.sscc) : '') +
+          '</span>' +
           '<span class="estado">' + escHtml(l.estado_preparacion) + '</span></div>';
       }).join('');
       const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>HODOS</b> ' + escHtml(r.hodosTexto) + '</div>' : '';
@@ -817,12 +866,14 @@
         '<button class="btn btn-ghost" id="btnVolver2">‹ Volver</button>' +
         '<h2>' + escHtml(ETIQUETA_TIPO[p.tipo]) + '</h2>' +
         '<span class="estado">' + escHtml(p.estadoTexto) + '</span>' +
+        '<div style="margin-top:8px;color:var(--text-500);">Pedido por ' + escHtml(p.solicitante_ldap || '—') + ' · ' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
         '<div style="margin-top:8px;">' + camposTipo + '</div>' +
+        (p.motivo ? '<div style="margin-top:8px;"><b>Motivo</b> ' + escHtml(p.motivo) + '</div>' : '') +
         hodosLinea +
         (p.comentario ? '<div style="margin-top:8px;"><b>Comentario</b> ' + escHtml(p.comentario) + '</div>' : '') +
         '<hr style="border-color:var(--ink-800);margin:12px 0;">' +
         filasLineas;
-      cont.querySelector('#btnVolver2').onclick = renderCola;
+      cont.querySelector('#btnVolver2').onclick = origen;
     }).catch(function (e) {
       app().querySelector('#detalle').innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });

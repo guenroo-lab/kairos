@@ -5,12 +5,56 @@ const TRADUCCION_ESTADO = {
   cerrada: 'Completada',
 };
 
+/** Unidades ya comprometidas en peticiones abiertas (no cerradas, aún no
+ *  preparadas) de esa tienda + código LM — para no ofrecer dos veces el
+ *  mismo stock a peticiones distintas. */
+function _comprometidoEnPeticionesAbiertas_(tienda, codigoLm) {
+  const abiertas = supaSelect_('peticiones',
+    'tienda_origen=eq.' + encodeURIComponent(tienda) + '&estado=neq.cerrada&select=id');
+  if (!abiertas.length) return 0;
+  const ids = abiertas.map(function (p) { return p.id; }).join(',');
+  const lineas = supaSelect_('lineas',
+    'peticion_id=in.(' + ids + ')&codigo_lm=eq.' + encodeURIComponent(codigoLm) + '&estado_preparacion=neq.preparado&select=cantidad');
+  return lineas.reduce(function (s, l) { return s + Number(l.cantidad); }, 0);
+}
+
 /** Unidades disponibles ahora mismo en edificio 5 (stock_fisico) para esa
- *  tienda + código LM, sumando todos los SSCC. */
+ *  tienda + código LM, sumando todos los SSCC, menos lo ya comprometido en
+ *  peticiones abiertas de otras peticiones. */
 function _stockDisponible_(tienda, codigoLm) {
   const filas = supaSelect_('stock_fisico',
     'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(codigoLm) + '&select=cantidad');
-  return filas.reduce(function (s, f) { return s + Number(f.cantidad); }, 0);
+  const fisico = filas.reduce(function (s, f) { return s + Number(f.cantidad); }, 0);
+  const comprometido = _comprometidoEnPeticionesAbiertas_(tienda, codigoLm);
+  return Math.max(0, fisico - comprometido);
+}
+
+/** Buscar un palet directamente por SSCC (Refill) — devuelve todos los LM
+ *  que contiene, cada uno con su cantidad y la ubicación del palet, para
+ *  elegir cuál de ellos pedir sin pasar por la búsqueda de artículo. */
+function buscarPaletPorSscc(ldap, sscc) {
+  const tienda = _tiendaDe_(ldap);
+  sscc = String(sscc || '').trim();
+  if (!sscc) throw new Error('Falta el SSCC.');
+
+  const filas = supaSelect_('stock_fisico',
+    'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=eq.' + encodeURIComponent(sscc) +
+    '&select=codigo_lm,ubicacion,cantidad&order=cantidad.desc')
+    .filter(function (f) { return f.cantidad > 0; });
+  if (!filas.length) return _json_([]);
+
+  const codigos = filas.map(function (f) { return f.codigo_lm; });
+  const catalogo = supaSelect_('catalogo', 'codigo_lm=in.(' + codigos.map(encodeURIComponent).join(',') + ')&select=codigo_lm,ean,designacion,seccion');
+  const porCodigo = {};
+  catalogo.forEach(function (c) { porCodigo[c.codigo_lm] = c; });
+
+  return _json_(filas.map(function (f) {
+    const cat = porCodigo[f.codigo_lm] || {};
+    return {
+      codigo_lm: f.codigo_lm, designacion: cat.designacion || null, ean: cat.ean || null, seccion: cat.seccion || null,
+      ubicacion: f.ubicacion, cantidad: f.cantidad, sscc: sscc,
+    };
+  }));
 }
 
 /** SSCC con stock ahora mismo en edificio 05 para ese código LM, para que
@@ -87,10 +131,13 @@ function crearPeticion(ldap, tipo, datos, lineas) {
     }
   });
 
+  if (!datos || !datos.motivo || !String(datos.motivo).trim()) throw new Error('Falta el motivo de la petición.');
+
   const cabecera = {
     tipo: tipo,
     tienda_origen: tienda,
     solicitante_ldap: ldap,
+    motivo: String(datos.motivo).trim(),
     comentario: (datos && datos.comentario) || null,
   };
 
@@ -104,9 +151,6 @@ function crearPeticion(ldap, tipo, datos, lineas) {
     if (!datos.numCesion) throw new Error('Falta el número de cesión.');
     cabecera.tienda_destino = datos.tiendaDestino;
     cabecera.num_cesion = String(datos.numCesion).trim();
-  } else {
-    if (!datos.motivo) throw new Error('Falta el motivo del refill.');
-    cabecera.motivo = String(datos.motivo).trim();
   }
 
   const peticion = supaInsert_('peticiones', cabecera);
