@@ -79,7 +79,7 @@ function _gestorDe_(ldap) {
 function listarUsuariosGestion(ldap) {
   const u = _gestorDe_(ldap);
   const filas = supaSelect_('usuarios_tienda',
-    'tienda=eq.' + encodeURIComponent(u.tienda) + '&select=id,ldap,tienda,rol,aprobado,creado_en&order=aprobado.asc,creado_en.asc');
+    'tienda=eq.' + encodeURIComponent(u.tienda) + '&rol=neq.master&select=id,ldap,tienda,rol,aprobado,creado_en&order=aprobado.asc,creado_en.asc');
   filas.forEach(function (f) { f.tiendaNombre = CFG.TIENDAS[f.tienda] || f.tienda; });
   return _json_(filas);
 }
@@ -87,6 +87,7 @@ function listarUsuariosGestion(ldap) {
 function _usuarioDeMiTienda_(u, idObjetivo) {
   const filas = supaSelect_('usuarios_tienda', 'id=eq.' + encodeURIComponent(idObjetivo) + '&tienda=eq.' + encodeURIComponent(u.tienda));
   if (!filas.length) throw new Error('Usuario no encontrado en tu tienda.');
+  if (filas[0].rol === 'master') throw new Error('No se puede gestionar al perfil Master.');
   return filas[0];
 }
 

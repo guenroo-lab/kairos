@@ -37,10 +37,14 @@ function listarTrazabilidad(ldap, historico) {
   });
 
   const idsTodas = peticiones.map(function (p) { return p.id; }).join(',');
-  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc');
+  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc,seccion,cantidad');
   peticiones.forEach(function (p) {
     const propias = lineasTodas.filter(function (l) { return l.peticion_id === p.id; });
     p.articulo = propias.length === 1 ? (propias[0].codigo_lm + ' — ' + (propias[0].designacion || '')) : (propias.length + ' artículos');
+    p.totalUnidades = propias.reduce(function (s, l) { return s + Number(l.cantidad || 0); }, 0);
+    var secciones = [];
+    propias.forEach(function (l) { if (l.seccion && secciones.indexOf(l.seccion) === -1) secciones.push(l.seccion); });
+    p.secciones = secciones;
     var ubicaciones = [];
     propias.forEach(function (l) { if (l.ubicacion && ubicaciones.indexOf(l.ubicacion) === -1) ubicaciones.push(l.ubicacion); });
     p.ubicaciones = ubicaciones;

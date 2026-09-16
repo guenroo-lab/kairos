@@ -711,17 +711,59 @@
       if (!huboAlguna) lista.appendChild(el('<p style="color:var(--text-500)">No hay peticiones con esos filtros.</p>'));
     }
 
+    // Histórico: tabla (para análisis - LDAP, tipo, sección...) en vez de
+    // tarjetas agrupadas.
+    function pintarHistoricoTabla_(filas) {
+      lista.innerHTML = '';
+      if (!filas.length) { lista.appendChild(el('<p style="color:var(--text-500)">No hay peticiones.</p>')); return; }
+      const ordenadas = filas.slice().sort(function (a, b) { return new Date(b.creada_en) - new Date(a.creada_en); });
+      const envoltorio = el('<div style="overflow-x:auto;"></div>');
+      const tabla = el(
+        '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
+        '<tr style="text-align:left;color:var(--text-500);border-bottom:1px solid var(--ink-800);">' +
+          '<th style="padding:6px 8px;">Fecha</th><th style="padding:6px 8px;">Tipo</th><th style="padding:6px 8px;">Nº</th>' +
+          '<th style="padding:6px 8px;">LDAP</th><th style="padding:6px 8px;">Sección</th><th style="padding:6px 8px;">Artículo</th>' +
+          '<th style="padding:6px 8px;">Uds</th><th style="padding:6px 8px;">Estado</th>' +
+        '</tr></table>'
+      );
+      ordenadas.forEach(function (p) {
+        var detalle;
+        if (p.estado === 'anulada') detalle = 'Anulada';
+        else if (p.camino === 'a_ubicar') detalle = p.aUbicarTexto || p.estadoTexto;
+        else if (p.camino === 'hodos') detalle = p.hodosTexto;
+        else detalle = p.refillTexto;
+        const fila = el(
+          '<tr style="border-bottom:1px solid var(--ink-800);cursor:pointer;">' +
+            '<td style="padding:6px 8px;white-space:nowrap;">' + new Date(p.creada_en).toLocaleString('es-ES') + '</td>' +
+            '<td style="padding:6px 8px;">' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</td>' +
+            '<td style="padding:6px 8px;">' + escHtml(p.num_pedido || p.num_cesion || '—') + '</td>' +
+            '<td style="padding:6px 8px;">' + escHtml(p.solicitante_ldap || '—') + '</td>' +
+            '<td style="padding:6px 8px;">' + escHtml((p.secciones || []).join(', ') || '—') + '</td>' +
+            '<td style="padding:6px 8px;">' + escHtml(p.articulo || '') + '</td>' +
+            '<td style="padding:6px 8px;text-align:right;">' + (p.totalUnidades || 0) + '</td>' +
+            '<td style="padding:6px 8px;">' + escHtml(detalle || '') + '</td>' +
+          '</tr>'
+        );
+        fila.onclick = function () { renderDetalle(p.id, renderHistorico); };
+        tabla.appendChild(fila);
+      });
+      envoltorio.appendChild(tabla);
+      lista.appendChild(envoltorio);
+    }
+
+    const pintar = historico ? pintarHistoricoTabla_ : pintarTraza;
+
     gas('listarTrazabilidad', LDAP, historico).then(function (filas) {
       todasTraza = filas;
-      pintarTraza(todasTraza);
+      pintar(todasTraza);
     }).catch(function (e) {
       lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });
 
     wrap.querySelector('#inBuscarTraza').oninput = function (e) {
       const q = e.target.value.trim().toLowerCase();
-      if (!q) { pintarTraza(todasTraza); return; }
-      pintarTraza(todasTraza.filter(function (p) {
+      if (!q) { pintar(todasTraza); return; }
+      pintar(todasTraza.filter(function (p) {
         return [
           p.num_pedido, p.num_cesion, p.solicitante_ldap, p.motivo, p.articulo,
           (p.sscc || []).join(' '), ETIQUETA_TIPO[p.tipo] || p.tipo,
