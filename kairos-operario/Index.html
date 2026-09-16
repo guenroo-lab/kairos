@@ -521,8 +521,8 @@
         google.script.run.withSuccessHandler(function (json) {
           const fila = JSON.parse(json).filter(function (x) { return x.id === p.id; })[0];
           contEstado.textContent = !fila ? 'Sin datos.'
-            : p.tipo === 'refill' ? ('Refill: ' + fila.refillEstado + (fila.refillFecha ? ' (entrega ' + fila.refillFecha + ')' : ''))
-            : ('HODOS: ' + (fila.hodosOk ? 'etiqueta creada' : 'sin etiqueta'));
+            : p.tipo === 'refill' ? ('Refill: ' + fila.refillEstado + (fila.refillFecha ? ' (entrega ' + fila.refillFecha + (fila.refillHora ? ' ' + fila.refillHora : '') + ')' : ''))
+            : ('HODOS: ' + fila.hodosEstado + (fila.hodosFecha ? ' (entrega ' + fila.hodosFecha + (fila.hodosHora ? ' ' + fila.hodosHora : '') + ')' : ''));
         }).listarEstadoPeticiones();
       }
     }
@@ -819,9 +819,9 @@
         if (!peticiones.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
         cont.innerHTML = peticiones.map(function (p) {
           const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
-          const detalle = p.camino === 'hodos' ? ('HODOS: ' + (p.hodosOk ? '✓' : '—'))
-            : p.camino === 'a_ubicar' ? ('A ubicar: ' + p.estado)
-            : ('Refill: ' + p.refillEstado + (p.refillFecha ? ' (entrega ' + p.refillFecha + ')' : ''));
+          const detalle = p.camino === 'hodos' ? ('HODOS: ' + p.hodosEstado + (p.hodosFecha ? ' (entrega ' + p.hodosFecha + (p.hodosHora ? ' ' + p.hodosHora : '') + ')' : ''))
+            : p.camino === 'a_ubicar' ? (p.aUbicarTexto || ('Estado: ' + p.estado))
+            : ('Refill: ' + p.refillEstado + (p.refillFecha ? ' (entrega ' + p.refillFecha + (p.refillHora ? ' ' + p.refillHora : '') + ')' : ''));
           return '<div class="fila" onclick="abrirDetalle(\'' + p.id + '\')">' +
             '<div class="tipo">' + etiquetaTipo + '</div>' +
             '<div class="meta">' + p.tiendaNombre + ' · ' + detalle + '</div></div>';

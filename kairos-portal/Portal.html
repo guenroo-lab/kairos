@@ -578,7 +578,7 @@
         deEsteGrupo.forEach(function (p) {
           var detalle;
           if (p.estado === 'anulada') detalle = 'Anulada';
-          else if (p.camino === 'a_ubicar') detalle = p.estadoTexto;
+          else if (p.camino === 'a_ubicar') detalle = p.aUbicarTexto || p.estadoTexto;
           else if (p.camino === 'hodos') detalle = 'HODOS: ' + p.hodosTexto;
           else detalle = 'Refill: ' + p.refillTexto;
           const fila = el(
@@ -876,7 +876,8 @@
           '</span>' +
           '<span class="estado">' + escHtml(l.estado_preparacion) + '</span></div>';
       }).join('');
-      const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>HODOS</b> ' + escHtml(r.hodosTexto) + '</div>' : '';
+      const etiquetaEstadoEnvio = (p.tipo === 'pedido_cliente' && p.transporte) ? 'Envío' : 'HODOS';
+      const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>' + etiquetaEstadoEnvio + '</b> ' + escHtml(r.hodosTexto) + '</div>' : '';
       const puedeAnular = (ROL === 'gestor' || ROL === 'master') && p.estado !== 'cerrada' && p.estado !== 'anulada';
 
       const cont = app().querySelector('#detalle');

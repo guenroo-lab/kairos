@@ -231,16 +231,27 @@ function obtenerDetallePeticion(ldap, peticionId) {
   var hodosTexto = null;
   const generaEtiqueta = (peticion.tipo === 'pedido_cliente' && !peticion.transporte) || peticion.tipo === 'cesion';
   if (generaEtiqueta) {
+    const totalLineas = lineas.length;
+    const preparadas = lineas.filter(function (l) { return l.estado_preparacion === 'preparado'; }).length;
     const conHodosId = lineas.filter(function (l) { return l.hodos_id; });
     if (!conHodosId.length) {
-      hodosTexto = 'Generando etiqueta…';
+      hodosTexto = (peticion.en_curso_por && preparadas < totalLineas) ? 'Preparando'
+        : (totalLineas && preparadas === totalLineas) ? 'Preparado'
+        : 'Pedido';
     } else {
       const idUnico = conHodosId[0].hodos_id;
-      const etiquetas = supaSelect_('etiquetas', 'id_unico=eq.' + encodeURIComponent(idUnico) + '&select=pendiente_impresion_incpc', CFG.SCHEMA_HODOS);
-      if (etiquetas.length) {
-        hodosTexto = etiquetas[0].pendiente_impresion_incpc ? 'Etiqueta pendiente de imprimir' : 'Etiqueta impresa';
+      const etiquetas = supaSelect_('etiquetas', 'id_unico=eq.' + encodeURIComponent(idUnico) + '&select=batea_id', CFG.SCHEMA_HODOS);
+      const batea = etiquetas.length ? etiquetas[0].batea_id : null;
+      if (batea) {
+        const cargas = supaSelect_('cargas', 'id_carga=eq.' + encodeURIComponent(batea) + '&select=fecha_entrega,horario', CFG.SCHEMA_HODOS);
+        const carga = cargas[0];
+        hodosTexto = 'Cargado' + (carga && carga.fecha_entrega ? ' · entrega ' + carga.fecha_entrega + (carga.horario ? ' ' + carga.horario : '') : '');
+      } else {
+        hodosTexto = 'Preparado';
       }
     }
+  } else if (peticion.tipo === 'pedido_cliente' && peticion.transporte && peticion.ubicacion_consolidacion) {
+    hodosTexto = 'Consolidado: ' + peticion.ubicacion_consolidacion;
   }
 
   return _json_({ peticion: peticion, lineas: lineas, hodosTexto: hodosTexto });
