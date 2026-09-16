@@ -91,6 +91,7 @@
     [data-kmode="light"] #operarioBar { color:var(--accent); }
     #operarioBar a { color:inherit; opacity:.85; font-weight:600; }
     #app { max-width:480px; margin:0 auto; }
+    #app.ancho { max-width:1600px; }
     .tabs { display:flex; background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:4px; margin-bottom:14px; gap:2px; }
     .tabs a { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:8px 2px; border-radius:calc(var(--radius-card) - 4px); text-decoration:none; color:var(--text-500); font-size:10.5px; font-weight:700; min-height:52px; }
     .tabs a svg { width:20px; height:20px; }
@@ -310,6 +311,7 @@
     }
 
     function render() {
+      document.getElementById('app').classList.toggle('ancho', MODO_JEFE);
       if (MODO_JEFE) {
         if (VISTA.nombre === 'volumenes') return renderVolumenes();
         if (VISTA.nombre === 'hodos') return renderHodos();
