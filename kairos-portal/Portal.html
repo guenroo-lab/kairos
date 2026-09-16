@@ -359,7 +359,7 @@
   var TIENDA = localStorage.getItem('kairos_tienda') || '';
   var TIENDA_NOMBRE = localStorage.getItem('kairos_tienda_nombre') || '';
   var ROL = localStorage.getItem('kairos_rol') || '';
-  var ETIQUETA_ROL = { vendedor: 'Vendedor', logistico: 'Logístico', gestor: 'Gestor', master: 'Master' };
+  var ETIQUETA_ROL = { vendedor: 'Reposición', logistico: 'Logística', gestor: 'Coordinación', master: 'Master' };
 
   function salir() {
     localStorage.removeItem('kairos_ldap');
@@ -426,13 +426,15 @@
         '<h2>Primera vez</h2>' +
         '<p style="color:var(--text-500)">No encontramos el número ' + escHtml(ldap) + '. Regístrate:</p>' +
         '<select class="entrada" id="selTienda">' +
+          '<option value="" selected disabled>Elige tu tienda…</option>' +
           '<option value="014">Marbella</option>' +
           '<option value="279">Mijas</option>' +
         '</select>' +
         '<select class="entrada" id="selRol">' +
-          '<option value="vendedor">Vendedor</option>' +
-          '<option value="logistico">Logístico</option>' +
-          '<option value="gestor">Gestor</option>' +
+          '<option value="" selected disabled>Elige tu rol…</option>' +
+          '<option value="vendedor">Reposición</option>' +
+          '<option value="logistico">Logística</option>' +
+          '<option value="gestor">Coordinación</option>' +
         '</select>' +
         '<div class="error" id="errAlta" style="display:none;"></div>' +
         '<button class="btn btn-primary" id="btnAlta">Solicitar acceso</button>' +
@@ -445,6 +447,8 @@
       const err = c.querySelector('#errAlta');
       const tienda = c.querySelector('#selTienda').value;
       const rol = c.querySelector('#selRol').value;
+      if (!tienda) { err.textContent = 'Elige tu tienda.'; err.style.display = 'block'; return; }
+      if (!rol) { err.textContent = 'Elige tu rol.'; err.style.display = 'block'; return; }
       gas('registrarUsuario', ldap, tienda, rol).then(function () {
         renderPendiente();
       }).catch(function (e) {

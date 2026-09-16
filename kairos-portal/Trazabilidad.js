@@ -4,17 +4,20 @@
  *    Preparado (peticiones.estado + en_curso_por), Consolidado + ubicación
  *    en cuanto se guarda ubicacion_consolidacion.
  *  - refill                             → HODOS (fusión Carta de Portes SIE,
- *    2026-09-15): public.palets + public.cargas — Petición enviada / Enviado
- *    a XP1 / Cargado (fecha + hora de entrega), al pasar por RC1.
+ *    2026-09-15): public.palets + public.cargas — Petición enviada / En
+ *    silueta esperando carga / Cargado (fecha + hora de entrega), al pasar
+ *    por RC1.
  *  - cesión / pedido_cliente sin transp.→ HODOS genera etiqueta automática
  *    (lineas.hodos_id + public.etiquetas) — Pedido / Preparando / Preparado /
  *    Cargado (etiquetas.batea_id → cargas) + fecha + hora de entrega.
  *  Mismo criterio que kairos-operario/Estado.js. */
 
-/** historico=false (por defecto): solo peticiones activas, es decir con
- *  alguna línea todavía sin preparar. historico=true: peticiones donde ya
- *  se ha preparado todo (siguen actualizándose ahí hasta Cargado/
- *  Consolidado/Cerrada) — archivo permanente para buscar/analizar. */
+/** historico=false (por defecto): activas — para a_ubicar hasta que se
+ *  guarda la ubicación de consolidación; para hodos/refill hasta que,
+ *  cargado, llega la fecha+hora de entrega prevista (hasta entonces sigue
+ *  en tránsito, no está en tienda todavía). historico=true: ya sucedió eso
+ *  — archivo permanente para buscar/analizar, sigue viéndose ahí si aún
+ *  cambia algo más adelante. */
 function listarTrazabilidad(ldap, historico) {
   const u = _usuarioDe_(ldap);
   var q = 'tienda_origen=eq.' + encodeURIComponent(u.tienda) +
@@ -34,11 +37,10 @@ function listarTrazabilidad(ldap, historico) {
   });
 
   const idsTodas = peticiones.map(function (p) { return p.id; }).join(',');
-  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc,estado_preparacion');
+  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc');
   peticiones.forEach(function (p) {
     const propias = lineasTodas.filter(function (l) { return l.peticion_id === p.id; });
     p.articulo = propias.length === 1 ? (propias[0].codigo_lm + ' — ' + (propias[0].designacion || '')) : (propias.length + ' artículos');
-    p.preparada = propias.length > 0 && propias.every(function (l) { return l.estado_preparacion === 'preparado'; });
     var ubicaciones = [];
     propias.forEach(function (l) { if (l.ubicacion && ubicaciones.indexOf(l.ubicacion) === -1) ubicaciones.push(l.ubicacion); });
     p.ubicaciones = ubicaciones;
@@ -82,13 +84,15 @@ function listarTrazabilidad(ldap, historico) {
       const carga = (etiqueta && etiqueta.batea_id) ? cargas.filter(function (c) { return c.id_carga === etiqueta.batea_id; })[0] : null;
       if (carga) {
         p.hodosTexto = 'Cargado' + (carga.fecha_entrega ? ' · entrega ' + carga.fecha_entrega + (carga.horario ? ' ' + carga.horario : '') : '');
+        p._fechaLlegada = carga.fecha_entrega;
+        p._horaLlegada = carga.horario;
       } else {
         p.hodosTexto = 'Preparado';
       }
     });
   }
 
-  // Camino "refill": enviada / en XP1 / cargada (fecha + hora real).
+  // Camino "refill": enviada / en silueta esperando carga / cargada (fecha + hora real).
   const peticionesRefill = peticiones.filter(function (p) { return p.camino === 'refill'; });
   if (peticionesRefill.length) {
     const ids = peticionesRefill.map(function (p) { return p.id; }).join(',');
@@ -114,6 +118,7 @@ function listarTrazabilidad(ldap, historico) {
       if (cargado) {
         const carga = cargas.filter(function (c) { return c.id_carga === cargado.batea_id; })[0];
         p.refillTexto = 'Cargado' + (carga && carga.fecha_entrega ? ' · entrega ' + carga.fecha_entrega + (carga.horario ? ' ' + carga.horario : '') : '');
+        if (carga) { p._fechaLlegada = carga.fecha_entrega; p._horaLlegada = carga.horario; }
       } else if (propias.length && propias.every(function (l) { return l.estado_preparacion === 'preparado'; })) {
         p.refillTexto = 'En silueta, esperando carga';
       } else {
@@ -122,6 +127,35 @@ function listarTrazabilidad(ldap, historico) {
     });
   }
 
+  // "Preparada" (activa -> histórico) depende del camino, no solo de si las
+  // líneas están hechas: a_ubicar pasa al dar ubicación; hodos/refill pasan
+  // solo cuando, cargados, llega la fecha+hora de entrega prevista (hasta
+  // entonces sigue en tránsito, no está físicamente en tienda todavía).
+  const ahora = new Date();
+  peticiones.forEach(function (p) {
+    if (p.camino === 'a_ubicar') {
+      p.preparada = !!p.ubicacion_consolidacion;
+    } else {
+      const llegada = _fechaHoraCarga_(p._fechaLlegada, p._horaLlegada);
+      p.preparada = !!(llegada && ahora >= llegada);
+    }
+    delete p._fechaLlegada;
+    delete p._horaLlegada;
+  });
+
   const filtradas = peticiones.filter(function (p) { return !!p.preparada === !!historico; });
   return _json_(filtradas);
+}
+
+/** cargas.fecha_entrega es texto "YYYY-MM-DD"; cargas.horario suele ser
+ *  "H:MM" pero a veces texto libre ("Envío único diario") — si no hay hora
+ *  reconocible se toma las 00:00 de esa fecha como referencia. */
+function _fechaHoraCarga_(fechaEntrega, horario) {
+  if (!fechaEntrega) return null;
+  const partes = String(fechaEntrega).split('-');
+  if (partes.length !== 3) return null;
+  var horas = 0, minutos = 0;
+  const m = String(horario || '').match(/^(\d{1,2}):(\d{2})/);
+  if (m) { horas = Number(m[1]); minutos = Number(m[2]); }
+  return new Date(Number(partes[0]), Number(partes[1]) - 1, Number(partes[2]), horas, minutos, 0, 0);
 }
