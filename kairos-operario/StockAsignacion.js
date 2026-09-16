@@ -131,3 +131,50 @@ function asignarSsccSiFalta_(linea, peticion) {
   });
   return resultado;
 }
+
+/** Palets alternativos al ya asignado para el código de esta línea, con su
+ *  remanente real (descontando lo comprometido por otras líneas abiertas) —
+ *  para el botón "Cambiar palet" cuando el asignado no sirve (sin stock en
+ *  ubicación, ubicación errónea, etc). */
+function listarPaletsAlternativos(lineaId) {
+  const lineaFilas = supaSelect_('lineas', 'id=eq.' + encodeURIComponent(lineaId) + '&select=id,codigo_lm,cantidad,sscc,peticion_id');
+  if (!lineaFilas.length) throw new Error('Línea no encontrada.');
+  const linea = lineaFilas[0];
+
+  const peticionFilas = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(linea.peticion_id) + '&select=tienda_origen');
+  if (!peticionFilas.length) throw new Error('Petición no encontrada.');
+  const tienda = peticionFilas[0].tienda_origen;
+
+  const candidatos = _candidatosStock_(tienda, linea.codigo_lm);
+  if (!candidatos.length) return _json_([]);
+
+  const desde = _ultimoSyncStockFisico_(tienda);
+  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, desde);
+  const actuales = _parseSsccMulti_(linea.sscc, linea.cantidad).map(function (p) { return p.sscc; });
+
+  const lista = candidatos.map(function (c) {
+    return {
+      sscc: c.sscc,
+      ubicacion: c.ubicacion,
+      remanente: c.cantidad - (uso[c.sscc] || 0),
+      esActual: actuales.indexOf(c.sscc) !== -1,
+    };
+  });
+  lista.sort(function (a, b) { return b.remanente - a.remanente; });
+  return _json_(lista);
+}
+
+/** Aplica a mano el palet elegido (sustituye SSCC + ubicación de la línea
+ *  entera, igual que hacía PreparacionPedidosPC/cambiarPaletLinea). */
+function cambiarPaletLinea(lineaId, sscc, ubicacion) {
+  sscc = String(sscc || '').trim();
+  ubicacion = String(ubicacion || '').trim();
+  if (!sscc || !ubicacion) throw new Error('Falta el SSCC o la ubicación del palet elegido.');
+
+  const filas = supaUpdate_('lineas', 'id=eq.' + encodeURIComponent(lineaId), {
+    sscc: sscc,
+    ubicacion: ubicacion,
+  });
+  if (!filas.length) throw new Error('Línea no encontrada.');
+  return _json_({ ok: true });
+}

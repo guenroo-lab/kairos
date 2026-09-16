@@ -9,7 +9,7 @@ function listarCola(filtroTienda, filtroTipo) {
   if (!peticiones.length) return _json_([]);
 
   const ids = peticiones.map(function (p) { return p.id; }).join(',');
-  const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,estado_preparacion,seccion');
+  const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,estado_preparacion,seccion,designacion,ubicacion');
 
   peticiones.forEach(function (p) {
     const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
@@ -20,6 +20,10 @@ function listarCola(filtroTienda, filtroTipo) {
     var secciones = [];
     propias.forEach(function (l) { if (l.seccion && secciones.indexOf(l.seccion) === -1) secciones.push(l.seccion); });
     p.secciones = secciones;
+    p.articulo = propias.length === 1 ? propias[0].designacion : null;
+    var ubicaciones = [];
+    propias.forEach(function (l) { if (l.ubicacion && ubicaciones.indexOf(l.ubicacion) === -1) ubicaciones.push(l.ubicacion); });
+    p.ubicaciones = ubicaciones;
   });
 
   return _json_(peticiones);

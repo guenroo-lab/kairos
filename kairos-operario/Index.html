@@ -65,9 +65,17 @@
     button.ok      { background:linear-gradient(155deg,#baf2cd,#7fe0a0); }
     button.neutro  { background:linear-gradient(155deg,#e4e6ee,#c3c7d6); }
     button.aviso:active, button.peligro:active, button.ok:active, button.neutro:active { transform:scale(.96); }
-    .fila { background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:12px 14px; margin-bottom:8px; cursor:pointer; border-left:4px solid var(--ink-700); box-shadow:var(--shadow-card); }
-    .fila .tipo { font-weight:700; font-size:14px; }
-    .fila .meta { color:var(--text-500); font-size:12.5px; margin-top:2px; }
+    .fila { background:linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%); border:1px solid var(--ink-800); border-top:1px solid rgba(255,255,255,.06); border-radius:var(--radius-card); padding:14px 16px; margin-bottom:10px; cursor:pointer; border-left:4px solid var(--ink-700); box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 12px 28px -16px rgba(0,0,0,.6); transition:transform .12s ease; }
+    .fila:active { transform:scale(.98); }
+    .fila .tipo { font-weight:800; font-size:14.5px; display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+    .fila .tipo .fecha { font-weight:600; font-size:11px; color:var(--text-500); white-space:nowrap; }
+    .fila .meta { color:var(--text-500); font-size:12.5px; margin-top:3px; }
+    .fila .articulo { color:var(--text-300); font-size:13px; margin-top:5px; font-weight:600; }
+    .fila .ubicacion { color:var(--accent); font-size:12px; margin-top:5px; font-weight:700; }
+    .fila .chips { display:flex; flex-wrap:wrap; gap:5px; margin-top:8px; }
+    .fila .chips .chip { font-size:10.5px; font-weight:700; padding:3px 8px; border-radius:var(--radius-chip); background:var(--ink-800); color:var(--text-500); }
+    .fila .progreso { height:4px; border-radius:999px; background:var(--ink-800); margin-top:10px; overflow:hidden; }
+    .fila .progreso > div { height:100%; background:var(--accent); border-radius:999px; }
     .linea { background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:11px 12px; margin-bottom:6px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:7px; }
     .linea.preparada { opacity:.6; }
     .linea label { flex:1; color:var(--text-100); }
@@ -163,6 +171,8 @@
     var CFG_TIENDA_NOMBRE = { '036': 'Málaga', '014': 'Marbella', '279': 'Mijas' };
     var ultimoDetalle = null; // {peticion, lineas} con sscc ya asignado — usado por el clic de marcar
     var vistaLinea = {}; // lineaId -> 'pregunta' | 'tipos' | 'motivo' (ausente = vista normal)
+    var confirmadosPalet = {}; // lineaId -> array<boolean>, checklist multi-palet antes de poder marcar preparada
+    var selectorPalet = {}; // lineaId -> 'cargando' | array de alternativas (ausente = cerrado)
     var INCIDENCIAS = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'];
 
     var CFG_SHORTCUTS = {
@@ -413,10 +423,20 @@
       if (!filtradas.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
 
       function filaHtml(p) {
-        const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre : 'Refill');
+        const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre : ('Refill' + (p.motivo ? ': ' + p.motivo : '')));
+        const fechaObj = new Date(p.creada_en);
+        const fechaTexto = fechaObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + fechaObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        const articuloTexto = p.articulo ? p.articulo : (p.totalLineas + ' artículo' + (p.totalLineas === 1 ? '' : 's'));
+        const chips = (p.secciones || []).map(function (s) { return '<span class="chip">' + s + '</span>'; }).join('');
+        const ubicacionTexto = (p.ubicaciones && p.ubicaciones.length) ? p.ubicaciones.join(' · ') : '';
+        const pct = p.totalLineas ? Math.round(100 * p.lineasPreparadas / p.totalLineas) : 0;
         return '<div class="fila" style="border-left-color:' + (CFG_TIENDA_COLOR[p.tienda_origen] || '#ccc') + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
-          '<div class="tipo">' + etiquetaTipo + '</div>' +
+          '<div class="tipo"><span>' + etiquetaTipo + '</span><span class="fecha">' + fechaTexto + '</span></div>' +
           '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas</div>' +
+          '<div class="articulo">' + articuloTexto + '</div>' +
+          (ubicacionTexto ? '<div class="ubicacion">📍 ' + ubicacionTexto + '</div>' : '') +
+          (chips ? '<div class="chips">' + chips + '</div>' : '') +
+          '<div class="progreso"><div style="width:' + pct + '%;"></div></div>' +
           '</div>';
       }
       const GRUPOS = [
@@ -452,6 +472,8 @@
     function pintarDetalle(json) {
       ultimoDetalle = JSON.parse(json);
       vistaLinea = {};
+      confirmadosPalet = {};
+      selectorPalet = {};
       renderDetalleBody_();
     }
 
@@ -503,38 +525,113 @@
       }
 
       const bloqueada = !l.sscc;
-
-      if (p.tipo === 'refill') {
-        return '<div class="linea"><label><input type="checkbox" ' + (bloqueada ? 'disabled' : '') + ' onchange="marcarLinea(\'' + l.id + '\', this)"> <span class="desc">' + cabecera + '</span></label>' + extraInfo + '</div>';
-      }
-
-      // pedido_cliente / cesion: flujo de incidencia
       if (bloqueada) {
+        if (p.tipo === 'refill') {
+          return '<div class="linea"><label><input type="checkbox" disabled> <span class="desc">' + cabecera + '</span></label>' + extraInfo + '</div>';
+        }
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo + '</div>';
       }
 
+      // Línea repartida en varios palets (ver parsearSsccMulti): checklist que
+      // hay que marcar entero antes de poder cerrar la línea — evita cerrarla
+      // habiendo cogido mercancía de un solo palet cuando hacían falta varios.
+      const partesPalet = parsearSsccMulti(l.sscc, l.cantidad);
+      const esMultiPalet = partesPalet.length > 1;
+      if (!confirmadosPalet[l.id]) confirmadosPalet[l.id] = partesPalet.map(function () { return false; });
+      const confirmados = confirmadosPalet[l.id];
+      const todosConfirmados = !esMultiPalet || confirmados.every(function (v) { return v; });
+
+      var bloquePalet = '';
+      if (esMultiPalet) {
+        const direcciones = String(l.ubicacion || '').split(' + ').map(function (s) { return s.trim(); });
+        bloquePalet += '<p class="meta" style="margin:8px 0 4px;font-weight:700;">📦 Repartido en ' + partesPalet.length + ' palets — confirma cada uno al cogerlo:</p>';
+        bloquePalet += partesPalet.map(function (parte, idx) {
+          return '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;">' +
+            '<input type="checkbox" style="width:18px;height:18px;flex:none;" ' + (confirmados[idx] ? 'checked' : '') +
+            ' onchange="marcarPaletConfirmado(\'' + l.id + '\', ' + idx + ', this.checked)">' +
+            '<span>SSCC ' + parte.sscc + ' · ' + (direcciones[idx] || '—') + ' · ' + parte.cantidad + ' ud</span></label>';
+        }).join('');
+      }
+
+      const sel = selectorPalet[l.id];
+      var bloqueSelector;
+      if (sel === 'cargando') {
+        bloqueSelector = '<div class="meta" style="margin-top:6px;">Buscando palets…</div>';
+      } else if (Array.isArray(sel)) {
+        if (!sel.length) {
+          bloqueSelector = '<div class="meta" style="margin-top:6px;">No se han encontrado otros palets con este código en el edificio 05.</div>' +
+            '<button class="secundario" style="margin-top:6px;" onclick="cerrarSelectorPalet(\'' + l.id + '\')">Cerrar</button>';
+        } else {
+          bloqueSelector = '<p class="meta" style="margin:8px 0 4px;font-weight:700;">Elige el palet:</p>' +
+            sel.map(function (c) {
+              const suficiente = c.remanente >= Number(l.cantidad || 0);
+              const clase = c.esActual ? 'neutro' : (suficiente ? 'ok' : 'aviso');
+              const etiqueta = 'SSCC ' + c.sscc + ' · ' + c.ubicacion + ' · ' + c.remanente + ' ud' + (c.esActual ? ' (actual)' : (suficiente ? '' : ' ⚠ insuficiente'));
+              return c.esActual
+                ? '<button class="' + clase + '" disabled style="width:100%;margin-bottom:6px;">' + etiqueta + '</button>'
+                : '<button class="' + clase + '" style="width:100%;margin-bottom:6px;" onclick="elegirPalet(\'' + l.id + '\', \'' + c.sscc + '\', \'' + c.ubicacion + '\')">' + etiqueta + '</button>';
+            }).join('') +
+            '<button class="secundario" onclick="cerrarSelectorPalet(\'' + l.id + '\')">Cancelar</button>';
+        }
+      } else {
+        bloqueSelector = '<button class="secundario" style="margin-top:8px;" onclick="abrirSelectorPalet(\'' + l.id + '\')">🔄 Cambiar palet</button>';
+      }
+      const cola = bloquePalet + bloqueSelector;
+
+      if (p.tipo === 'refill') {
+        return '<div class="linea"><label><input type="checkbox" ' + (!todosConfirmados ? 'disabled title="Confirma todos los palets primero"' : '') + ' onchange="marcarLinea(\'' + l.id + '\', this)"> <span class="desc">' + cabecera + '</span></label>' + extraInfo + cola + '</div>';
+      }
+
+      // pedido_cliente / cesion: flujo de incidencia
       const vista = vistaLinea[l.id];
 
       if (vista === 'motivo') {
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
           '<input type="text" id="motivo-' + l.id + '" placeholder="Motivo de la incidencia"> ' +
           '<button class="ok" onclick="confirmarOtrasIncidencias(\'' + l.id + '\')">Confirmar</button> ' +
-          '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">‹ Volver</button></div>';
+          '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">‹ Volver</button>' + cola + '</div>';
       }
       if (vista === 'tipos') {
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
           '<button class="aviso" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Palet\', \'\')">Sin Palet</button> ' +
           '<button class="peligro" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Mercancía\', \'\')">Sin Mercancía</button> ' +
           '<button class="neutro" onclick="verIncidenciaMotivo(\'' + l.id + '\')">Otras Incidencias</button> ' +
-          '<button class="secundario" onclick="verIncidenciaPregunta(\'' + l.id + '\')">‹ Volver</button></div>';
+          '<button class="secundario" onclick="verIncidenciaPregunta(\'' + l.id + '\')">‹ Volver</button>' + cola + '</div>';
       }
       if (vista === 'pregunta') {
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
           '<button class="ok" onclick="cerrarLinea(\'' + l.id + '\', \'\', \'\')">Sin incidencia</button> ' +
-          '<button class="aviso" onclick="verIncidenciaTipos(\'' + l.id + '\')">⚠ Con incidencia</button></div>';
+          '<button class="aviso" onclick="verIncidenciaTipos(\'' + l.id + '\')">⚠ Con incidencia</button>' + cola + '</div>';
       }
       return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
-        '<button onclick="verIncidenciaPregunta(\'' + l.id + '\')">Marcar preparada</button></div>';
+        '<button ' + (!todosConfirmados ? 'disabled title="Confirma todos los palets primero"' : 'onclick="verIncidenciaPregunta(\'' + l.id + '\')"') + '>Marcar preparada</button>' + cola + '</div>';
+    }
+
+    function marcarPaletConfirmado(lineaId, idx, checked) {
+      if (!confirmadosPalet[lineaId]) confirmadosPalet[lineaId] = [];
+      confirmadosPalet[lineaId][idx] = checked;
+      renderDetalleBody_();
+    }
+
+    function abrirSelectorPalet(lineaId) {
+      selectorPalet[lineaId] = 'cargando';
+      renderDetalleBody_();
+      google.script.run
+        .withSuccessHandler(function (json) { selectorPalet[lineaId] = JSON.parse(json); renderDetalleBody_(); })
+        .withFailureHandler(function (err) { delete selectorPalet[lineaId]; kAlerta(err.message); renderDetalleBody_(); })
+        .listarPaletsAlternativos(lineaId);
+    }
+
+    function cerrarSelectorPalet(lineaId) {
+      delete selectorPalet[lineaId];
+      renderDetalleBody_();
+    }
+
+    function elegirPalet(lineaId, sscc, ubicacion) {
+      google.script.run
+        .withSuccessHandler(function () { delete selectorPalet[lineaId]; delete confirmadosPalet[lineaId]; renderDetalle(); })
+        .withFailureHandler(function (err) { kAlerta(err.message); })
+        .cambiarPaletLinea(lineaId, sscc, ubicacion);
     }
 
     function verIncidenciaPregunta(lineaId) { vistaLinea[lineaId] = 'pregunta'; renderDetalleBody_(); }
