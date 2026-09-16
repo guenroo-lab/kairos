@@ -189,7 +189,7 @@
   /** Elegir uno o varios SSCC concretos (con ubicación + stock) para cubrir
    *  la cantidad pedida. Resuelve al reparto {sscc, ubicacion, cantidad}[]
    *  ya recortado a lo necesario, o null si se omite (lo asigna el almacén). */
-  function elegirSsccModal_(candidatos, cantidadNecesaria) {
+  function elegirSsccModal_(candidatos, cantidadNecesaria, codigoLmPedido) {
     return new Promise(function (resolve) {
       var overlay = document.createElement('div');
       overlay.className = 'koverlay';
@@ -205,8 +205,14 @@
           '<p>¿De qué palet(es) coger? Necesitas ' + cantidadNecesaria + ' ud.</p>' +
           candidatos.map(function (c) {
             var elegido = seleccion.indexOf(c.sscc) !== -1;
-            return '<button class="btn ' + (elegido ? 'btn-primary' : 'btn-ghost') + '" style="width:100%;margin-bottom:6px;text-align:left;" data-sscc="' + escHtml(c.sscc) + '">' +
-              (elegido ? '✓ ' : '') + 'SSCC ' + escHtml(c.sscc) + ' · ' + escHtml(c.ubicacion || '—') + ' · ' + c.cantidad + ' ud</button>';
+            var otrasRefs = (c.contenido || []).filter(function (x) { return x.codigo_lm !== codigoLmPedido; });
+            var contenidoHtml = otrasRefs.length
+              ? '<div class="meta" style="margin:2px 0 8px 4px;">También lleva: ' +
+                otrasRefs.map(function (x) { return escHtml(x.designacion || x.codigo_lm) + ' (' + x.cantidad + ')'; }).join(' · ') + '</div>'
+              : '<div class="meta" style="margin:2px 0 8px 4px;">Palet solo con esta referencia</div>';
+            return '<button class="btn ' + (elegido ? 'btn-primary' : 'btn-ghost') + '" style="width:100%;margin-bottom:2px;text-align:left;" data-sscc="' + escHtml(c.sscc) + '">' +
+              (elegido ? '✓ ' : '') + 'SSCC ' + escHtml(c.sscc) + ' · ' + escHtml(c.ubicacion || '—') + ' · ' + c.cantidad + ' ud</button>' +
+              contenidoHtml;
           }).join('') +
           '<p class="meta">Seleccionado: ' + total + ' / ' + cantidadNecesaria + ' ud</p>' +
           '<div class="fila-botones">' +
@@ -633,7 +639,7 @@
           function elegirPaletYAnadir() {
             gas('listarSsccDisponibles', LDAP, articulo.codigo_lm).then(function (candidatos) {
               if (!candidatos.length) { anadir(null); return; }
-              elegirSsccModal_(candidatos, cantidad).then(anadir);
+              elegirSsccModal_(candidatos, cantidad, articulo.codigo_lm).then(anadir);
             });
           }
           if (chk.duplicados.length) {

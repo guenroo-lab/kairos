@@ -20,8 +20,34 @@ function listarSsccDisponibles(ldap, codigoLm) {
   const tienda = _tiendaDe_(ldap);
   const filas = supaSelect_('stock_fisico',
     'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(String(codigoLm || '').trim()) +
-    '&select=sscc,ubicacion,cantidad&order=cantidad.desc');
-  return _json_(filas.filter(function (f) { return f.cantidad > 0; }));
+    '&select=sscc,ubicacion,cantidad&order=cantidad.desc')
+    .filter(function (f) { return f.cantidad > 0; });
+  if (!filas.length) return _json_([]);
+
+  // Contenido completo de cada palet (otras referencias que también lleva),
+  // para elegir el que más convenga pedir.
+  const sscc = filas.map(function (f) { return f.sscc; });
+  const otrasFilas = supaSelect_('stock_fisico',
+    'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=in.(' + sscc.map(encodeURIComponent).join(',') + ')' +
+    '&select=sscc,codigo_lm,cantidad');
+
+  const codigos = [];
+  otrasFilas.forEach(function (f) { if (codigos.indexOf(f.codigo_lm) === -1) codigos.push(f.codigo_lm); });
+  const catalogo = codigos.length
+    ? supaSelect_('catalogo', 'codigo_lm=in.(' + codigos.map(encodeURIComponent).join(',') + ')&select=codigo_lm,designacion')
+    : [];
+  const designacionPorCodigo = {};
+  catalogo.forEach(function (c) { designacionPorCodigo[c.codigo_lm] = c.designacion; });
+
+  filas.forEach(function (f) {
+    f.contenido = otrasFilas
+      .filter(function (o) { return o.sscc === f.sscc && Number(o.cantidad) > 0; })
+      .map(function (o) {
+        return { codigo_lm: o.codigo_lm, designacion: designacionPorCodigo[o.codigo_lm] || null, cantidad: o.cantidad };
+      });
+  });
+
+  return _json_(filas);
 }
 
 /** Peticiones abiertas (no cerradas) de la misma tienda que ya llevan ese
