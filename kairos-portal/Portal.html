@@ -285,66 +285,6 @@
     });
   }
 
-  /** Elegir uno o varios SSCC concretos (con ubicación + stock) para cubrir
-   *  la cantidad pedida. Resuelve al reparto {sscc, ubicacion, cantidad}[]
-   *  ya recortado a lo necesario, o null si se omite (lo asigna el almacén). */
-  function elegirSsccModal_(candidatos, cantidadNecesaria, codigoLmPedido) {
-    return new Promise(function (resolve) {
-      var overlay = document.createElement('div');
-      overlay.className = 'koverlay';
-      var seleccion = [];
-      function totalSeleccionado() {
-        return candidatos.filter(function (c) { return seleccion.indexOf(c.sscc) !== -1; })
-          .reduce(function (s, c) { return s + c.cantidad; }, 0);
-      }
-      function cerrar(valor) { document.body.removeChild(overlay); resolve(valor); }
-      function pintar() {
-        var total = totalSeleccionado();
-        overlay.innerHTML = '<div class="kmodal">' +
-          '<p>¿De qué palet(es) coger? Necesitas ' + cantidadNecesaria + ' ud.</p>' +
-          candidatos.map(function (c) {
-            var elegido = seleccion.indexOf(c.sscc) !== -1;
-            var otrasRefs = (c.contenido || []).filter(function (x) { return x.codigo_lm !== codigoLmPedido; });
-            var contenidoHtml = otrasRefs.length
-              ? '<div class="meta" style="margin:2px 0 8px 4px;">También lleva: ' +
-                otrasRefs.map(function (x) { return escHtml(x.designacion || x.codigo_lm) + ' (' + x.cantidad + ')'; }).join(' · ') + '</div>'
-              : '<div class="meta" style="margin:2px 0 8px 4px;">Palet solo con esta referencia</div>';
-            return '<button class="btn ' + (elegido ? 'btn-primary' : 'btn-ghost') + '" style="width:100%;margin-bottom:2px;text-align:left;" data-sscc="' + escHtml(c.sscc) + '">' +
-              (elegido ? '✓ ' : '') + 'SSCC ' + escHtml(c.sscc) + ' · ' + escHtml(c.ubicacion || '—') + ' · ' + c.cantidad + ' ud</button>' +
-              contenidoHtml;
-          }).join('') +
-          '<p class="meta">Seleccionado: ' + total + ' / ' + cantidadNecesaria + ' ud</p>' +
-          '<div class="fila-botones">' +
-          '<button class="btn btn-ghost" id="kssccOmitir">Que lo asigne el almacén</button>' +
-          '<button class="btn btn-primary" id="kssccAceptar"' + (total < cantidadNecesaria ? ' disabled' : '') + '>Confirmar selección</button>' +
-          '</div></div>';
-        overlay.querySelectorAll('[data-sscc]').forEach(function (btn) {
-          btn.onclick = function () {
-            var sscc = btn.getAttribute('data-sscc');
-            var idx = seleccion.indexOf(sscc);
-            if (idx === -1) seleccion.push(sscc); else seleccion.splice(idx, 1);
-            pintar();
-          };
-        });
-        overlay.querySelector('#kssccOmitir').onclick = function () { cerrar(null); };
-        overlay.querySelector('#kssccAceptar').onclick = function () {
-          if (total < cantidadNecesaria) return;
-          var restante = cantidadNecesaria;
-          var reparto = [];
-          candidatos.filter(function (c) { return seleccion.indexOf(c.sscc) !== -1; }).forEach(function (c) {
-            if (restante <= 0) return;
-            var tomar = Math.min(c.cantidad, restante);
-            reparto.push({ sscc: c.sscc, ubicacion: c.ubicacion, cantidad: tomar });
-            restante -= tomar;
-          });
-          cerrar(reparto);
-        };
-      }
-      document.body.appendChild(overlay);
-      pintar();
-    });
-  }
-
   function renderBrandHeaderHtml_() {
     return '<div>' +
       '<div class="brand-head">' +
@@ -416,12 +356,15 @@
   var LDAP = localStorage.getItem('kairos_ldap') || '';
   var TIENDA = localStorage.getItem('kairos_tienda') || '';
   var TIENDA_NOMBRE = localStorage.getItem('kairos_tienda_nombre') || '';
+  var ROL = localStorage.getItem('kairos_rol') || '';
+  var ETIQUETA_ROL = { vendedor: 'Vendedor', logistico: 'Logístico', gestor: 'Gestor' };
 
   function salir() {
     localStorage.removeItem('kairos_ldap');
     localStorage.removeItem('kairos_tienda');
     localStorage.removeItem('kairos_tienda_nombre');
-    LDAP = ''; TIENDA = ''; TIENDA_NOMBRE = '';
+    localStorage.removeItem('kairos_rol');
+    LDAP = ''; TIENDA = ''; TIENDA_NOMBRE = ''; ROL = '';
     render();
   }
 
@@ -458,10 +401,11 @@
       gas('entrar', ldap).then(function (r) {
         if (r.estado === 'no_existe') { renderAlta(ldap); return; }
         if (r.estado === 'pendiente') { renderPendiente(); return; }
-        LDAP = r.ldap; TIENDA = r.tienda; TIENDA_NOMBRE = r.tiendaNombre;
+        LDAP = r.ldap; TIENDA = r.tienda; TIENDA_NOMBRE = r.tiendaNombre; ROL = r.rol;
         localStorage.setItem('kairos_ldap', LDAP);
         localStorage.setItem('kairos_tienda', TIENDA);
         localStorage.setItem('kairos_tienda_nombre', TIENDA_NOMBRE);
+        localStorage.setItem('kairos_rol', ROL);
         renderCola();
       }).catch(function (e) {
         err.textContent = e.message; err.style.display = 'block';
@@ -483,6 +427,11 @@
           '<option value="014">Marbella</option>' +
           '<option value="279">Mijas</option>' +
         '</select>' +
+        '<select class="entrada" id="selRol">' +
+          '<option value="vendedor">Vendedor (solo Refill)</option>' +
+          '<option value="logistico">Logístico (todas las peticiones)</option>' +
+          '<option value="gestor">Gestor (todas + anular)</option>' +
+        '</select>' +
         '<div class="error" id="errAlta" style="display:none;"></div>' +
         '<button class="btn btn-primary" id="btnAlta">Solicitar acceso</button>' +
         '<button class="btn btn-ghost" id="btnVolver">‹ Volver</button>' +
@@ -493,7 +442,8 @@
     c.querySelector('#btnAlta').onclick = function () {
       const err = c.querySelector('#errAlta');
       const tienda = c.querySelector('#selTienda').value;
-      gas('registrarUsuario', ldap, tienda).then(function () {
+      const rol = c.querySelector('#selRol').value;
+      gas('registrarUsuario', ldap, tienda, rol).then(function () {
         renderPendiente();
       }).catch(function (e) {
         err.textContent = e.message; err.style.display = 'block';
@@ -524,7 +474,7 @@
     pintarCabecera_();
     const top = el(
       '<div class="top">' +
-        '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--text-500)">· ' + escHtml(LDAP) + '</span></div>' +
+        '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--text-500)">· ' + escHtml(LDAP) + ' · ' + escHtml(ETIQUETA_ROL[ROL] || ROL) + '</span></div>' +
         '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
       '</div>'
     );
@@ -568,7 +518,7 @@
     pintarCabecera_();
     const top = el(
       '<div class="top">' +
-        '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--text-500)">· ' + escHtml(LDAP) + '</span></div>' +
+        '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--text-500)">· ' + escHtml(LDAP) + ' · ' + escHtml(ETIQUETA_ROL[ROL] || ROL) + '</span></div>' +
         '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
       '</div>'
     );
@@ -602,7 +552,8 @@
         lista.appendChild(el('<div class="grupo-titulo">' + g.label + ' (' + deEsteGrupo.length + ')</div>'));
         deEsteGrupo.forEach(function (p) {
           var detalle;
-          if (p.camino === 'a_ubicar') detalle = p.estadoTexto;
+          if (p.estado === 'anulada') detalle = 'Anulada';
+          else if (p.camino === 'a_ubicar') detalle = p.estadoTexto;
           else if (p.camino === 'hodos') detalle = 'HODOS: ' + p.hodosTexto;
           else detalle = 'Refill: ' + p.refillTexto;
           const fila = el(
@@ -646,20 +597,24 @@
   function renderNueva() {
     app().innerHTML = '';
     pintarCabecera_();
+    const soloRefill = ROL === 'vendedor';
     const c = el(
       '<div class="wrap"><div class="card">' +
         '<button class="btn btn-ghost" id="btnVolver">‹ Volver</button>' +
         '<h2>Nueva petición</h2>' +
         '<button class="btn btn-primary" id="btnRefill">Refill</button>' +
-        '<button class="btn btn-primary" id="btnPC">Pedido cliente</button>' +
-        '<button class="btn btn-primary" id="btnCesion">Cesión</button>' +
+        (soloRefill ? '' :
+          '<button class="btn btn-primary" id="btnPC">Pedido cliente</button>' +
+          '<button class="btn btn-primary" id="btnCesion">Cesión</button>') +
       '</div></div>'
     );
     app().appendChild(c);
     c.querySelector('#btnVolver').onclick = renderCola;
-    c.querySelector('#btnPC').onclick = function () { renderFormulario('pedido_cliente'); };
-    c.querySelector('#btnCesion').onclick = function () { renderFormulario('cesion'); };
     c.querySelector('#btnRefill').onclick = function () { renderFormulario('refill'); };
+    if (!soloRefill) {
+      c.querySelector('#btnPC').onclick = function () { renderFormulario('pedido_cliente'); };
+      c.querySelector('#btnCesion').onclick = function () { renderFormulario('cesion'); };
+    }
   }
 
   function renderFormulario(tipo) {
@@ -809,28 +764,22 @@
         const cantidad = Number(cantidadTexto);
         if (!cantidad || cantidad <= 0) return;
         gas('verificarAntesDeAnadir', LDAP, articulo.codigo_lm, cantidad).then(function (chk) {
-          function anadir(reparto) {
+          // El palet lo asigna el almacén internamente al preparar (como la
+          // app original) — aquí no se elige, solo unidades.
+          function anadir() {
             lineas.push({
               codigoLm: articulo.codigo_lm, designacion: articulo.designacion,
               ean: articulo.ean, seccion: articulo.seccion, cantidad: cantidad,
-              sscc: reparto ? reparto.map(function (r) { return r.sscc + ' (' + r.cantidad + 'ud)'; }).join(' + ') : null,
-              ubicacion: reparto ? reparto.map(function (r) { return r.ubicacion; }).join(' + ') : null,
             });
             inputBuscar.value = ''; articuloElegido = null;
             pintarLineas();
           }
-          function elegirPaletYAnadir() {
-            gas('listarSsccDisponibles', LDAP, articulo.codigo_lm).then(function (candidatos) {
-              if (!candidatos.length) { anadir(null); return; }
-              elegirSsccModal_(candidatos, cantidad, articulo.codigo_lm).then(anadir);
-            });
-          }
           function avisarDuplicadoYSeguir() {
             if (chk.duplicados.length) {
               kAlerta('Ya hay una petición abierta (' + (ETIQUETA_TIPO[chk.duplicados[0].tipo] || chk.duplicados[0].tipo) +
-                ') con este artículo — se añadirá de todas formas.').then(elegirPaletYAnadir);
+                ') con este artículo — se añadirá de todas formas.').then(anadir);
             } else {
-              elegirPaletYAnadir();
+              anadir();
             }
           }
           // Sin stock suficiente NO bloquea — solo avisa (un compañero de la
@@ -902,6 +851,7 @@
           '<span class="estado">' + escHtml(l.estado_preparacion) + '</span></div>';
       }).join('');
       const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>HODOS</b> ' + escHtml(r.hodosTexto) + '</div>' : '';
+      const puedeAnular = ROL === 'gestor' && p.estado !== 'cerrada' && p.estado !== 'anulada';
 
       const cont = app().querySelector('#detalle');
       cont.innerHTML =
@@ -913,9 +863,19 @@
         (p.motivo ? '<div style="margin-top:8px;"><b>Motivo</b> ' + escHtml(p.motivo) + '</div>' : '') +
         hodosLinea +
         (p.comentario ? '<div style="margin-top:8px;"><b>Comentario</b> ' + escHtml(p.comentario) + '</div>' : '') +
+        (puedeAnular ? '<button class="btn btn-danger" id="btnAnular" style="margin-top:10px;">Anular petición</button>' : '') +
         '<hr style="border-color:var(--ink-800);margin:12px 0;">' +
         filasLineas;
       cont.querySelector('#btnVolver2').onclick = origen;
+      if (puedeAnular) {
+        cont.querySelector('#btnAnular').onclick = function () {
+          kConfirmar('¿Anular esta petición? No se puede deshacer.').then(function (ok) {
+            if (!ok) return;
+            gas('anularPeticion', LDAP, id).then(function () { renderDetalle(id, origen); })
+              .catch(function (e) { kAlerta(e.message); });
+          });
+        };
+      }
     }).catch(function (e) {
       app().querySelector('#detalle').innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });
@@ -963,7 +923,7 @@
         filas.forEach(function (u) {
           const fila = el(
             '<div class="fila" style="cursor:default;">' +
-              '<div><b>' + escHtml(u.ldap) + '</b> · ' + escHtml(u.tiendaNombre) + '</div>' +
+              '<div><b>' + escHtml(u.ldap) + '</b> · ' + escHtml(u.tiendaNombre) + ' · ' + escHtml(ETIQUETA_ROL[u.rol] || u.rol) + '</div>' +
               '<div>' +
                 '<button class="btn-ghost" style="width:auto;padding:6px 10px;" data-a="ap">Aprobar</button> ' +
                 '<button class="btn-ghost" style="width:auto;padding:6px 10px;color:var(--danger-fg);" data-a="re">Rechazar</button>' +

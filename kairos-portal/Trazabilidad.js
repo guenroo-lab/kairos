@@ -7,10 +7,11 @@
  *  Mismo criterio que kairos-operario/Estado.js. */
 
 function listarTrazabilidad(ldap) {
-  const tienda = _tiendaDe_(ldap);
-  const peticiones = supaSelect_('peticiones',
-    'tienda_origen=eq.' + encodeURIComponent(tienda) +
-    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo&order=creada_en.desc&limit=200');
+  const u = _usuarioDe_(ldap);
+  var q = 'tienda_origen=eq.' + encodeURIComponent(u.tienda) +
+    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo&order=creada_en.desc&limit=200';
+  if (u.rol === 'vendedor') q += '&tipo=eq.refill'; // Vendedor solo ve Refill
+  const peticiones = supaSelect_('peticiones', q);
   if (!peticiones.length) return _json_([]);
 
   peticiones.forEach(function (p) {

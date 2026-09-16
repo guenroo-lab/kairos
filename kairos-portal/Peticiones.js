@@ -3,7 +3,23 @@ const TRADUCCION_ESTADO = {
   en_preparacion: 'En preparación',
   a_ubicar: 'Preparada, pendiente de consolidar',
   cerrada: 'Completada',
+  anulada: 'Anulada',
 };
+
+/** Anular una petición abierta (rol gestor). No la borra — queda como
+ *  histórico en trazabilidad, pero desaparece de la cola de preparación
+ *  (kairos-operario solo lee estado in pendiente/en_preparacion). */
+function anularPeticion(ldap, peticionId) {
+  const u = _usuarioDe_(ldap);
+  if (u.rol !== 'gestor') throw new Error('Solo un gestor puede anular peticiones.');
+
+  const cab = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(peticionId) + '&tienda_origen=eq.' + encodeURIComponent(u.tienda) + '&select=id,estado');
+  if (!cab.length) throw new Error('Petición no encontrada.');
+  if (cab[0].estado === 'cerrada' || cab[0].estado === 'anulada') throw new Error('Esta petición ya no se puede anular.');
+
+  supaUpdate_('peticiones', 'id=eq.' + encodeURIComponent(peticionId), { estado: 'anulada' });
+  return _json_({ ok: true });
+}
 
 /** Unidades ya comprometidas en peticiones abiertas (no cerradas, aún no
  *  preparadas) de esa tienda + código LM — para no ofrecer dos veces el
@@ -118,9 +134,13 @@ function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
 }
 
 function crearPeticion(ldap, tipo, datos, lineas) {
-  const tienda = _tiendaDe_(ldap);
+  const u = _usuarioDe_(ldap);
+  const tienda = u.tienda;
   if (['pedido_cliente', 'cesion', 'refill'].indexOf(tipo) === -1) {
     throw new Error('Tipo de petición no válido.');
+  }
+  if (u.rol === 'vendedor' && tipo !== 'refill') {
+    throw new Error('Tu rol (Vendedor) solo puede crear peticiones de Refill.');
   }
   if (!lineas || !lineas.length) throw new Error('Añade al menos una línea.');
   // Sin stock suficiente NO bloquea — es un aviso informativo (ya mostrado
@@ -179,14 +199,13 @@ function crearPeticion(ldap, tipo, datos, lineas) {
 }
 
 function listarMisPeticiones(ldap) {
-  const tienda = _tiendaDe_(ldap);
-  const filas = supaSelect_(
-    'peticiones',
-    'tienda_origen=eq.' + encodeURIComponent(tienda) +
-      '&estado=neq.cerrada' +
-      '&select=id,tipo,num_pedido,num_cesion,tienda_destino,estado,creada_en,solicitante_ldap' +
-      '&order=creada_en.desc&limit=200'
-  );
+  const u = _usuarioDe_(ldap);
+  var q = 'tienda_origen=eq.' + encodeURIComponent(u.tienda) +
+    '&estado=neq.cerrada' +
+    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,estado,creada_en,solicitante_ldap' +
+    '&order=creada_en.desc&limit=200';
+  if (u.rol === 'vendedor') q += '&tipo=eq.refill'; // Vendedor solo ve Refill
+  const filas = supaSelect_('peticiones', q);
   filas.forEach(function (p) { p.estadoTexto = TRADUCCION_ESTADO[p.estado] || p.estado; });
   if (filas.length) {
     const ids = filas.map(function (p) { return p.id; }).join(',');

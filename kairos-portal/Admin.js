@@ -9,7 +9,7 @@ function _verificarAdmin_(passwordAdmin) {
 
 function listarPendientesAprobacion(passwordAdmin) {
   _verificarAdmin_(passwordAdmin);
-  const filas = supaSelect_('usuarios_tienda', 'aprobado=eq.false&select=id,ldap,tienda,creado_en&order=creado_en.asc');
+  const filas = supaSelect_('usuarios_tienda', 'aprobado=eq.false&select=id,ldap,tienda,rol,creado_en&order=creado_en.asc');
   filas.forEach(function (f) { f.tiendaNombre = CFG.TIENDAS[f.tienda] || f.tienda; });
   return _json_(filas);
 }
