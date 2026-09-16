@@ -13,6 +13,17 @@ function _stockDisponible_(tienda, codigoLm) {
   return filas.reduce(function (s, f) { return s + Number(f.cantidad); }, 0);
 }
 
+/** SSCC con stock ahora mismo en edificio 05 para ese código LM, para que
+ *  quien pide pueda elegir uno o varios palets concretos en vez de dejar
+ *  que el almacén asigne uno solo al preparar. */
+function listarSsccDisponibles(ldap, codigoLm) {
+  const tienda = _tiendaDe_(ldap);
+  const filas = supaSelect_('stock_fisico',
+    'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(String(codigoLm || '').trim()) +
+    '&select=sscc,ubicacion,cantidad&order=cantidad.desc');
+  return _json_(filas.filter(function (f) { return f.cantidad > 0; }));
+}
+
 /** Peticiones abiertas (no cerradas) de la misma tienda que ya llevan ese
  *  código LM — aviso de posible duplicado, no bloqueante. */
 function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
@@ -77,7 +88,7 @@ function crearPeticion(ldap, tipo, datos, lineas) {
   const unidadMedida = tipo === 'refill' ? 'palet' : 'ud';
   const lineasPayload = lineas.map(function (l) {
     if (!l.codigoLm || !l.cantidad) throw new Error('Línea incompleta.');
-    return {
+    const payload = {
       peticion_id: peticion.id,
       codigo_lm: String(l.codigoLm).trim(),
       cantidad: Number(l.cantidad),
@@ -86,6 +97,15 @@ function crearPeticion(ldap, tipo, datos, lineas) {
       designacion: l.designacion || null,
       seccion: l.seccion || null,
     };
+    // Palet(es) elegidos a mano por quien pide (ver listarSsccDisponibles) —
+    // si no eligió ninguno, se queda sin sscc y el almacén lo asigna solo
+    // al preparar (asignarSsccSiFalta_ en kairos-operario).
+    if (l.sscc) {
+      payload.sscc = l.sscc;
+      payload.ubicacion = l.ubicacion || null;
+      payload.sscc_asignado_en = new Date().toISOString();
+    }
+    return payload;
   });
   supaInsertMany_('lineas', lineasPayload);
 
