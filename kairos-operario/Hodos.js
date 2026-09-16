@@ -84,9 +84,12 @@ function _enviarEtiquetaHodos_(payload) {
  * asumido (puede no reflejarse en la lógica interna de la app HODOS real
  * si ella hace algo más al cambiar esos campos). */
 
+/** Solo "Petición Reserva" (el subtipo que genera Kairos) — no las de otros
+ *  orígenes/tipos que también viven en public.etiquetas. */
 function listarEtiquetasCompleto() {
   const etiquetas = supaSelect_('etiquetas',
-    'select=id_unico,numero_pedido,destino,origen,subtipo,estado,fecha_creacion,pendiente_impresion_incpc,origen_tienda' +
+    'subtipo=eq.' + encodeURIComponent(SUBTIPO_HODOS_PREPARACION_) +
+    '&select=id_unico,numero_pedido,destino,origen,subtipo,estado,fecha_creacion,pendiente_impresion_incpc,origen_tienda' +
     '&order=fecha_creacion.desc&limit=200',
     'public');
   return _json_(etiquetas);
