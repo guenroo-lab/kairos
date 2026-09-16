@@ -760,10 +760,12 @@
 
     function pedirCantidad() {
       const articulo = articuloElegido;
-      kPedirTexto('¿Cuántas ' + unidadLabel + ' de ' + articulo.codigo_lm + '?', { numerico: true }).then(function (cantidadTexto) {
-        const cantidad = Number(cantidadTexto);
-        if (!cantidad || cantidad <= 0) return;
-        gas('verificarAntesDeAnadir', LDAP, articulo.codigo_lm, cantidad).then(function (chk) {
+      // Se consulta el disponible ANTES de preguntar cantidad, para mostrarlo
+      // en la propia pregunta (proactivo, no solo avisar si falla después).
+      gas('verificarAntesDeAnadir', LDAP, articulo.codigo_lm, 1).then(function (chk) {
+        kPedirTexto('¿Cuántas ' + unidadLabel + ' de ' + articulo.codigo_lm + '? (disponibles: ' + chk.disponible + ')', { numerico: true }).then(function (cantidadTexto) {
+          const cantidad = Number(cantidadTexto);
+          if (!cantidad || cantidad <= 0) return;
           // El palet lo asigna el almacén internamente al preparar (como la
           // app original) — aquí no se elige, solo unidades.
           function anadir() {
