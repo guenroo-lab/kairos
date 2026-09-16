@@ -148,6 +148,14 @@ function listarMisPeticiones(ldap) {
       '&order=creada_en.desc&limit=200'
   );
   filas.forEach(function (p) { p.estadoTexto = TRADUCCION_ESTADO[p.estado] || p.estado; });
+  if (filas.length) {
+    const ids = filas.map(function (p) { return p.id; }).join(',');
+    const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,codigo_lm,designacion');
+    filas.forEach(function (p) {
+      const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
+      p.articulo = propias.length === 1 ? (propias[0].codigo_lm + ' — ' + (propias[0].designacion || '')) : (propias.length + ' artículos');
+    });
+  }
   return _json_(filas);
 }
 

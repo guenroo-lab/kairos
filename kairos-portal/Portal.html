@@ -504,7 +504,8 @@
           '<div class="fila">' +
             '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
               ((p.num_pedido || p.num_cesion) ? ' · ' + escHtml(p.num_pedido || p.num_cesion) : '') +
-              '<div style="color:var(--text-500);font-size:12px;">' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
+              '<div style="color:var(--text-500);font-size:12px;">' + escHtml(p.articulo || '') + '</div>' +
+              '<div style="color:var(--text-500);font-size:12px;">' + escHtml(p.solicitante_ldap || '—') + ' · ' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
             '</div>' +
             '<span class="estado">' + escHtml(p.estadoTexto) + '</span>' +
           '</div>'
@@ -534,12 +535,14 @@
 
     const wrap = el('<div class="wrap"></div>');
     app().appendChild(wrap);
+    wrap.appendChild(el('<input class="entrada" id="inBuscarTraza" placeholder="Buscar por nº pedido, SSCC, LM, quién pidió, motivo…">'));
     const lista = el('<div class="card" id="listaTraza"><p style="color:var(--text-500)">Cargando…</p></div>');
     wrap.appendChild(lista);
 
-    gas('listarTrazabilidad', LDAP).then(function (filas) {
+    var todasTraza = [];
+    function pintarTraza(filas) {
       lista.innerHTML = '';
-      if (!filas.length) { lista.appendChild(el('<p style="color:var(--text-500)">No hay peticiones todavía.</p>')); return; }
+      if (!filas.length) { lista.appendChild(el('<p style="color:var(--text-500)">No hay peticiones.</p>')); return; }
       filas.forEach(function (p) {
         var detalle;
         if (p.camino === 'a_ubicar') detalle = p.estadoTexto;
@@ -549,16 +552,34 @@
           '<div class="fila" style="cursor:default;">' +
             '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
               ((p.num_pedido || p.num_cesion) ? ' · ' + escHtml(p.num_pedido || p.num_cesion) : '') +
-              '<div style="color:var(--text-500);font-size:12px;">' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
+              '<div style="color:var(--text-500);font-size:12px;">' + escHtml(p.articulo || '') + (p.motivo ? ' · ' + escHtml(p.motivo) : '') + '</div>' +
+              (p.sscc && p.sscc.length ? '<div style="color:var(--text-500);font-size:12px;">SSCC ' + escHtml(p.sscc.join(' · ')) + '</div>' : '') +
+              '<div style="color:var(--text-500);font-size:12px;">' + escHtml(p.solicitante_ldap || '—') + ' · ' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
             '</div>' +
             '<span class="estado">' + escHtml(detalle) + '</span>' +
           '</div>'
         );
         lista.appendChild(fila);
       });
+    }
+
+    gas('listarTrazabilidad', LDAP).then(function (filas) {
+      todasTraza = filas;
+      pintarTraza(todasTraza);
     }).catch(function (e) {
       lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });
+
+    wrap.querySelector('#inBuscarTraza').oninput = function (e) {
+      const q = e.target.value.trim().toLowerCase();
+      if (!q) { pintarTraza(todasTraza); return; }
+      pintarTraza(todasTraza.filter(function (p) {
+        return [
+          p.num_pedido, p.num_cesion, p.solicitante_ldap, p.motivo, p.articulo,
+          (p.sscc || []).join(' '), ETIQUETA_TIPO[p.tipo] || p.tipo,
+        ].filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
+      }));
+    };
   }
 </script>
 <script>

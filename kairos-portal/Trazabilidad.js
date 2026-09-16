@@ -10,7 +10,7 @@ function listarTrazabilidad(ldap) {
   const tienda = _tiendaDe_(ldap);
   const peticiones = supaSelect_('peticiones',
     'tienda_origen=eq.' + encodeURIComponent(tienda) +
-    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en&order=creada_en.desc&limit=200');
+    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo&order=creada_en.desc&limit=200');
   if (!peticiones.length) return _json_([]);
 
   peticiones.forEach(function (p) {
@@ -18,6 +18,21 @@ function listarTrazabilidad(ldap) {
     p.camino = (p.tipo === 'pedido_cliente' && p.transporte) ? 'a_ubicar'
       : (p.tipo === 'refill') ? 'refill'
       : 'hodos';
+  });
+
+  const idsTodas = peticiones.map(function (p) { return p.id; }).join(',');
+  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc');
+  peticiones.forEach(function (p) {
+    const propias = lineasTodas.filter(function (l) { return l.peticion_id === p.id; });
+    p.articulo = propias.length === 1 ? (propias[0].codigo_lm + ' — ' + (propias[0].designacion || '')) : (propias.length + ' artículos');
+    var ubicaciones = [];
+    propias.forEach(function (l) { if (l.ubicacion && ubicaciones.indexOf(l.ubicacion) === -1) ubicaciones.push(l.ubicacion); });
+    p.ubicaciones = ubicaciones;
+    var sscc = [];
+    propias.forEach(function (l) {
+      _parseSsccMulti_(l.sscc, 0).forEach(function (parte) { if (parte.sscc && sscc.indexOf(parte.sscc) === -1) sscc.push(parte.sscc); });
+    });
+    p.sscc = sscc;
   });
 
   const peticionesHodos = peticiones.filter(function (p) { return p.camino === 'hodos'; });
