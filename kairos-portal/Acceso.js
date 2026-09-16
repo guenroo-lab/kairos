@@ -51,13 +51,15 @@ function _tiendaDe_(ldap) {
   return _usuarioDe_(ldap).tienda;
 }
 
-/** Un gestor no pertenece a una tienda fija — puede entrar en la que
- *  quiera. Cambia su propio registro (usuarios_tienda.tienda); a partir
- *  de ahí todo lo demás (_tiendaDe_, listados, crear peticiones) ya
- *  funciona igual que si estuviera registrado en esa tienda. */
+/** Master (un único perfil, asignado a mano en la base de datos — nunca
+ *  autoasignable al registrarse) no pertenece a una tienda fija, puede
+ *  entrar en la que quiera. Cambia su propio registro
+ *  (usuarios_tienda.tienda); a partir de ahí todo lo demás (_tiendaDe_,
+ *  listados, crear peticiones) ya funciona igual que si estuviera
+ *  registrado en esa tienda. Gestor NO tiene este permiso — solo Master. */
 function cambiarTiendaActiva(ldap, tienda) {
   const u = _usuarioDe_(ldap);
-  if (u.rol !== 'gestor') throw new Error('Solo un gestor puede cambiar de tienda.');
+  if (u.rol !== 'master') throw new Error('Solo el perfil Master puede cambiar de tienda.');
   if (!CFG.TIENDAS[tienda]) throw new Error('Tienda no válida.');
 
   supaUpdate_('usuarios_tienda', 'ldap=eq.' + encodeURIComponent(ldap), { tienda: tienda });

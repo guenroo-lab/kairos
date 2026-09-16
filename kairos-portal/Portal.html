@@ -357,7 +357,7 @@
   var TIENDA = localStorage.getItem('kairos_tienda') || '';
   var TIENDA_NOMBRE = localStorage.getItem('kairos_tienda_nombre') || '';
   var ROL = localStorage.getItem('kairos_rol') || '';
-  var ETIQUETA_ROL = { vendedor: 'Vendedor', logistico: 'Logístico', gestor: 'Gestor' };
+  var ETIQUETA_ROL = { vendedor: 'Vendedor', logistico: 'Logístico', gestor: 'Gestor', master: 'Master' };
 
   function salir() {
     localStorage.removeItem('kairos_ldap');
@@ -467,12 +467,12 @@
 </script>
 <script>
   const ETIQUETA_TIPO = { pedido_cliente: 'Pedido cliente', cesion: 'Cesión', refill: 'Refill' };
-  const NOMBRE_TIENDA = { '014': 'Marbella', '279': 'Mijas', '036': 'Málaga' };
+  const NOMBRE_TIENDA = { '014': 'Marbella', '279': 'Mijas' };
 
   /** Gestor puede entrar en la tienda que quiera (no está atado a una) —
    *  cambia su registro (usuarios_tienda.tienda) y recarga la vista. */
   function pintarSelectorTienda_(contenedorAcciones) {
-    if (ROL !== 'gestor') return;
+    if (ROL !== 'master') return;
     const opciones = Object.keys(NOMBRE_TIENDA).map(function (cod) {
       return '<option value="' + cod + '"' + (cod === TIENDA ? ' selected' : '') + '>' + NOMBRE_TIENDA[cod] + '</option>';
     }).join('');
@@ -658,7 +658,6 @@
         '<select class="entrada" id="inDestino">' +
           '<option value="014">Marbella</option>' +
           '<option value="279">Mijas</option>' +
-          '<option value="036">Málaga</option>' +
         '</select>';
     } else {
       camposTipo = '<input class="entrada" id="inMotivo" placeholder="Motivo del refill">';
@@ -878,7 +877,7 @@
           '<span class="estado">' + escHtml(l.estado_preparacion) + '</span></div>';
       }).join('');
       const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>HODOS</b> ' + escHtml(r.hodosTexto) + '</div>' : '';
-      const puedeAnular = ROL === 'gestor' && p.estado !== 'cerrada' && p.estado !== 'anulada';
+      const puedeAnular = (ROL === 'gestor' || ROL === 'master') && p.estado !== 'cerrada' && p.estado !== 'anulada';
 
       const cont = app().querySelector('#detalle');
       cont.innerHTML =

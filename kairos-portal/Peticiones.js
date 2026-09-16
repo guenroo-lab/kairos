@@ -11,7 +11,7 @@ const TRADUCCION_ESTADO = {
  *  (kairos-operario solo lee estado in pendiente/en_preparacion). */
 function anularPeticion(ldap, peticionId) {
   const u = _usuarioDe_(ldap);
-  if (u.rol !== 'gestor') throw new Error('Solo un gestor puede anular peticiones.');
+  if (u.rol !== 'gestor' && u.rol !== 'master') throw new Error('Solo un gestor puede anular peticiones.');
 
   const cab = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(peticionId) + '&tienda_origen=eq.' + encodeURIComponent(u.tienda) + '&select=id,estado');
   if (!cab.length) throw new Error('Petición no encontrada.');
