@@ -430,9 +430,9 @@
           '<option value="279">Mijas</option>' +
         '</select>' +
         '<select class="entrada" id="selRol">' +
-          '<option value="vendedor">Vendedor (solo Refill)</option>' +
-          '<option value="logistico">Logístico (todas las peticiones)</option>' +
-          '<option value="gestor">Gestor (todas + anular)</option>' +
+          '<option value="vendedor">Vendedor</option>' +
+          '<option value="logistico">Logístico</option>' +
+          '<option value="gestor">Gestor</option>' +
         '</select>' +
         '<div class="error" id="errAlta" style="display:none;"></div>' +
         '<button class="btn btn-primary" id="btnAlta">Solicitar acceso</button>' +
@@ -470,6 +470,7 @@
 <script>
   const ETIQUETA_TIPO = { pedido_cliente: 'Pedido cliente', cesion: 'Cesión', refill: 'Refill' };
   const NOMBRE_TIENDA = { '014': 'Marbella', '279': 'Mijas' };
+  const ROLES_ASIGNABLES_ = ['vendedor', 'logistico', 'gestor']; // 'master' nunca asignable desde aquí
 
   /** Gestor puede entrar en la tienda que quiera (no está atado a una) —
    *  cambia su registro (usuarios_tienda.tienda) y recarga la vista. */
@@ -490,6 +491,98 @@
     };
   }
 
+  /** Gestor/master gestionan (aprobar/rechazar altas, revocar, cambiar rol)
+   *  la gente de su propia tienda directamente desde el portal — sin la
+   *  contraseña de admin aparte. */
+  function pintarBotonUsuarios_(contenedorAcciones) {
+    if (ROL !== 'gestor' && ROL !== 'master') return;
+    const btn = el('<button class="btn-ghost" style="width:auto;padding:6px 10px;">Usuarios</button>');
+    contenedorAcciones.insertBefore(btn, contenedorAcciones.firstChild);
+    btn.onclick = renderGestionUsuarios;
+  }
+
+  function renderGestionUsuarios() {
+    app().innerHTML = '';
+    pintarCabecera_();
+    const top = el(
+      '<div class="top">' +
+        '<div><b>Usuarios</b> <span style="color:var(--text-500)">· ' + escHtml(TIENDA_NOMBRE) + '</span></div>' +
+        '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnVolverUsuarios">‹ Volver</button>' +
+      '</div>'
+    );
+    app().appendChild(top);
+    top.querySelector('#btnVolverUsuarios').onclick = renderCola;
+
+    const wrap = el('<div class="wrap"></div>');
+    app().appendChild(wrap);
+    const lista = el('<div class="card" id="listaUsuarios"><p style="color:var(--text-500)">Cargando…</p></div>');
+    wrap.appendChild(lista);
+
+    function cargar() {
+      gas('listarUsuariosGestion', LDAP).then(pintar).catch(function (e) {
+        lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
+      });
+    }
+
+    function pintar(usuarios) {
+      const pendientes = usuarios.filter(function (u) { return !u.aprobado; });
+      const activos = usuarios.filter(function (u) { return u.aprobado; });
+      lista.innerHTML = '';
+
+      lista.appendChild(el('<div class="grupo-titulo">Pendientes de aprobar (' + pendientes.length + ')</div>'));
+      if (!pendientes.length) lista.appendChild(el('<p style="color:var(--text-500)">Ninguno.</p>'));
+      pendientes.forEach(function (u) {
+        const fila = el(
+          '<div class="fila" style="cursor:default;">' +
+            '<div><b>' + escHtml(u.ldap) + '</b> · rol solicitado: ' + escHtml(ETIQUETA_ROL[u.rol] || u.rol) + '</div>' +
+            '<div style="display:flex;gap:6px;">' +
+              '<button class="btn-ghost" style="width:auto;padding:6px 10px;" data-a="ap">Aprobar</button>' +
+              '<button class="btn-ghost" style="width:auto;padding:6px 10px;color:var(--danger-fg);" data-a="re">Rechazar</button>' +
+            '</div>' +
+          '</div>'
+        );
+        fila.querySelector('[data-a="ap"]').onclick = function () {
+          gas('aprobarUsuarioPortal', LDAP, u.id).then(cargar).catch(function (e) { kAlerta(e.message); });
+        };
+        fila.querySelector('[data-a="re"]').onclick = function () {
+          kConfirmar('¿Rechazar a ' + u.ldap + '? Se borra la solicitud.').then(function (ok) {
+            if (!ok) return;
+            gas('rechazarUsuarioPortal', LDAP, u.id).then(cargar).catch(function (e) { kAlerta(e.message); });
+          });
+        };
+        lista.appendChild(fila);
+      });
+
+      lista.appendChild(el('<div class="grupo-titulo">Usuarios activos (' + activos.length + ')</div>'));
+      if (!activos.length) lista.appendChild(el('<p style="color:var(--text-500)">Ninguno.</p>'));
+      activos.forEach(function (u) {
+        const fila = el(
+          '<div class="fila" style="cursor:default;flex-wrap:wrap;">' +
+            '<div><b>' + escHtml(u.ldap) + '</b></div>' +
+            '<div style="display:flex;gap:6px;align-items:center;">' +
+              '<select class="entrada" style="width:auto;margin:0;padding:6px 8px;font-size:12px;" data-a="rol">' +
+                ROLES_ASIGNABLES_.map(function (r) { return '<option value="' + r + '"' + (r === u.rol ? ' selected' : '') + '>' + ETIQUETA_ROL[r] + '</option>'; }).join('') +
+              '</select>' +
+              '<button class="btn-ghost" style="width:auto;padding:6px 10px;color:var(--danger-fg);" data-a="rev">Revocar</button>' +
+            '</div>' +
+          '</div>'
+        );
+        fila.querySelector('[data-a="rol"]').onchange = function (e) {
+          gas('cambiarRolUsuarioPortal', LDAP, u.id, e.target.value).then(cargar).catch(function (err) { kAlerta(err.message); });
+        };
+        fila.querySelector('[data-a="rev"]').onclick = function () {
+          kConfirmar('¿Revocar acceso a ' + u.ldap + '?').then(function (ok) {
+            if (!ok) return;
+            gas('revocarUsuarioPortal', LDAP, u.id).then(cargar).catch(function (e) { kAlerta(e.message); });
+          });
+        };
+        lista.appendChild(fila);
+      });
+    }
+
+    cargar();
+  }
+
   function renderCola() {
     app().innerHTML = '';
     pintarCabecera_();
@@ -504,6 +597,7 @@
     app().appendChild(top);
     top.querySelector('#btnSalir').onclick = salir;
     pintarSelectorTienda_(top.querySelector('#topAcciones'));
+    pintarBotonUsuarios_(top.querySelector('#topAcciones'));
     const tabs = el(renderTabsPortal_('cola'));
     app().appendChild(tabs);
     tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
@@ -558,6 +652,7 @@
     app().appendChild(top);
     top.querySelector('#btnSalir').onclick = salir;
     pintarSelectorTienda_(top.querySelector('#topAcciones'));
+    pintarBotonUsuarios_(top.querySelector('#topAcciones'));
     const tabs = el(renderTabsPortal_(historico ? 'historico' : 'traza'));
     app().appendChild(tabs);
     tabs.querySelector('#tabPeticiones').onclick = function (e) { e.preventDefault(); renderCola(); };

@@ -101,7 +101,7 @@ function listarEstadoPeticiones() {
         p.refillFecha = carga ? carga.fecha_entrega : null;
         p.refillHora = carga ? carga.horario : null;
       } else if (propias.length && propias.every(function (l) { return l.estado_preparacion === 'preparado'; })) {
-        p.refillEstado = 'Enviado a XP1';
+        p.refillEstado = 'En silueta, esperando carga';
       } else {
         p.refillEstado = 'Petición enviada';
       }

@@ -65,3 +65,56 @@ function cambiarTiendaActiva(ldap, tienda) {
   supaUpdate_('usuarios_tienda', 'ldap=eq.' + encodeURIComponent(ldap), { tienda: tienda });
   return _json_({ tienda: tienda, tiendaNombre: CFG.TIENDAS[tienda] });
 }
+
+function _gestorDe_(ldap) {
+  const u = _usuarioDe_(ldap);
+  if (u.rol !== 'gestor' && u.rol !== 'master') throw new Error('Solo un gestor puede gestionar usuarios.');
+  return u;
+}
+
+/** Gestión de usuarios desde el propio portal (sin contraseña de admin) —
+ *  gestor/master ven y gestionan solo la gente de su tienda (para master,
+ *  la que tenga activa en ese momento). Aprobar/rechazar altas y
+ *  revocar/cambiar rol de gente ya aprobada. */
+function listarUsuariosGestion(ldap) {
+  const u = _gestorDe_(ldap);
+  const filas = supaSelect_('usuarios_tienda',
+    'tienda=eq.' + encodeURIComponent(u.tienda) + '&select=id,ldap,tienda,rol,aprobado,creado_en&order=aprobado.asc,creado_en.asc');
+  filas.forEach(function (f) { f.tiendaNombre = CFG.TIENDAS[f.tienda] || f.tienda; });
+  return _json_(filas);
+}
+
+function _usuarioDeMiTienda_(u, idObjetivo) {
+  const filas = supaSelect_('usuarios_tienda', 'id=eq.' + encodeURIComponent(idObjetivo) + '&tienda=eq.' + encodeURIComponent(u.tienda));
+  if (!filas.length) throw new Error('Usuario no encontrado en tu tienda.');
+  return filas[0];
+}
+
+function aprobarUsuarioPortal(ldap, idObjetivo) {
+  const u = _gestorDe_(ldap);
+  _usuarioDeMiTienda_(u, idObjetivo);
+  supaUpdate_('usuarios_tienda', 'id=eq.' + encodeURIComponent(idObjetivo), { aprobado: true, aprobado_en: new Date().toISOString() });
+  return _json_({ ok: true });
+}
+
+function rechazarUsuarioPortal(ldap, idObjetivo) {
+  const u = _gestorDe_(ldap);
+  _usuarioDeMiTienda_(u, idObjetivo);
+  supaDelete_('usuarios_tienda', 'id=eq.' + encodeURIComponent(idObjetivo));
+  return _json_({ ok: true });
+}
+
+function revocarUsuarioPortal(ldap, idObjetivo) {
+  const u = _gestorDe_(ldap);
+  _usuarioDeMiTienda_(u, idObjetivo);
+  supaUpdate_('usuarios_tienda', 'id=eq.' + encodeURIComponent(idObjetivo), { aprobado: false });
+  return _json_({ ok: true });
+}
+
+function cambiarRolUsuarioPortal(ldap, idObjetivo, nuevoRol) {
+  const u = _gestorDe_(ldap);
+  if (ROLES_VALIDOS.indexOf(nuevoRol) === -1) throw new Error('Rol no válido.');
+  _usuarioDeMiTienda_(u, idObjetivo);
+  supaUpdate_('usuarios_tienda', 'id=eq.' + encodeURIComponent(idObjetivo), { rol: nuevoRol });
+  return _json_({ ok: true });
+}

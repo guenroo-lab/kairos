@@ -115,7 +115,7 @@ function listarTrazabilidad(ldap, historico) {
         const carga = cargas.filter(function (c) { return c.id_carga === cargado.batea_id; })[0];
         p.refillTexto = 'Cargado' + (carga && carga.fecha_entrega ? ' · entrega ' + carga.fecha_entrega + (carga.horario ? ' ' + carga.horario : '') : '');
       } else if (propias.length && propias.every(function (l) { return l.estado_preparacion === 'preparado'; })) {
-        p.refillTexto = 'Enviado a XP1';
+        p.refillTexto = 'En silueta, esperando carga';
       } else {
         p.refillTexto = 'Petición enviada';
       }
