@@ -1,9 +1,25 @@
-function obtenerPeticion(peticionId) {
+/** operarioNombre: quien abre el detalle AHORA. Se registra en la petición
+ *  (no bloqueante — cualquiera puede entrar igual) para que jefe de equipo
+ *  y compañeros vean quién más está en este pedido (Cola, Control de
+ *  pedidos, y aviso en el propio detalle si alguien distinto lo tenía). */
+function obtenerPeticion(peticionId, operarioNombre) {
   const cab = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(peticionId));
   if (!cab.length) throw new Error('Petición no encontrada.');
   const peticion = cab[0];
   peticion.tiendaNombre = CFG.TIENDAS[peticion.tienda_origen] || peticion.tienda_origen;
   peticion.tiendaDestinoNombre = peticion.tienda_destino ? (CFG.TIENDAS[peticion.tienda_destino] || peticion.tienda_destino) : null;
+
+  operarioNombre = String(operarioNombre || '').trim();
+  const otroEnCurso = (peticion.en_curso_por && peticion.en_curso_por !== operarioNombre)
+    ? { operario: peticion.en_curso_por, desde: peticion.en_curso_desde }
+    : null;
+  if (operarioNombre && peticion.estado !== 'cerrada') {
+    supaUpdate_('peticiones', 'id=eq.' + encodeURIComponent(peticionId), {
+      en_curso_por: operarioNombre,
+      en_curso_desde: new Date().toISOString(),
+    });
+    peticion.en_curso_por = operarioNombre;
+  }
 
   const lineas = supaSelect_('lineas', 'peticion_id=eq.' + encodeURIComponent(peticionId) + '&order=id.asc');
 
@@ -17,7 +33,7 @@ function obtenerPeticion(peticionId) {
     }
   });
 
-  return _json_({ peticion: peticion, lineas: lineas });
+  return _json_({ peticion: peticion, lineas: lineas, otroEnCurso: otroEnCurso });
 }
 
 function marcarLineaPreparada(lineaId, operarioNombre, incidencia, motivo) {

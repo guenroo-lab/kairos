@@ -1,6 +1,6 @@
 function listarCola(filtroTienda, filtroTipo) {
   var q = 'estado=in.(pendiente,en_preparacion)' +
-    '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,motivo,cola_individual,creada_en' +
+    '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,motivo,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap' +
     '&order=creada_en.asc&limit=200';
   if (filtroTienda) q += '&tienda_origen=eq.' + encodeURIComponent(filtroTienda);
   if (filtroTipo) q += '&tipo=eq.' + encodeURIComponent(filtroTipo);
@@ -9,7 +9,7 @@ function listarCola(filtroTienda, filtroTipo) {
   if (!peticiones.length) return _json_([]);
 
   const ids = peticiones.map(function (p) { return p.id; }).join(',');
-  const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,estado_preparacion,seccion,designacion,ubicacion');
+  const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,estado_preparacion,seccion,designacion,ubicacion,sscc,cantidad');
 
   peticiones.forEach(function (p) {
     const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
@@ -24,6 +24,13 @@ function listarCola(filtroTienda, filtroTipo) {
     var ubicaciones = [];
     propias.forEach(function (l) { if (l.ubicacion && ubicaciones.indexOf(l.ubicacion) === -1) ubicaciones.push(l.ubicacion); });
     p.ubicaciones = ubicaciones;
+    var sscc = [];
+    propias.forEach(function (l) {
+      _parseSsccMulti_(l.sscc, l.cantidad).forEach(function (parte) {
+        if (parte.sscc && sscc.indexOf(parte.sscc) === -1) sscc.push(parte.sscc);
+      });
+    });
+    p.sscc = sscc;
   });
 
   return _json_(peticiones);

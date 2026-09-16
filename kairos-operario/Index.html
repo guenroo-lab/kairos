@@ -287,6 +287,7 @@
     function render() {
       if (MODO_JEFE) {
         if (VISTA.nombre === 'volumenes') return renderVolumenes();
+        if (VISTA.nombre === 'detalle') return renderDetalle();
         return renderPanel();
       }
       if (!OPERARIO) return renderElegirOperarios();
@@ -312,19 +313,9 @@
             ICONO_TABS[t.nombre] + '<span>' + t.label + '</span></a>';
         }).join('') + '</div>';
       }
-      if (ROL !== 'jefe_equipo') return '';
-      var tabs = [
-        { nombre: 'cola', label: 'Peticiones' },
-        { nombre: 'stock', label: 'Stock' },
-        { nombre: 'estado', label: 'Estado' },
-        { nombre: 'panel', label: 'Panel' },
-        { nombre: 'volumenes', label: 'Volúmenes' },
-      ];
-      return '<div class="tabs">' + tabs.map(function (t) {
-        return '<a href="#" class="' + (VISTA.nombre === t.nombre ? 'activa' : '') +
-          '" onclick="event.preventDefault(); VISTA={nombre:\'' + t.nombre + '\',peticionId:null}; render();">' +
-          ICONO_TABS[t.nombre] + '<span>' + t.label + '</span></a>';
-      }).join('') + '</div>';
+      // Modo normal (cualquier operario, incluido Edson): sin pestañas de
+      // gestión — eso vive solo en la pantalla aparte ?modo=jefe.
+      return '';
     }
 
     function renderElegirOperarios() {
@@ -449,12 +440,17 @@
         const articuloTexto = p.articulo ? p.articulo : (p.totalLineas + ' artículo' + (p.totalLineas === 1 ? '' : 's'));
         const chips = (p.secciones || []).map(function (s) { return '<span class="chip">' + s + '</span>'; }).join('');
         const ubicacionTexto = (p.ubicaciones && p.ubicaciones.length) ? p.ubicaciones.join(' · ') : '';
+        const ssccTexto = (p.sscc && p.sscc.length) ? p.sscc.join(' · ') : '';
         const pct = p.totalLineas ? Math.round(100 * p.lineasPreparadas / p.totalLineas) : 0;
+        const enCurso = (p.en_curso_por && p.en_curso_por !== OPERARIO)
+          ? '<div class="meta" style="color:var(--warn-fg);">👤 En curso: ' + p.en_curso_por + ' (' + tiempoDesde_(p.en_curso_desde) + ')</div>' : '';
         return '<div class="fila" style="border-left-color:' + (CFG_TIENDA_COLOR[p.tienda_origen] || '#ccc') + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
           '<div class="tipo"><span>' + etiquetaTipo + '</span><span class="fecha">' + fechaTexto + '</span></div>' +
-          '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas</div>' +
+          '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · pide: ' + (p.solicitante_ldap || '—') + '</div>' +
           '<div class="articulo">' + articuloTexto + '</div>' +
           (ubicacionTexto ? '<div class="ubicacion">📍 ' + ubicacionTexto + '</div>' : '') +
+          (ssccTexto ? '<div class="meta">SSCC ' + ssccTexto + '</div>' : '') +
+          enCurso +
           (chips ? '<div class="chips">' + chips + '</div>' : '') +
           '<div class="progreso"><div style="width:' + pct + '%;"></div></div>' +
           '</div>';
@@ -483,10 +479,10 @@
 
     function renderDetalle() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
-        '<div class="volver"><a href="#" id="volverCola">← Cola</a></div><div id="detalleBody">Cargando…</div>';
+        '<div class="volver"><a href="#" id="volverCola">← ' + (MODO_JEFE ? 'Control de pedidos' : 'Cola') + '</a></div><div id="detalleBody">Cargando…</div>';
       sincronizarPickers_();
-      document.getElementById('volverCola').onclick = function (e) { e.preventDefault(); VISTA = { nombre: 'cola', peticionId: null }; render(); };
-      google.script.run.withSuccessHandler(pintarDetalle).obtenerPeticion(VISTA.peticionId);
+      document.getElementById('volverCola').onclick = function (e) { e.preventDefault(); VISTA = { nombre: MODO_JEFE ? 'panel' : 'cola', peticionId: null }; render(); };
+      google.script.run.withSuccessHandler(pintarDetalle).obtenerPeticion(VISTA.peticionId, OPERARIO);
     }
 
     function pintarDetalle(json) {
@@ -502,6 +498,10 @@
       var titulo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? ('Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre) : ('Refill: ' + (p.motivo || '')));
 
       var html = '<h1>' + titulo + '</h1><p class="meta">' + p.tiendaNombre + '</p>';
+      if (ultimoDetalle.otroEnCurso) {
+        html += '<p class="meta" style="color:var(--warn-fg);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--radius-btn);padding:8px 10px;margin:8px 0;">⚠ ' +
+          ultimoDetalle.otroEnCurso.operario + ' también está en este pedido (' + tiempoDesde_(ultimoDetalle.otroEnCurso.desde) + ')</p>';
+      }
       html += ultimoDetalle.lineas.map(function (l) { return renderLineaHtml_(p, l); }).join('');
 
       if (p.tipo === 'cesion' || p.tipo === 'refill' || (p.tipo === 'pedido_cliente' && !p.transporte)) {
@@ -546,10 +546,8 @@
 
       const bloqueada = !l.sscc;
       if (bloqueada) {
-        if (p.tipo === 'refill') {
-          return '<div class="linea"><label><input type="checkbox" disabled> <span class="desc">' + cabecera + '</span></label>' + extraInfo + '</div>';
-        }
-        return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo + '</div>';
+        return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
+          '<button class="secundario" disabled title="Esperando ubicación de palet">Marcar preparada</button></div>';
       }
 
       // Línea repartida en varios palets (ver parsearSsccMulti): checklist que
@@ -566,10 +564,10 @@
         const direcciones = String(l.ubicacion || '').split(' + ').map(function (s) { return s.trim(); });
         bloquePalet += '<p class="meta" style="margin:8px 0 4px;font-weight:700;">📦 Repartido en ' + partesPalet.length + ' palets — confirma cada uno al cogerlo:</p>';
         bloquePalet += partesPalet.map(function (parte, idx) {
-          return '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;cursor:pointer;">' +
-            '<input type="checkbox" style="width:18px;height:18px;flex:none;" ' + (confirmados[idx] ? 'checked' : '') +
-            ' onchange="marcarPaletConfirmado(\'' + l.id + '\', ' + idx + ', this.checked)">' +
-            '<span>SSCC ' + parte.sscc + ' · ' + (direcciones[idx] || '—') + ' · ' + parte.cantidad + ' ud</span></label>';
+          const etiquetaPalet = 'SSCC ' + parte.sscc + ' · ' + (direcciones[idx] || '—') + ' · ' + parte.cantidad + ' ud';
+          return confirmados[idx]
+            ? '<button class="ok" style="width:100%;margin-bottom:6px;" onclick="marcarPaletConfirmado(\'' + l.id + '\', ' + idx + ', false)">✓ Confirmado — ' + etiquetaPalet + '</button>'
+            : '<button class="secundario" style="width:100%;margin-bottom:6px;" onclick="marcarPaletConfirmado(\'' + l.id + '\', ' + idx + ', true)">Confirmar palet cogido — ' + etiquetaPalet + '</button>';
         }).join('');
       }
 
@@ -599,7 +597,8 @@
       const cola = bloquePalet + bloqueSelector;
 
       if (p.tipo === 'refill') {
-        return '<div class="linea"><label><input type="checkbox" ' + (!todosConfirmados ? 'disabled title="Confirma todos los palets primero"' : '') + ' onchange="marcarLinea(\'' + l.id + '\', this)"> <span class="desc">' + cabecera + '</span></label>' + extraInfo + cola + '</div>';
+        return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
+          '<button ' + (!todosConfirmados ? 'disabled title="Confirma todos los palets primero"' : 'onclick="marcarLinea(\'' + l.id + '\', this)"') + '>Marcar preparada</button>' + cola + '</div>';
       }
 
       // pedido_cliente / cesion: flujo de incidencia
@@ -681,12 +680,12 @@
         .deshacerLineaPreparada(lineaId, OPERARIO);
     }
 
-    function marcarLinea(lineaId, checkbox) {
-      checkbox.disabled = true;
+    function marcarLinea(lineaId, boton) {
+      boton.disabled = true;
       dispararPuenteMyIsoSiProcede_(lineaId, false);
       google.script.run
         .withSuccessHandler(function () { renderDetalle(); })
-        .withFailureHandler(function (err) { kAlerta(err.message); checkbox.disabled = false; checkbox.checked = false; })
+        .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; })
         .marcarLineaPreparada(lineaId, OPERARIO);
     }
 
@@ -734,6 +733,14 @@
     }
 
     function limpiarSscc(sscc) { return String(sscc || '').replace(/^0+/, ''); }
+
+    function tiempoDesde_(iso) {
+      if (!iso) return '';
+      const min = Math.round((Date.now() - new Date(iso).getTime()) / 60000);
+      if (min < 1) return 'ahora mismo';
+      if (min < 60) return 'hace ' + min + ' min';
+      return 'hace ' + Math.round(min / 60) + 'h';
+    }
 
     // Espejo de _parseSsccMulti_ (StockAsignacion.js) — "sscc1 (Xud) + sscc2 (Yud)".
     function parsearSsccMulti(valorSscc, cantidadFila) {
@@ -849,9 +856,10 @@
             botonIndividual = ' <button class="secundario" onclick="event.stopPropagation(); marcarColaIndividualUI(\'' + p.id + '\', ' + (!p.cola_individual) + ', this)">' +
               (p.cola_individual ? 'Volver a normal' : 'Mover a individual') + '</button>';
           }
+          const enCurso = p.en_curso_por ? (' · en curso: ' + p.en_curso_por + ' (' + tiempoDesde_(p.en_curso_desde) + ')') : '';
           return '<div class="fila" onclick="abrirDetalle(\'' + p.id + '\')">' +
             '<div class="tipo">' + etiquetaTipo + '</div>' +
-            '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + p.estado + (p.cola_individual ? ' · individual' : '') + botonReintentar + botonIndividual + '</div></div>';
+            '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + p.estado + (p.cola_individual ? ' · individual' : '') + enCurso + botonReintentar + botonIndividual + '</div></div>';
         }).join('');
       }).listarTodasPeticiones();
     }
