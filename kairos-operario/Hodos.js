@@ -76,3 +76,49 @@ function _enviarEtiquetaHodos_(payload) {
   if (!json.ok) throw new Error('HODOS rechazó la etiqueta: ' + json.error);
   return json.idUnico;
 }
+
+/** ============ Pantalla HODOS (jefe de equipo): crear/editar/anular ============
+ * Crear reutiliza el camino real (_enviarEtiquetaHodos_, mismo que el
+ * automático) — seguro, ya probado. Editar/Anular NO tienen endpoint real
+ * en HODOS todavía: son UPDATE directos contra public.etiquetas, a riesgo
+ * asumido (puede no reflejarse en la lógica interna de la app HODOS real
+ * si ella hace algo más al cambiar esos campos). */
+
+function listarEtiquetasCompleto() {
+  const etiquetas = supaSelect_('etiquetas',
+    'select=id_unico,numero_pedido,destino,origen,subtipo,estado,fecha_creacion,pendiente_impresion_incpc,origen_tienda' +
+    '&order=fecha_creacion.desc&limit=200',
+    'public');
+  return _json_(etiquetas);
+}
+
+function crearEtiquetaHodosManual(destino, numeroPedido, codigoLm, cantidad, operario) {
+  destino = String(destino || '').trim();
+  codigoLm = String(codigoLm || '').trim();
+  if (!destino) throw new Error('Falta el destino.');
+  if (!codigoLm || !cantidad || Number(cantidad) <= 0) throw new Error('Falta artículo o cantidad.');
+
+  const idUnico = _enviarEtiquetaHodos_({
+    destino: destino,
+    pedido: numeroPedido ? String(numeroPedido).trim() : null,
+    tipo: SUBTIPO_HODOS_PREPARACION_,
+    origenIntegracion: 'panel-manual',
+    operario: operario || '',
+    items: [{ referencia: codigoLm, cantidad: Number(cantidad) }],
+  });
+  return _json_({ idUnico: idUnico });
+}
+
+function editarEtiquetaHodos(idUnico, destino, numeroPedido) {
+  const cambios = {};
+  destino = String(destino || '').trim();
+  if (destino) cambios.destino = destino;
+  cambios.numero_pedido = numeroPedido ? String(numeroPedido).trim() : null;
+  supaUpdate_('etiquetas', 'id_unico=eq.' + encodeURIComponent(idUnico), cambios, 'public');
+  return _json_({ ok: true });
+}
+
+function anularEtiquetaHodos(idUnico) {
+  supaUpdate_('etiquetas', 'id_unico=eq.' + encodeURIComponent(idUnico), { estado: 'ANULADA' }, 'public');
+  return _json_({ ok: true });
+}

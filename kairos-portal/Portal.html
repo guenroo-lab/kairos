@@ -10,7 +10,7 @@
     document.documentElement.setAttribute('data-ktheme', t);
   })();
 </script>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Permanent+Marker&display=swap">
 <style>
   :root {
     --ink-950:#090d13; --ink-900:#0f151e; --ink-850:#141b26; --ink-800:#1a2230;
@@ -131,6 +131,7 @@
   .brand-badge { background:#fff; border-radius:10px; padding:6px 10px; display:flex; align-items:center; box-shadow:0 2px 8px -3px rgba(0,0,0,.4); }
   .brand-badge img { display:block; height:30px; width:auto; }
   .brand-x { color:var(--text-600); font-size:14px; font-weight:600; }
+  .brand-nombre { font-family:'Permanent Marker', cursive; font-size:26px; color:var(--accent); line-height:1; letter-spacing:.01em; }
   .theme-toggle { margin-left:auto; }
   button.theme-btn { width:auto; background:var(--ink-800); color:var(--text-300); padding:7px 10px; font-size:12px; margin:0; border:1px solid var(--ink-700); border-radius:var(--radius-btn); cursor:pointer; font-weight:700; display:flex; align-items:center; gap:5px; }
   .theme-btn svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
@@ -291,6 +292,7 @@
       '<div class="brand-badge"><img src="' + LOGO_TAISA_B64 + '" alt="Taisa"></div>' +
       '<span class="brand-x">×</span>' +
       '<div class="brand-badge"><img src="data:image/png;base64,' + LOGO_LM_B64 + '" alt="Leroy Merlin"></div>' +
+      '<span class="brand-nombre">Kairos</span>' +
       '<div class="theme-toggle"><button class="theme-btn" onclick="toggleThemePanel()" type="button">' + ICONO_TEMA + 'Tema</button></div>' +
       '</div>' +
       '<div class="theme-panel" id="themePanel">' +

@@ -13,7 +13,7 @@
       document.documentElement.setAttribute('data-ktheme', t);
     })();
   </script>
-  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Permanent+Marker&display=swap">
   <style>
     :root {
       --ink-950:#090d13; --ink-900:#0f151e; --ink-850:#141b26; --ink-800:#1a2230;
@@ -26,6 +26,7 @@
       --chip-mijas-bg:#26123b; --chip-mijas-fg:#d6a6ff;
       --chip-malaga-bg:#0f2a1a; --chip-malaga-fg:#7fe0a4;
       --tienda-marbella:#2f6fed; --tienda-mijas:#9333ea; --tienda-malaga:#16a34a;
+      --tipo-refill:#3fb54a; --tipo-pedido:#4c7dff; --tipo-cesion:#a855f7;
       --radius-card:14px; --radius-btn:10px; --radius-chip:999px;
       --shadow-card:0 1px 0 rgba(255,255,255,.03) inset, 0 8px 24px -12px rgba(0,0,0,.6);
     }
@@ -39,6 +40,7 @@
       --chip-marbella-bg:#e5edff; --chip-marbella-fg:#1d4ed8;
       --chip-mijas-bg:#f2e6ff; --chip-mijas-fg:#7e22ce;
       --chip-malaga-bg:#e2f6e9; --chip-malaga-fg:#15803d;
+      --tipo-refill:#2f9e3f; --tipo-pedido:#1d4ed8; --tipo-cesion:#7e22ce;
       --shadow-card:0 1px 2px rgba(30,25,15,.04), 0 10px 24px -14px rgba(30,25,15,.18);
     }
     [data-ktheme="indigo"]   { --accent:#4c7dff; --accent-ink:#ffffff; --accent-dim:#1c2b52; --accent-line:#3a55a8; }
@@ -102,11 +104,23 @@
     .chip-urgencia.ok { background:var(--ink-800); color:var(--ok); }
     .chip-urgencia.aviso { background:var(--warn-bg); color:var(--warn-fg); }
     .chip-urgencia.peligro { background:var(--danger-bg); color:var(--danger-fg); }
+    .panel-tiendas-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; align-items:start; }
+    .tienda-header { display:flex; align-items:center; gap:8px; }
+    .tienda-header .punto { width:10px; height:10px; border-radius:50%; display:inline-block; }
+    .fila.tipo-refill { border-left-color:var(--tipo-refill); }
+    .fila.tipo-pedido_cliente { border-left-color:var(--tipo-pedido); }
+    .fila.tipo-cesion { border-left-color:var(--tipo-cesion); }
+    #zonaImprimir { display:none; }
+    @media print {
+      body > *:not(#zonaImprimir) { display:none !important; }
+      #zonaImprimir { display:block !important; color:#000; padding:40px; }
+    }
 
     .brand-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
     .brand-badge { background:#fff; border-radius:10px; padding:6px 10px; display:flex; align-items:center; box-shadow:0 2px 8px -3px rgba(0,0,0,.4); }
     .brand-badge img { display:block; height:30px; width:auto; }
     .brand-x { color:var(--text-600); font-size:14px; font-weight:600; }
+    .brand-nombre { font-family:'Permanent Marker', cursive; font-size:26px; color:var(--accent); line-height:1; letter-spacing:.01em; }
     .theme-toggle { margin-left:auto; display:flex; gap:6px; }
     button.theme-btn { background:var(--ink-800); color:var(--text-300); padding:7px 10px; font-size:12px; display:flex; align-items:center; gap:5px; min-height:36px; }
     .theme-btn svg { width:16px; height:16px; }
@@ -228,6 +242,7 @@
       estado: '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',
       panel: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
       volumenes: '<svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
+      hodos: '<svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10"/></svg>',
     };
     var ICONO_TEMA = '<svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>';
     var ICONO_REFRESCAR = '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>';
@@ -239,6 +254,7 @@
         '<div class="brand-badge"><img src="' + LOGO_TAISA_B64 + '" alt="Taisa"></div>' +
         '<span class="brand-x">×</span>' +
         '<div class="brand-badge"><img src="data:image/png;base64,' + LOGO_LM_B64 + '" alt="Leroy Merlin"></div>' +
+        '<span class="brand-nombre">Kairos</span>' +
         '<div class="theme-toggle"><button class="theme-btn" onclick="actualizarPantalla()" type="button">' + ICONO_REFRESCAR + 'Actualizar</button>' +
         '<button class="theme-btn" onclick="toggleThemePanel()" type="button">' + ICONO_TEMA + 'Tema</button></div>' +
         '</div>' +
@@ -291,6 +307,7 @@
     function render() {
       if (MODO_JEFE) {
         if (VISTA.nombre === 'volumenes') return renderVolumenes();
+        if (VISTA.nombre === 'hodos') return renderHodos();
         if (VISTA.nombre === 'detalle') return renderDetalle();
         return renderPanel();
       }
@@ -309,6 +326,7 @@
       if (MODO_JEFE) {
         var tabsJefe = [
           { nombre: 'panel', label: 'Control de pedidos' },
+          { nombre: 'hodos', label: 'HODOS' },
           { nombre: 'volumenes', label: 'Volúmenes' },
         ];
         return '<div class="tabs">' + tabsJefe.map(function (t) {
@@ -886,8 +904,10 @@
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
         '<h1>Control de pedidos</h1>' +
         '<p class="meta">Toca "Mover a individual" para asignar a un solo operario en vez de la cola de equipo. Se actualiza solo cada 30s.</p>' +
-        '<h3>Marbella</h3><div id="listaTodas-014">Cargando…</div>' +
-        '<h3>Mijas</h3><div id="listaTodas-279">Cargando…</div>' +
+        '<div class="panel-tiendas-grid">' +
+          '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-marbella);"></span>Marbella</h3><div id="listaTodas-014">Cargando…</div></div>' +
+          '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-mijas);"></span>Mijas</h3><div id="listaTodas-279">Cargando…</div></div>' +
+        '</div>' +
         '<h3>Etiquetas HODOS creadas</h3><div id="listaEtiquetas">Cargando…</div>';
       sincronizarPickers_();
       cargarTodasPeticiones_();
@@ -912,7 +932,7 @@
       const activa = p.estado !== 'cerrada' && p.estado !== 'anulada';
       const preparando = p.en_curso_por ? (' · preparando: ' + p.en_curso_por + ' (' + tiempoDesde_(p.en_curso_desde) + ')') : '';
       const urgencia = activa ? urgenciaHtml_(p.creada_en) : '';
-      return '<div class="fila" onclick="abrirDetalle(\'' + p.id + '\')">' +
+      return '<div class="fila tipo-' + p.tipo + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
         '<div class="tipo">' + etiquetaTipo + ' ' + urgencia + '</div>' +
         '<div class="meta">' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + p.estado + (p.cola_individual ? ' · individual' : '') + preparando + '</div>' +
         (articulosTexto ? '<div class="meta">' + articulosTexto + '</div>' : '') +
@@ -939,6 +959,124 @@
           cont.innerHTML = html;
         });
       }).listarTodasPeticiones();
+    }
+
+    var HODOS_CACHE_ = [];
+
+    function renderHodos() {
+      document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
+        '<h1>HODOS</h1>' +
+        '<p class="meta">Crear pasa por la app HODOS real (seguro). Editar/Anular cambian la base directamente — puede no reflejarse en HODOS si ella hace algo más al cambiar estos campos.</p>' +
+        '<button onclick="renderFormCrearEtiqueta_()">+ Crear etiqueta</button>' +
+        '<div id="formCrearEtiqueta"></div>' +
+        '<input class="entrada" id="buscarHodos" placeholder="Buscar por nº pedido, destino, id, estado…" style="margin-top:10px;">' +
+        '<div id="listaHodosCompleto">Cargando…</div>';
+      sincronizarPickers_();
+      document.getElementById('buscarHodos').oninput = function (e) {
+        const q = e.target.value.trim().toLowerCase();
+        if (!q) { pintarHodos_(HODOS_CACHE_); return; }
+        pintarHodos_(HODOS_CACHE_.filter(function (x) {
+          return [x.id_unico, x.numero_pedido, x.destino, x.estado, x.origen].filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
+        }));
+      };
+      cargarHodosCompleto_();
+    }
+
+    function cargarHodosCompleto_() {
+      google.script.run.withSuccessHandler(function (json) {
+        HODOS_CACHE_ = JSON.parse(json);
+        pintarHodos_(HODOS_CACHE_);
+      }).listarEtiquetasCompleto();
+      const cont = document.getElementById('formCrearEtiqueta');
+      if (cont) cont.innerHTML = '';
+    }
+
+    function _etiquetaPorId_(idUnico) {
+      return HODOS_CACHE_.filter(function (e) { return e.id_unico === idUnico; })[0];
+    }
+
+    function pintarHodos_(lista) {
+      const cont = document.getElementById('listaHodosCompleto');
+      if (!cont) return;
+      if (!lista.length) { cont.innerHTML = '<p class="meta">Sin etiquetas.</p>'; return; }
+      cont.innerHTML = lista.map(function (e) {
+        const anulada = e.estado === 'ANULADA';
+        return '<div class="linea">' +
+          '<div><div class="desc">' + (e.numero_pedido || '(sin nº)') + ' → ' + e.destino + '</div>' +
+          '<div class="meta">' + e.id_unico + ' · ' + e.estado + ' · ' + (e.origen || '') + ' · ' + new Date(e.fecha_creacion).toLocaleString('es-ES') + '</div></div>' +
+          '<div><button class="secundario" onclick="imprimirEtiqueta_(\'' + e.id_unico + '\')">Imprimir</button> ' +
+          (anulada ? '' :
+            '<button class="secundario" onclick="renderFormEditarEtiqueta_(\'' + e.id_unico + '\')">Editar</button> ' +
+            '<button class="peligro" onclick="anularEtiquetaUI_(\'' + e.id_unico + '\', this)">Anular</button>') +
+          '</div></div>';
+      }).join('');
+    }
+
+    function renderFormCrearEtiqueta_() {
+      const cont = document.getElementById('formCrearEtiqueta');
+      cont.innerHTML =
+        '<div class="linea" style="flex-direction:column;align-items:stretch;gap:6px;">' +
+        '<input class="entrada" id="ceDestino" placeholder="Destino (ej. Marbella, Mijas, Granada…)">' +
+        '<input class="entrada" id="ceNumPedido" placeholder="Nº de pedido (opcional)">' +
+        '<input class="entrada" id="ceCodigoLm" placeholder="Código LM">' +
+        '<input class="entrada" id="ceCantidad" type="number" placeholder="Cantidad">' +
+        '<button onclick="crearEtiquetaUI_(this)">Crear etiqueta</button>' +
+        '</div>';
+    }
+
+    function crearEtiquetaUI_(boton) {
+      const destino = document.getElementById('ceDestino').value.trim();
+      const numPedido = document.getElementById('ceNumPedido').value.trim();
+      const codigoLm = document.getElementById('ceCodigoLm').value.trim();
+      const cantidad = document.getElementById('ceCantidad').value;
+      boton.disabled = true; boton.textContent = 'Creando…';
+      google.script.run
+        .withSuccessHandler(function () { cargarHodosCompleto_(); })
+        .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; boton.textContent = 'Crear etiqueta'; })
+        .crearEtiquetaHodosManual(destino, numPedido, codigoLm, cantidad, OPERARIO);
+    }
+
+    function renderFormEditarEtiqueta_(idUnico) {
+      const e = _etiquetaPorId_(idUnico);
+      if (!e) return;
+      kPedirTexto('Destino:', { valorInicial: e.destino }).then(function (nuevoDestino) {
+        if (nuevoDestino === null) return;
+        kPedirTexto('Nº de pedido:', { valorInicial: e.numero_pedido || '' }).then(function (nuevoPedido) {
+          if (nuevoPedido === null) return;
+          google.script.run
+            .withSuccessHandler(cargarHodosCompleto_)
+            .withFailureHandler(function (err) { kAlerta(err.message); })
+            .editarEtiquetaHodos(idUnico, nuevoDestino, nuevoPedido);
+        });
+      });
+    }
+
+    function anularEtiquetaUI_(idUnico, boton) {
+      kConfirmar('¿Anular la etiqueta ' + idUnico + '? Esto actualiza la base directamente.').then(function (ok) {
+        if (!ok) return;
+        boton.disabled = true;
+        google.script.run
+          .withSuccessHandler(cargarHodosCompleto_)
+          .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; })
+          .anularEtiquetaHodos(idUnico);
+      });
+    }
+
+    function imprimirEtiqueta_(idUnico) {
+      const e = _etiquetaPorId_(idUnico);
+      if (!e) return;
+      var zona = document.getElementById('zonaImprimir');
+      if (!zona) {
+        zona = document.createElement('div');
+        zona.id = 'zonaImprimir';
+        document.body.appendChild(zona);
+      }
+      zona.innerHTML =
+        '<div style="font-size:28px;font-weight:800;">' + e.destino + '</div>' +
+        '<div style="font-size:20px;margin-top:10px;">Pedido: ' + (e.numero_pedido || '—') + '</div>' +
+        '<div style="font-size:16px;margin-top:6px;">' + e.id_unico + '</div>' +
+        '<div style="font-size:14px;margin-top:6px;">' + new Date(e.fecha_creacion).toLocaleString('es-ES') + '</div>';
+      window.print();
     }
 
     function cargarEtiquetasHodos_() {
