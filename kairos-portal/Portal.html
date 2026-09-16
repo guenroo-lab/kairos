@@ -309,10 +309,12 @@
 
   var ICONO_PETICIONES = '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>';
   var ICONO_TRAZA = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>';
+  var ICONO_HISTORICO = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>';
   function renderTabsPortal_(activa) {
     return '<div class="tabs">' +
       '<a href="#" id="tabPeticiones" class="' + (activa === 'cola' ? 'activa' : '') + '">' + ICONO_PETICIONES + '<span>Peticiones</span></a>' +
       '<a href="#" id="tabTrazabilidad" class="' + (activa === 'traza' ? 'activa' : '') + '">' + ICONO_TRAZA + '<span>Trazabilidad</span></a>' +
+      '<a href="#" id="tabHistorico" class="' + (activa === 'historico' ? 'activa' : '') + '">' + ICONO_HISTORICO + '<span>Histórico</span></a>' +
       '</div>';
   }
 
@@ -505,6 +507,7 @@
     const tabs = el(renderTabsPortal_('cola'));
     app().appendChild(tabs);
     tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
+    tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
 
     const wrap = el('<div class="wrap"></div>');
     app().appendChild(wrap);
@@ -535,7 +538,13 @@
     });
   }
 
-  function renderTrazabilidad() {
+  /** Trazabilidad = activas (algo por preparar todavía). Histórico = ya
+   *  preparadas del todo, sigue actualizándose ahí (Cargado/Consolidado/
+   *  Cerrada) — no vuelve a Trazabilidad, se queda como archivo permanente. */
+  function renderTrazabilidad() { renderVistaTraza_(false); }
+  function renderHistorico() { renderVistaTraza_(true); }
+
+  function renderVistaTraza_(historico) {
     app().innerHTML = '';
     pintarCabecera_();
     const top = el(
@@ -549,9 +558,11 @@
     app().appendChild(top);
     top.querySelector('#btnSalir').onclick = salir;
     pintarSelectorTienda_(top.querySelector('#topAcciones'));
-    const tabs = el(renderTabsPortal_('traza'));
+    const tabs = el(renderTabsPortal_(historico ? 'historico' : 'traza'));
     app().appendChild(tabs);
     tabs.querySelector('#tabPeticiones').onclick = function (e) { e.preventDefault(); renderCola(); };
+    tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
+    tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
 
     const wrap = el('<div class="wrap"></div>');
     app().appendChild(wrap);
@@ -592,14 +603,14 @@
               '<span class="estado">' + escHtml(detalle) + '</span>' +
             '</div>'
           );
-          fila.onclick = function () { renderDetalle(p.id, renderTrazabilidad); };
+          fila.onclick = function () { renderDetalle(p.id, historico ? renderHistorico : renderTrazabilidad); };
           lista.appendChild(fila);
         });
       });
       if (!huboAlguna) lista.appendChild(el('<p style="color:var(--text-500)">No hay peticiones con esos filtros.</p>'));
     }
 
-    gas('listarTrazabilidad', LDAP).then(function (filas) {
+    gas('listarTrazabilidad', LDAP, historico).then(function (filas) {
       todasTraza = filas;
       pintarTraza(todasTraza);
     }).catch(function (e) {

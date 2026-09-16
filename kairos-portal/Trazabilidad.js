@@ -11,7 +11,11 @@
  *    Cargado (etiquetas.batea_id → cargas) + fecha + hora de entrega.
  *  Mismo criterio que kairos-operario/Estado.js. */
 
-function listarTrazabilidad(ldap) {
+/** historico=false (por defecto): solo peticiones activas, es decir con
+ *  alguna línea todavía sin preparar. historico=true: peticiones donde ya
+ *  se ha preparado todo (siguen actualizándose ahí hasta Cargado/
+ *  Consolidado/Cerrada) — archivo permanente para buscar/analizar. */
+function listarTrazabilidad(ldap, historico) {
   const u = _usuarioDe_(ldap);
   var q = 'tienda_origen=eq.' + encodeURIComponent(u.tienda) +
     '&select=id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo,en_curso_por,ubicacion_consolidacion&order=creada_en.desc&limit=200';
@@ -30,10 +34,11 @@ function listarTrazabilidad(ldap) {
   });
 
   const idsTodas = peticiones.map(function (p) { return p.id; }).join(',');
-  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc');
+  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc,estado_preparacion');
   peticiones.forEach(function (p) {
     const propias = lineasTodas.filter(function (l) { return l.peticion_id === p.id; });
     p.articulo = propias.length === 1 ? (propias[0].codigo_lm + ' — ' + (propias[0].designacion || '')) : (propias.length + ' artículos');
+    p.preparada = propias.length > 0 && propias.every(function (l) { return l.estado_preparacion === 'preparado'; });
     var ubicaciones = [];
     propias.forEach(function (l) { if (l.ubicacion && ubicaciones.indexOf(l.ubicacion) === -1) ubicaciones.push(l.ubicacion); });
     p.ubicaciones = ubicaciones;
@@ -117,5 +122,6 @@ function listarTrazabilidad(ldap) {
     });
   }
 
-  return _json_(peticiones);
+  const filtradas = peticiones.filter(function (p) { return !!p.preparada === !!historico; });
+  return _json_(filtradas);
 }

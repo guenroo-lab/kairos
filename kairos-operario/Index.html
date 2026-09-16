@@ -98,6 +98,10 @@
     .chip-marbella { background:var(--chip-marbella-bg); color:var(--chip-marbella-fg); }
     .chip-mijas { background:var(--chip-mijas-bg); color:var(--chip-mijas-fg); }
     .chip-malaga { background:var(--chip-malaga-bg); color:var(--chip-malaga-fg); }
+    .chip-urgencia { font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:var(--radius-chip); white-space:nowrap; display:inline-block; }
+    .chip-urgencia.ok { background:var(--ink-800); color:var(--ok); }
+    .chip-urgencia.aviso { background:var(--warn-bg); color:var(--warn-fg); }
+    .chip-urgencia.peligro { background:var(--danger-bg); color:var(--danger-fg); }
 
     .brand-head { display:flex; align-items:center; gap:10px; margin-bottom:10px; }
     .brand-badge { background:#fff; border-radius:10px; padding:6px 10px; display:flex; align-items:center; box-shadow:0 2px 8px -3px rgba(0,0,0,.4); }
@@ -829,38 +833,111 @@
       }).listarEstadoPeticiones();
     }
 
+    var PANEL_POLL_ = null;
+    function iniciarPollingPanel_() {
+      detenerPollingPanel_();
+      PANEL_POLL_ = setInterval(function () {
+        if (VISTA.nombre !== 'panel') { detenerPollingPanel_(); return; }
+        cargarTodasPeticiones_();
+      }, 30000);
+    }
+    function detenerPollingPanel_() {
+      if (PANEL_POLL_) { clearInterval(PANEL_POLL_); PANEL_POLL_ = null; }
+    }
+
+    // Ventana de 24h laborables: fin de semana no cuenta, corte a las 14h.
+    // Viernes >=14h, sábado o domingo -> como si se pidiera el lunes 00:00.
+    // Cualquier otro día >=14h -> pasa al día siguiente 00:00.
+    function inicioEfectivoUrgencia_(creadaEnIso) {
+      const d = new Date(creadaEnIso);
+      const dia = d.getDay(); // 0=domingo..6=sábado
+      const hora = d.getHours();
+      if (dia === 6 || dia === 0 || (dia === 5 && hora >= 14)) {
+        const offset = dia === 6 ? 2 : dia === 0 ? 1 : 3;
+        return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset, 0, 0, 0, 0);
+      }
+      if (hora >= 14) return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1, 0, 0, 0, 0);
+      return d;
+    }
+    function horasHabilesTranscurridas_(desde, hasta) {
+      var actual = new Date(desde);
+      var totalMs = 0, tope = 0;
+      while (actual < hasta && tope < 60) {
+        const finDia = new Date(actual.getFullYear(), actual.getMonth(), actual.getDate() + 1, 0, 0, 0, 0);
+        const tramoFin = finDia < hasta ? finDia : hasta;
+        const dia = actual.getDay();
+        if (dia !== 0 && dia !== 6) totalMs += (tramoFin - actual);
+        actual = finDia;
+        tope++;
+      }
+      return totalMs / 3600000;
+    }
+    function urgenciaHtml_(creadaEnIso) {
+      const inicio = inicioEfectivoUrgencia_(creadaEnIso);
+      const restante = 24 - horasHabilesTranscurridas_(inicio, new Date());
+      var clase, texto;
+      if (restante > 6) { clase = 'ok'; texto = Math.round(restante) + 'h restantes'; }
+      else if (restante > 0) { clase = 'aviso'; texto = Math.round(restante) + 'h restantes'; }
+      else { clase = 'peligro'; texto = 'vencido hace ' + Math.round(-restante) + 'h'; }
+      return '<span class="chip-urgencia ' + clase + '">' + texto + '</span>';
+    }
+
     function renderPanel() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
         '<h1>Control de pedidos</h1>' +
-        '<p class="meta">Toca "Mover a individual" en una petición para asignarla a un solo operario en vez de la cola de equipo.</p>' +
-        '<h3>Todas las peticiones</h3><div id="listaTodas">Cargando…</div>' +
+        '<p class="meta">Toca "Mover a individual" para asignar a un solo operario en vez de la cola de equipo. Se actualiza solo cada 30s.</p>' +
+        '<h3>Marbella</h3><div id="listaTodas-014">Cargando…</div>' +
+        '<h3>Mijas</h3><div id="listaTodas-279">Cargando…</div>' +
         '<h3>Etiquetas HODOS creadas</h3><div id="listaEtiquetas">Cargando…</div>';
       sincronizarPickers_();
       cargarTodasPeticiones_();
       cargarEtiquetasHodos_();
+      iniciarPollingPanel_();
+    }
+
+    function _filaPeticionPanel_(p) {
+      const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
+      const articulosTexto = (p.articulos || []).map(function (a) {
+        return (a.designacion || a.codigo_lm) + ' (' + a.cantidad + ' ' + a.unidad_medida + ')';
+      }).join(' · ');
+      var botonReintentar = '';
+      if (p.necesitaHodos && !p.tieneHodos && p.estado === 'cerrada') {
+        botonReintentar = ' <button class="secundario" onclick="event.stopPropagation(); reintentarHodosUI(\'' + p.id + '\', this)">Reintentar HODOS</button>';
+      }
+      var botonIndividual = '';
+      if (p.tipo !== 'refill' && (p.estado === 'pendiente' || p.estado === 'en_preparacion')) {
+        botonIndividual = ' <button class="secundario" onclick="event.stopPropagation(); marcarColaIndividualUI(\'' + p.id + '\', ' + (!p.cola_individual) + ', this)">' +
+          (p.cola_individual ? 'Volver a normal' : 'Mover a individual') + '</button>';
+      }
+      const activa = p.estado !== 'cerrada' && p.estado !== 'anulada';
+      const preparando = p.en_curso_por ? (' · preparando: ' + p.en_curso_por + ' (' + tiempoDesde_(p.en_curso_desde) + ')') : '';
+      const urgencia = activa ? urgenciaHtml_(p.creada_en) : '';
+      return '<div class="fila" onclick="abrirDetalle(\'' + p.id + '\')">' +
+        '<div class="tipo">' + etiquetaTipo + ' ' + urgencia + '</div>' +
+        '<div class="meta">' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + p.estado + (p.cola_individual ? ' · individual' : '') + preparando + '</div>' +
+        (articulosTexto ? '<div class="meta">' + articulosTexto + '</div>' : '') +
+        '<div class="meta">' + botonReintentar + botonIndividual + '</div></div>';
     }
 
     function cargarTodasPeticiones_() {
       google.script.run.withSuccessHandler(function (json) {
         const peticiones = JSON.parse(json);
-        const cont = document.getElementById('listaTodas');
-        if (!peticiones.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
-        cont.innerHTML = peticiones.map(function (p) {
-          const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino) : 'Refill');
-          var botonReintentar = '';
-          if (p.necesitaHodos && !p.tieneHodos && p.estado === 'cerrada') {
-            botonReintentar = ' <button class="secundario" onclick="event.stopPropagation(); reintentarHodosUI(\'' + p.id + '\', this)">Reintentar HODOS</button>';
+        ['014', '279'].forEach(function (codigoTienda) {
+          const cont = document.getElementById('listaTodas-' + codigoTienda);
+          if (!cont) return;
+          const deEstaTienda = peticiones.filter(function (p) { return p.tienda_origen === codigoTienda; });
+          if (!deEstaTienda.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
+          const activas = deEstaTienda.filter(function (p) { return p.estado !== 'cerrada' && p.estado !== 'anulada'; });
+          const cerradasSinEtiqueta = deEstaTienda.filter(function (p) {
+            return p.estado === 'cerrada' && p.necesitaHodos && !p.tieneHodos;
+          });
+          var html = activas.length ? activas.map(_filaPeticionPanel_).join('') : '<p class="meta">Sin peticiones activas.</p>';
+          if (cerradasSinEtiqueta.length) {
+            html += '<p class="meta" style="margin-top:10px;font-weight:700;">Cerradas sin etiqueta HODOS</p>' +
+              cerradasSinEtiqueta.map(_filaPeticionPanel_).join('');
           }
-          var botonIndividual = '';
-          if (p.tipo !== 'refill' && (p.estado === 'pendiente' || p.estado === 'en_preparacion')) {
-            botonIndividual = ' <button class="secundario" onclick="event.stopPropagation(); marcarColaIndividualUI(\'' + p.id + '\', ' + (!p.cola_individual) + ', this)">' +
-              (p.cola_individual ? 'Volver a normal' : 'Mover a individual') + '</button>';
-          }
-          const enCurso = p.en_curso_por ? (' · en curso: ' + p.en_curso_por + ' (' + tiempoDesde_(p.en_curso_desde) + ')') : '';
-          return '<div class="fila" onclick="abrirDetalle(\'' + p.id + '\')">' +
-            '<div class="tipo">' + etiquetaTipo + '</div>' +
-            '<div class="meta">' + p.tiendaNombre + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + p.estado + (p.cola_individual ? ' · individual' : '') + enCurso + botonReintentar + botonIndividual + '</div></div>';
-        }).join('');
+          cont.innerHTML = html;
+        });
       }).listarTodasPeticiones();
     }
 

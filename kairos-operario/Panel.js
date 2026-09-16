@@ -1,13 +1,19 @@
 /** Panel jefe de equipo: todas las peticiones, etiquetas HODOS ya creadas
  *  por Kairos, y reintento del envío para las que fallaron. */
 
+/** Panel en vivo del jefe de equipo — todas las peticiones (activas Y
+ *  cerradas, hasta el límite, para no perder el "Reintentar HODOS" de las
+ *  cerradas sin etiqueta), con lo necesario para vigilarlas de un vistazo:
+ *  artículos+cantidades, quién las está preparando (en_curso_por) y la
+ *  fecha de creación (para el contador de urgencia, calculado en cliente). */
 function listarTodasPeticiones() {
   const peticiones = supaSelect_('peticiones',
-    'select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,estado,cola_individual,creada_en,en_curso_por,en_curso_desde&order=creada_en.desc&limit=300');
+    'select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,estado,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap' +
+    '&order=creada_en.asc&limit=300');
   if (!peticiones.length) return _json_([]);
 
   const ids = peticiones.map(function (p) { return p.id; }).join(',');
-  const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,estado_preparacion,hodos_id');
+  const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,estado_preparacion,hodos_id,codigo_lm,designacion,cantidad,unidad_medida');
 
   peticiones.forEach(function (p) {
     const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
@@ -16,6 +22,9 @@ function listarTodasPeticiones() {
     p.tiendaNombre = CFG.TIENDAS[p.tienda_origen] || p.tienda_origen;
     p.necesitaHodos = (p.tipo === 'cesion') || (p.tipo === 'pedido_cliente' && !p.transporte);
     p.tieneHodos = propias.some(function (l) { return l.hodos_id; });
+    p.articulos = propias.map(function (l) {
+      return { codigo_lm: l.codigo_lm, designacion: l.designacion, cantidad: l.cantidad, unidad_medida: l.unidad_medida };
+    });
   });
   return _json_(peticiones);
 }
