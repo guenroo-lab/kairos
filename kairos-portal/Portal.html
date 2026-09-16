@@ -469,17 +469,39 @@
   const ETIQUETA_TIPO = { pedido_cliente: 'Pedido cliente', cesion: 'Cesión', refill: 'Refill' };
   const NOMBRE_TIENDA = { '014': 'Marbella', '279': 'Mijas', '036': 'Málaga' };
 
+  /** Gestor puede entrar en la tienda que quiera (no está atado a una) —
+   *  cambia su registro (usuarios_tienda.tienda) y recarga la vista. */
+  function pintarSelectorTienda_(contenedorAcciones) {
+    if (ROL !== 'gestor') return;
+    const opciones = Object.keys(NOMBRE_TIENDA).map(function (cod) {
+      return '<option value="' + cod + '"' + (cod === TIENDA ? ' selected' : '') + '>' + NOMBRE_TIENDA[cod] + '</option>';
+    }).join('');
+    const sel = el('<select class="entrada" style="width:auto;margin:0;padding:6px 8px;font-size:12px;">' + opciones + '</select>');
+    contenedorAcciones.insertBefore(sel, contenedorAcciones.firstChild);
+    sel.onchange = function () {
+      gas('cambiarTiendaActiva', LDAP, sel.value).then(function (r) {
+        TIENDA = r.tienda; TIENDA_NOMBRE = r.tiendaNombre;
+        localStorage.setItem('kairos_tienda', TIENDA);
+        localStorage.setItem('kairos_tienda_nombre', TIENDA_NOMBRE);
+        render();
+      }).catch(function (e) { kAlerta(e.message); });
+    };
+  }
+
   function renderCola() {
     app().innerHTML = '';
     pintarCabecera_();
     const top = el(
       '<div class="top">' +
         '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--text-500)">· ' + escHtml(LDAP) + ' · ' + escHtml(ETIQUETA_ROL[ROL] || ROL) + '</span></div>' +
-        '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
+        '<div style="display:flex;gap:6px;align-items:center;" id="topAcciones">' +
+          '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
+        '</div>' +
       '</div>'
     );
     app().appendChild(top);
     top.querySelector('#btnSalir').onclick = salir;
+    pintarSelectorTienda_(top.querySelector('#topAcciones'));
     const tabs = el(renderTabsPortal_('cola'));
     app().appendChild(tabs);
     tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
@@ -519,11 +541,14 @@
     const top = el(
       '<div class="top">' +
         '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--text-500)">· ' + escHtml(LDAP) + ' · ' + escHtml(ETIQUETA_ROL[ROL] || ROL) + '</span></div>' +
-        '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
+        '<div style="display:flex;gap:6px;align-items:center;" id="topAcciones">' +
+          '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
+        '</div>' +
       '</div>'
     );
     app().appendChild(top);
     top.querySelector('#btnSalir').onclick = salir;
+    pintarSelectorTienda_(top.querySelector('#topAcciones'));
     const tabs = el(renderTabsPortal_('traza'));
     app().appendChild(tabs);
     tabs.querySelector('#tabPeticiones').onclick = function (e) { e.preventDefault(); renderCola(); };
