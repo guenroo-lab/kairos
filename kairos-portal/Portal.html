@@ -114,6 +114,9 @@
 
   .koverlay { position:fixed; inset:0; background:rgba(5,7,10,.6); display:flex; align-items:center; justify-content:center; padding:20px; z-index:1000; }
   .kmodal { background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:18px; max-width:360px; width:100%; max-height:85vh; overflow-y:auto; box-shadow:var(--shadow-card); }
+  .kmodal-ancho { max-width:min(960px, 95vw); }
+  .paletes-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(240px, 1fr)); gap:14px; margin:10px 0; align-items:start; }
+  .palet-card { min-width:0; }
   .kmodal p { margin:0 0 14px; font-size:14.5px; line-height:1.45; color:var(--text-100); }
   .kmodal input.entrada { margin-bottom:0; }
   .kmodal .fila-botones { display:flex; gap:8px; justify-content:flex-end; margin-top:14px; }
@@ -197,8 +200,9 @@
       var seleccion = [];
       function cerrar(valor) { document.body.removeChild(overlay); resolve(valor); }
       function pintar() {
-        overlay.innerHTML = '<div class="kmodal">' +
+        overlay.innerHTML = '<div class="kmodal kmodal-ancho">' +
           '<p>¿Qué palet(es) mover? Se llevan enteros.</p>' +
+          '<div class="paletes-grid">' +
           candidatos.map(function (c) {
             var elegido = seleccion.indexOf(c.sscc) !== -1;
             var tabla = (c.contenido || []).map(function (x) {
@@ -207,10 +211,12 @@
                 '<span>' + escHtml(x.designacion || '—') + '</span>' +
                 '<span style="text-align:right;">' + x.cantidad + '</span></div>';
             }).join('');
-            return '<button class="btn ' + (elegido ? 'btn-primary' : 'btn-ghost') + '" style="width:100%;margin-bottom:2px;text-align:left;" data-sscc="' + escHtml(c.sscc) + '">' +
+            return '<div class="palet-card">' +
+              '<button class="btn ' + (elegido ? 'btn-primary' : 'btn-ghost') + '" style="width:100%;margin-bottom:2px;text-align:left;" data-sscc="' + escHtml(c.sscc) + '">' +
               (elegido ? '✓ ' : '') + 'SSCC ' + escHtml(c.sscc) + ' · ' + escHtml(c.ubicacion || '—') + ' · ' + c.cantidad + ' ud</button>' +
-              '<div style="margin:0 0 10px 4px;">' + tabla + '</div>';
+              '<div style="margin:0 0 4px 4px;">' + tabla + '</div></div>';
           }).join('') +
+          '</div>' +
           '<div class="fila-botones">' +
           '<button class="btn btn-ghost" id="kpaletCancelar">Cancelar</button>' +
           '<button class="btn btn-primary" id="kpaletAceptar"' + (!seleccion.length ? ' disabled' : '') + '>Confirmar (' + seleccion.length + ')</button>' +
