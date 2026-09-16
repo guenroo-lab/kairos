@@ -123,21 +123,14 @@ function crearPeticion(ldap, tipo, datos, lineas) {
     throw new Error('Tipo de petición no válido.');
   }
   if (!lineas || !lineas.length) throw new Error('Añade al menos una línea.');
-
-  lineas.forEach(function (l) {
-    const disponible = _stockDisponible_(tienda, String(l.codigoLm || '').trim());
-    if (Number(l.cantidad) > disponible) {
-      throw new Error('No hay stock suficiente de ' + l.codigoLm + ' en almacén (' + disponible + ' disponibles).');
-    }
-  });
-
-  if (!datos || !datos.motivo || !String(datos.motivo).trim()) throw new Error('Falta el motivo de la petición.');
+  // Sin stock suficiente NO bloquea — es un aviso informativo (ya mostrado
+  // al añadir el artículo, ver verificarAntesDeAnadir); un compañero de la
+  // misma tienda debe poder pedir igual aunque ya esté comprometido.
 
   const cabecera = {
     tipo: tipo,
     tienda_origen: tienda,
     solicitante_ldap: ldap,
-    motivo: String(datos.motivo).trim(),
     comentario: (datos && datos.comentario) || null,
   };
 
@@ -151,6 +144,9 @@ function crearPeticion(ldap, tipo, datos, lineas) {
     if (!datos.numCesion) throw new Error('Falta el número de cesión.');
     cabecera.tienda_destino = datos.tiendaDestino;
     cabecera.num_cesion = String(datos.numCesion).trim();
+  } else {
+    if (!datos.motivo) throw new Error('Falta el motivo del refill.');
+    cabecera.motivo = String(datos.motivo).trim();
   }
 
   const peticion = supaInsert_('peticiones', cabecera);

@@ -634,8 +634,7 @@
         '<input class="entrada" id="inNumPedido" placeholder="Nº de pedido">' +
         '<label style="display:flex;align-items:center;gap:8px;margin-bottom:8px;">' +
           '<input type="checkbox" id="inTransporte"> Con transporte (se consolida en plataforma)' +
-        '</label>' +
-        '<input class="entrada" id="inMotivo" placeholder="Motivo de la petición">';
+        '</label>';
     } else if (tipo === 'cesion') {
       camposTipo =
         '<input class="entrada" id="inNumCesion" placeholder="Nº de cesión">' +
@@ -643,8 +642,7 @@
           '<option value="014">Marbella</option>' +
           '<option value="279">Mijas</option>' +
           '<option value="036">Málaga</option>' +
-        '</select>' +
-        '<input class="entrada" id="inMotivo" placeholder="Motivo de la petición">';
+        '</select>';
     } else {
       camposTipo = '<input class="entrada" id="inMotivo" placeholder="Motivo del refill">';
     }
@@ -774,10 +772,6 @@
         const cantidad = Number(cantidadTexto);
         if (!cantidad || cantidad <= 0) return;
         gas('verificarAntesDeAnadir', LDAP, articulo.codigo_lm, cantidad).then(function (chk) {
-          if (cantidad > chk.disponible) {
-            kAlerta('Solo hay ' + chk.disponible + ' ' + unidadLabel + ' disponibles de ' + articulo.codigo_lm + ' en almacén.');
-            return;
-          }
           function anadir(reparto) {
             lineas.push({
               codigoLm: articulo.codigo_lm, designacion: articulo.designacion,
@@ -794,11 +788,21 @@
               elegirSsccModal_(candidatos, cantidad, articulo.codigo_lm).then(anadir);
             });
           }
-          if (chk.duplicados.length) {
-            kAlerta('Ya hay una petición abierta (' + (ETIQUETA_TIPO[chk.duplicados[0].tipo] || chk.duplicados[0].tipo) +
-              ') con este artículo — se añadirá de todas formas.').then(elegirPaletYAnadir);
+          function avisarDuplicadoYSeguir() {
+            if (chk.duplicados.length) {
+              kAlerta('Ya hay una petición abierta (' + (ETIQUETA_TIPO[chk.duplicados[0].tipo] || chk.duplicados[0].tipo) +
+                ') con este artículo — se añadirá de todas formas.').then(elegirPaletYAnadir);
+            } else {
+              elegirPaletYAnadir();
+            }
+          }
+          // Sin stock suficiente NO bloquea — solo avisa (un compañero de la
+          // misma tienda debe poder pedir igual aunque ya esté comprometido).
+          if (cantidad > chk.disponible) {
+            kAlerta('Solo hay ' + chk.disponible + ' ' + unidadLabel + ' disponibles de ' + articulo.codigo_lm + ' en almacén — se añadirá de todas formas.')
+              .then(avisarDuplicadoYSeguir);
           } else {
-            elegirPaletYAnadir();
+            avisarDuplicadoYSeguir();
           }
         });
       });
@@ -809,8 +813,6 @@
       err.style.display = 'none';
       if (!lineas.length) { err.textContent = 'Añade al menos un artículo.'; err.style.display = 'block'; return; }
       var datos = { comentario: c.querySelector('#inComentario').value.trim() || null };
-      datos.motivo = c.querySelector('#inMotivo').value.trim();
-      if (!datos.motivo) { err.textContent = 'Falta el motivo de la petición.'; err.style.display = 'block'; return; }
       if (tipo === 'pedido_cliente') {
         datos.numPedido = c.querySelector('#inNumPedido').value.trim();
         datos.transporte = c.querySelector('#inTransporte').checked;
@@ -819,6 +821,9 @@
         datos.tiendaDestino = c.querySelector('#inDestino').value;
         datos.numCesion = c.querySelector('#inNumCesion').value.trim();
         if (!datos.numCesion) { err.textContent = 'Falta el número de cesión.'; err.style.display = 'block'; return; }
+      } else {
+        datos.motivo = c.querySelector('#inMotivo').value.trim();
+        if (!datos.motivo) { err.textContent = 'Falta el motivo.'; err.style.display = 'block'; return; }
       }
       gas('crearPeticion', LDAP, tipo, datos, lineas).then(function () {
         renderCola();
