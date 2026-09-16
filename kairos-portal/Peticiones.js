@@ -1,5 +1,5 @@
 const TRADUCCION_ESTADO = {
-  pendiente: 'Recibida',
+  pendiente: 'Solicitado',
   en_preparacion: 'En preparación',
   a_ubicar: 'Preparada, pendiente de consolidar',
   cerrada: 'Completada',
