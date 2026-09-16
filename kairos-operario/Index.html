@@ -120,7 +120,12 @@
     .brand-badge { background:#fff; border-radius:10px; padding:6px 10px; display:flex; align-items:center; box-shadow:0 2px 8px -3px rgba(0,0,0,.4); }
     .brand-badge img { display:block; height:30px; width:auto; }
     .brand-x { color:var(--text-600); font-size:14px; font-weight:600; }
-    .brand-nombre { font-family:'Permanent Marker', cursive; font-size:26px; color:var(--accent); line-height:1; letter-spacing:.01em; }
+    .brand-nombre {
+      font-family:'Permanent Marker', cursive; font-size:38px; color:var(--accent); line-height:1; letter-spacing:.015em;
+      -webkit-text-stroke:1px var(--ink-950); text-stroke:1px var(--ink-950);
+      text-shadow:0 2px 0 rgba(0,0,0,.35), 0 6px 14px color-mix(in srgb, var(--accent) 55%, transparent);
+    }
+    [data-kmode="light"] .brand-nombre { -webkit-text-stroke:1px var(--ink-900); text-stroke:1px var(--ink-900); text-shadow:0 2px 0 rgba(0,0,0,.15), 0 6px 14px color-mix(in srgb, var(--accent) 45%, transparent); }
     .theme-toggle { margin-left:auto; display:flex; gap:6px; }
     button.theme-btn { background:var(--ink-800); color:var(--text-300); padding:7px 10px; font-size:12px; display:flex; align-items:center; gap:5px; min-height:36px; }
     .theme-btn svg { width:16px; height:16px; }
