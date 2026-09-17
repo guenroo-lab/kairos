@@ -164,6 +164,10 @@
   .pick.active { background:var(--accent-dim); border-color:var(--accent-line); color:var(--accent-ink); }
   [data-kmode="light"] .pick.active { color:var(--accent); }
   .pick[data-hidden] { display:none; }
+  .filtros-tipo { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+  .chip-tipo { padding:7px 14px; border-radius:var(--radius-chip); background:var(--ink-800); border:1px solid var(--ink-700); color:var(--text-300); font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+  .chip-tipo.activo { background:var(--accent-dim); border-color:var(--accent-line); color:var(--accent-ink); }
+  [data-kmode="light"] .chip-tipo.activo { color:var(--accent); }
 </style>
 <div id="app"></div>
 <script>
@@ -672,6 +676,17 @@
 
     const wrap = el('<div class="wrap"></div>');
     app().appendChild(wrap);
+    const TIPOS_FILTRO_TRAZA = [
+      { tipo: 'todas', label: 'Todas' },
+      { tipo: 'pedido_cliente', label: 'Pedido cliente' },
+      { tipo: 'refill', label: 'Refill' },
+      { tipo: 'cesion', label: 'Cesión' },
+    ];
+    var filtroTipoTraza = 'todas';
+    const chips = el('<div class="filtros-tipo">' + TIPOS_FILTRO_TRAZA.map(function (t) {
+      return '<button type="button" class="chip-tipo' + (t.tipo === 'todas' ? ' activo' : '') + '" data-tipo="' + t.tipo + '">' + t.label + '</button>';
+    }).join('') + '</div>');
+    wrap.appendChild(chips);
     wrap.appendChild(el('<input class="entrada" id="inBuscarTraza" placeholder="Buscar por nº pedido, SSCC, LM, quién pidió, motivo…">'));
     const lista = el('<div class="card" id="listaTraza"><p style="color:var(--text-500)">Cargando…</p></div>');
     wrap.appendChild(lista);
@@ -758,23 +773,35 @@
 
     const pintar = historico ? pintarHistoricoTabla_ : pintarTraza;
 
+    function aplicarFiltrosTraza_() {
+      const q = wrap.querySelector('#inBuscarTraza').value.trim().toLowerCase();
+      var filas = filtroTipoTraza === 'todas' ? todasTraza : todasTraza.filter(function (p) { return p.tipo === filtroTipoTraza; });
+      if (q) {
+        filas = filas.filter(function (p) {
+          return [
+            p.num_pedido, p.num_cesion, p.solicitante_ldap, p.motivo, p.articulo,
+            (p.sscc || []).join(' '), ETIQUETA_TIPO[p.tipo] || p.tipo,
+          ].filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
+        });
+      }
+      pintar(filas);
+    }
+
     gas('listarTrazabilidad', LDAP, historico).then(function (filas) {
       todasTraza = filas;
-      pintar(todasTraza);
+      aplicarFiltrosTraza_();
     }).catch(function (e) {
       lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });
 
-    wrap.querySelector('#inBuscarTraza').oninput = function (e) {
-      const q = e.target.value.trim().toLowerCase();
-      if (!q) { pintar(todasTraza); return; }
-      pintar(todasTraza.filter(function (p) {
-        return [
-          p.num_pedido, p.num_cesion, p.solicitante_ldap, p.motivo, p.articulo,
-          (p.sscc || []).join(' '), ETIQUETA_TIPO[p.tipo] || p.tipo,
-        ].filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
-      }));
-    };
+    wrap.querySelector('#inBuscarTraza').oninput = aplicarFiltrosTraza_;
+    chips.querySelectorAll('.chip-tipo').forEach(function (btn) {
+      btn.onclick = function () {
+        filtroTipoTraza = btn.getAttribute('data-tipo');
+        chips.querySelectorAll('.chip-tipo').forEach(function (b) { b.classList.toggle('activo', b === btn); });
+        aplicarFiltrosTraza_();
+      };
+    });
   }
 </script>
 <script>

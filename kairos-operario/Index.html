@@ -106,6 +106,20 @@
     .chip-urgencia.aviso { background:var(--warn-bg); color:var(--warn-fg); }
     .chip-urgencia.peligro { background:var(--danger-bg); color:var(--danger-fg); }
     .panel-tiendas-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; align-items:start; }
+    .filtros-tipo { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+    .chip-tipo { padding:7px 14px; border-radius:var(--radius-chip); background:var(--ink-800); border:1px solid var(--ink-700); color:var(--text-300); font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
+    .chip-tipo.activo { background:var(--accent-dim); border-color:var(--accent-line); color:var(--accent-ink); }
+    [data-kmode="light"] .chip-tipo.activo { color:var(--accent); }
+    .panel-contadores { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
+    .contador-flujo { display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:var(--radius-card); background:linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%); border:1px solid var(--ink-800); border-left:4px solid var(--ink-700); font-size:12.5px; font-weight:700; color:var(--text-300); box-shadow:var(--shadow-card); }
+    .contador-flujo b { font-size:22px; font-weight:800; color:var(--text-100); }
+    .contador-flujo.tipo-refill { border-left-color:var(--tipo-refill); }
+    .contador-flujo.tipo-pedido_cliente { border-left-color:var(--tipo-pedido); }
+    .contador-flujo.tipo-cesion { border-left-color:var(--tipo-cesion); }
+    button.btn-individual { background:linear-gradient(155deg, var(--accent), color-mix(in srgb, var(--accent) 65%, #000)); color:var(--accent-ink); min-height:38px; padding:8px 14px; font-size:12.5px; box-shadow:0 3px 0 rgba(0,0,0,.22), 0 1px 0 rgba(255,255,255,.15) inset; }
+    button.btn-individual:active { transform:scale(.96); }
+    button.btn-equipo { background:linear-gradient(155deg, var(--ink-700), var(--ink-850)); color:var(--text-100); border:1px solid var(--ink-600); min-height:38px; padding:8px 14px; font-size:12.5px; box-shadow:0 3px 0 rgba(0,0,0,.22); }
+    button.btn-equipo:active { transform:scale(.96); }
     .tienda-header { display:flex; align-items:center; gap:8px; }
     .tienda-header .punto { width:10px; height:10px; border-radius:50%; display:inline-block; }
     .fila.tipo-refill { border-left-color:var(--tipo-refill); }
@@ -910,18 +924,36 @@
       return '<span class="chip-urgencia ' + clase + '">' + texto + '</span>';
     }
 
+    var PANEL_CACHE_ = [];
+    var PANEL_FILTRO_TIPO_ = 'todas';
+    const TIPOS_FILTRO_PANEL_ = [
+      { tipo: 'todas', label: 'Todas' },
+      { tipo: 'pedido_cliente', label: 'Pedido cliente' },
+      { tipo: 'refill', label: 'Refill' },
+      { tipo: 'cesion', label: 'Cesión' },
+    ];
+
     function renderPanel() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
         '<h1>Control de pedidos</h1>' +
         '<p class="meta">Toca "Mover a individual" para asignar a un solo operario en vez de la cola de equipo. Se actualiza solo cada 30s.</p>' +
+        '<div class="filtros-tipo" id="filtrosTipoPanel">' + TIPOS_FILTRO_PANEL_.map(function (t) {
+          return '<button type="button" class="chip-tipo' + (t.tipo === PANEL_FILTRO_TIPO_ ? ' activo' : '') + '" data-tipo="' + t.tipo + '">' + t.label + '</button>';
+        }).join('') + '</div>' +
+        '<div class="panel-contadores" id="panelContadores"></div>' +
         '<div class="panel-tiendas-grid">' +
           '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-marbella);"></span>Marbella</h3><div id="listaTodas-014">Cargando…</div></div>' +
           '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-mijas);"></span>Mijas</h3><div id="listaTodas-279">Cargando…</div></div>' +
-        '</div>' +
-        '<h3>Etiquetas HODOS creadas</h3><div id="listaEtiquetas">Cargando…</div>';
+        '</div>';
       sincronizarPickers_();
+      document.getElementById('filtrosTipoPanel').querySelectorAll('.chip-tipo').forEach(function (btn) {
+        btn.onclick = function () {
+          PANEL_FILTRO_TIPO_ = btn.getAttribute('data-tipo');
+          document.getElementById('filtrosTipoPanel').querySelectorAll('.chip-tipo').forEach(function (b) { b.classList.toggle('activo', b === btn); });
+          pintarPanel_();
+        };
+      });
       cargarTodasPeticiones_();
-      cargarEtiquetasHodos_();
       iniciarPollingPanel_();
     }
 
@@ -936,8 +968,8 @@
       }
       var botonIndividual = '';
       if (p.tipo !== 'refill' && (p.estado === 'pendiente' || p.estado === 'en_preparacion')) {
-        botonIndividual = ' <button class="secundario" onclick="event.stopPropagation(); marcarColaIndividualUI(\'' + p.id + '\', ' + (!p.cola_individual) + ', this)">' +
-          (p.cola_individual ? 'Volver a normal' : 'Mover a individual') + '</button>';
+        botonIndividual = ' <button class="' + (p.cola_individual ? 'btn-equipo' : 'btn-individual') + '" onclick="event.stopPropagation(); marcarColaIndividualUI(\'' + p.id + '\', ' + (!p.cola_individual) + ', this)">' +
+          (p.cola_individual ? 'Mover a En Equipo' : 'Mover a individual') + '</button>';
       }
       const activa = p.estado !== 'cerrada' && p.estado !== 'anulada';
       const preparando = p.en_curso_por ? (' · preparando: ' + p.en_curso_por + ' (' + tiempoDesde_(p.en_curso_desde) + ')') : '';
@@ -951,24 +983,39 @@
 
     function cargarTodasPeticiones_() {
       google.script.run.withSuccessHandler(function (json) {
-        const peticiones = JSON.parse(json);
-        ['014', '279'].forEach(function (codigoTienda) {
-          const cont = document.getElementById('listaTodas-' + codigoTienda);
-          if (!cont) return;
-          const deEstaTienda = peticiones.filter(function (p) { return p.tienda_origen === codigoTienda; });
-          if (!deEstaTienda.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
-          const activas = deEstaTienda.filter(function (p) { return p.estado !== 'cerrada' && p.estado !== 'anulada'; });
-          const cerradasSinEtiqueta = deEstaTienda.filter(function (p) {
-            return p.estado === 'cerrada' && p.necesitaHodos && !p.tieneHodos;
-          });
-          var html = activas.length ? activas.map(_filaPeticionPanel_).join('') : '<p class="meta">Sin peticiones activas.</p>';
-          if (cerradasSinEtiqueta.length) {
-            html += '<p class="meta" style="margin-top:10px;font-weight:700;">Cerradas sin etiqueta HODOS</p>' +
-              cerradasSinEtiqueta.map(_filaPeticionPanel_).join('');
-          }
-          cont.innerHTML = html;
-        });
+        PANEL_CACHE_ = JSON.parse(json);
+        pintarPanel_();
       }).listarTodasPeticiones();
+    }
+
+    function pintarPanel_() {
+      const contCont = document.getElementById('panelContadores');
+      if (contCont) {
+        const activasTodas = PANEL_CACHE_.filter(function (p) { return p.estado !== 'cerrada' && p.estado !== 'anulada'; });
+        const contadores = { pedido_cliente: 0, refill: 0, cesion: 0 };
+        activasTodas.forEach(function (p) { if (contadores[p.tipo] !== undefined) contadores[p.tipo]++; });
+        contCont.innerHTML =
+          '<div class="contador-flujo tipo-refill"><b>' + contadores.refill + '</b> Refill</div>' +
+          '<div class="contador-flujo tipo-pedido_cliente"><b>' + contadores.pedido_cliente + '</b> Pedido cliente</div>' +
+          '<div class="contador-flujo tipo-cesion"><b>' + contadores.cesion + '</b> Cesión</div>';
+      }
+      const peticiones = PANEL_FILTRO_TIPO_ === 'todas' ? PANEL_CACHE_ : PANEL_CACHE_.filter(function (p) { return p.tipo === PANEL_FILTRO_TIPO_; });
+      ['014', '279'].forEach(function (codigoTienda) {
+        const cont = document.getElementById('listaTodas-' + codigoTienda);
+        if (!cont) return;
+        const deEstaTienda = peticiones.filter(function (p) { return p.tienda_origen === codigoTienda; });
+        if (!deEstaTienda.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
+        const activas = deEstaTienda.filter(function (p) { return p.estado !== 'cerrada' && p.estado !== 'anulada'; });
+        const cerradasSinEtiqueta = deEstaTienda.filter(function (p) {
+          return p.estado === 'cerrada' && p.necesitaHodos && !p.tieneHodos;
+        });
+        var html = activas.length ? activas.map(_filaPeticionPanel_).join('') : '<p class="meta">Sin peticiones activas.</p>';
+        if (cerradasSinEtiqueta.length) {
+          html += '<p class="meta" style="margin-top:10px;font-weight:700;">Cerradas sin etiqueta HODOS</p>' +
+            cerradasSinEtiqueta.map(_filaPeticionPanel_).join('');
+        }
+        cont.innerHTML = html;
+      });
     }
 
     var HODOS_CACHE_ = [];
@@ -1154,22 +1201,10 @@
         .cambiarActivoOperario(nombre, activo);
     }
 
-    function cargarEtiquetasHodos_() {
-      google.script.run.withSuccessHandler(function (json) {
-        const etiquetas = JSON.parse(json);
-        const cont = document.getElementById('listaEtiquetas');
-        if (!etiquetas.length) { cont.innerHTML = '<p class="meta">Sin etiquetas todavía.</p>'; return; }
-        cont.innerHTML = etiquetas.map(function (e) {
-          return '<div class="linea"><div>' + (e.numero_pedido || '(sin nº)') + ' → ' + e.destino + '</div>' +
-            '<div class="meta">' + e.id_unico + ' · ' + e.estado + ' · ' + new Date(e.fecha_creacion).toLocaleString('es-ES') + '</div></div>';
-        }).join('');
-      }).listarEtiquetasHodos();
-    }
-
     function reintentarHodosUI(peticionId, boton) {
       boton.disabled = true; boton.textContent = 'Enviando…';
       google.script.run
-        .withSuccessHandler(function () { cargarTodasPeticiones_(); cargarEtiquetasHodos_(); })
+        .withSuccessHandler(function () { cargarTodasPeticiones_(); })
         .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; boton.textContent = 'Reintentar HODOS'; })
         .reintentarHodos(peticionId);
     }
