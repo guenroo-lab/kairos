@@ -201,7 +201,7 @@ function crearPeticion(ldap, tipo, datos, lineas) {
 function listarMisPeticiones(ldap) {
   const u = _usuarioDe_(ldap);
   var q = 'tienda_origen=eq.' + encodeURIComponent(u.tienda) +
-    '&estado=neq.cerrada' +
+    '&estado=not.in.(cerrada,anulada)' +
     '&select=id,tipo,num_pedido,num_cesion,tienda_destino,estado,creada_en,solicitante_ldap' +
     '&order=creada_en.desc&limit=200';
   if (u.rol === 'vendedor') q += '&tipo=eq.refill'; // Vendedor solo ve Refill

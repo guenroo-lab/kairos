@@ -135,9 +135,13 @@ function listarTrazabilidad(ldap, historico) {
   // líneas están hechas: a_ubicar pasa al dar ubicación; hodos/refill pasan
   // solo cuando, cargados, llega la fecha+hora de entrega prevista (hasta
   // entonces sigue en tránsito, no está físicamente en tienda todavía).
+  // Anulada: directa a histórico, no debe quedar visible como activa en
+  // ningún camino.
   const ahora = new Date();
   peticiones.forEach(function (p) {
-    if (p.camino === 'a_ubicar') {
+    if (p.estado === 'anulada') {
+      p.preparada = true;
+    } else if (p.camino === 'a_ubicar') {
       p.preparada = !!p.ubicacion_consolidacion;
     } else {
       const llegada = _fechaHoraCarga_(p._fechaLlegada, p._horaLlegada);
