@@ -87,9 +87,13 @@
     .filtros { margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap; }
     .volver { margin-bottom:12px; display:inline-block; }
     a { color:var(--text-300); }
-    #operarioBar { background:var(--accent-dim); border:1px solid var(--accent-line); color:var(--accent-ink); padding:9px 12px; border-radius:var(--radius-btn); margin-bottom:12px; font-size:13px; display:flex; align-items:center; justify-content:space-between; }
+    #operarioBar { background:var(--accent-dim); border:1px solid var(--accent-line); color:var(--accent-ink); padding:9px 12px; border-radius:var(--radius-btn); margin-bottom:12px; font-size:13px; display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px; }
     [data-kmode="light"] #operarioBar { color:var(--accent); }
-    #operarioBar a { color:inherit; opacity:.85; font-weight:600; }
+    .ob-info { display:flex; align-items:center; flex-wrap:wrap; gap:2px; }
+    .ob-acciones { display:flex; gap:6px; flex-wrap:wrap; }
+    button.btn-ob { padding:6px 12px; font-size:12px; min-height:32px; border-radius:var(--radius-chip); display:flex; align-items:center; gap:5px; font-weight:800; box-shadow:0 2px 8px -3px rgba(0,0,0,.4); }
+    button.btn-ob.btn-ob-tienda { background:var(--ink-950); color:var(--text-100); border:1px solid rgba(255,255,255,.18); }
+    button.btn-ob.btn-ob-operario { background:var(--danger-bg); color:var(--danger-fg); border:1px solid var(--danger-line); }
     .badge-modo { display:inline-flex; align-items:center; padding:3px 10px; border-radius:var(--radius-chip); font-size:11.5px; font-weight:800; margin:0 6px; }
     .badge-modo.solo { background:var(--ink-950); color:var(--text-100); }
     .badge-modo.equipo { background:var(--ink-950); color:var(--text-100); }
@@ -437,9 +441,14 @@
         renderBrandHeaderHtml_() +
         renderTabsBar_() +
         '<h1>Kairos · Operario</h1>' +
-        '<div id="operarioBar">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) +
-          ' <span class="badge-modo ' + (esTrabajoEnEquipo_() ? 'equipo' : 'solo') + '">' + (esTrabajoEnEquipo_() ? '👥 En equipo' : '👤 En solitario') + '</span>' +
-          ' — <a href="#" id="cambiarTienda">cambiar tienda</a> · <a href="#" id="cambiarOperario">cambiar operario</a></div>' +
+        '<div id="operarioBar">' +
+          '<div class="ob-info">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) +
+            ' <span class="badge-modo ' + (esTrabajoEnEquipo_() ? 'equipo' : 'solo') + '">' + (esTrabajoEnEquipo_() ? '👥 En equipo' : '👤 En solitario') + '</span></div>' +
+          '<div class="ob-acciones">' +
+            '<button class="btn-ob btn-ob-tienda" id="cambiarTienda" type="button">🏬 Cambiar tienda</button>' +
+            '<button class="btn-ob btn-ob-operario" id="cambiarOperario" type="button">👤 Cambiar operario</button>' +
+          '</div>' +
+        '</div>' +
         '<div class="filtros">' +
         '<select id="filtroTipo"><option value="">Todos los tipos</option><option value="refill">Refill</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option></select>' +
         '<select id="filtroSeccion"><option value="">Todas las secciones</option></select>' +
