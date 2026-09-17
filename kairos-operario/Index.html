@@ -249,6 +249,7 @@
       panel: '<svg viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>',
       volumenes: '<svg viewBox="0 0 24 24"><path d="M4 20V10M12 20V4M20 20v-7"/></svg>',
       hodos: '<svg viewBox="0 0 24 24"><path d="M3 7l9-4 9 4-9 4-9-4zM3 7v10l9 4 9-4V7M12 11v10"/></svg>',
+      operarios: '<svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>',
     };
     var ICONO_TEMA = '<svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>';
     var ICONO_REFRESCAR = '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>';
@@ -315,6 +316,7 @@
       if (MODO_JEFE) {
         if (VISTA.nombre === 'volumenes') return renderVolumenes();
         if (VISTA.nombre === 'hodos') return renderHodos();
+        if (VISTA.nombre === 'operarios') return renderOperariosGestion();
         if (VISTA.nombre === 'detalle') return renderDetalle();
         return renderPanel();
       }
@@ -334,6 +336,7 @@
         var tabsJefe = [
           { nombre: 'panel', label: 'Control de pedidos' },
           { nombre: 'hodos', label: 'HODOS' },
+          { nombre: 'operarios', label: 'Operarios' },
           { nombre: 'volumenes', label: 'Volúmenes' },
         ];
         return '<div class="tabs">' + tabsJefe.map(function (t) {
@@ -1084,6 +1087,71 @@
         '<div style="font-size:16px;margin-top:6px;">' + e.id_unico + '</div>' +
         '<div style="font-size:14px;margin-top:6px;">' + new Date(e.fecha_creacion).toLocaleString('es-ES') + '</div>';
       window.print();
+    }
+
+    /** ============ Pantalla Operarios (jefe de equipo): alta/baja ============ */
+
+    var OPERARIOS_CACHE_ = [];
+
+    function renderOperariosGestion() {
+      document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
+        '<h1>Operarios del almacén</h1>' +
+        '<p class="meta">Quitar no borra el histórico, solo lo saca de la lista para preparar.</p>' +
+        '<div class="linea" style="flex-direction:column;align-items:stretch;gap:6px;">' +
+        '<input class="entrada" id="opNombre" placeholder="Nombre (ej. Antonio.M)">' +
+        '<select class="entrada" id="opRol">' +
+        '<option value="operario">Operario</option>' +
+        '<option value="jefe_equipo">Jefe de equipo</option>' +
+        '</select>' +
+        '<button onclick="crearOperarioUI_(this)">+ Añadir operario</button>' +
+        '</div>' +
+        '<div id="listaOperariosGestion" style="margin-top:10px;">Cargando…</div>';
+      sincronizarPickers_();
+      cargarOperariosGestion_();
+    }
+
+    function cargarOperariosGestion_() {
+      google.script.run.withSuccessHandler(function (json) {
+        OPERARIOS_CACHE_ = JSON.parse(json);
+        pintarOperariosGestion_();
+      }).listarOperariosGestion();
+    }
+
+    function pintarOperariosGestion_() {
+      const cont = document.getElementById('listaOperariosGestion');
+      if (!cont) return;
+      if (!OPERARIOS_CACHE_.length) { cont.innerHTML = '<p class="meta">Sin operarios.</p>'; return; }
+      cont.innerHTML = OPERARIOS_CACHE_.map(function (o) {
+        return '<div class="linea">' +
+          '<div><div class="desc">' + o.nombre + (o.activo ? '' : ' <span class="meta">(inactivo)</span>') + '</div>' +
+          '<div class="meta">' + (o.rol === 'jefe_equipo' ? 'Jefe de equipo' : 'Operario') + '</div></div>' +
+          '<div>' + (o.activo
+            ? '<button class="peligro" onclick="cambiarActivoOperarioUI_(\'' + o.nombre + '\', false, this)">Quitar</button>'
+            : '<button class="secundario" onclick="cambiarActivoOperarioUI_(\'' + o.nombre + '\', true, this)">Reactivar</button>') +
+          '</div></div>';
+      }).join('');
+    }
+
+    function crearOperarioUI_(boton) {
+      const nombre = document.getElementById('opNombre').value.trim();
+      const rol = document.getElementById('opRol').value;
+      boton.disabled = true; boton.textContent = 'Añadiendo…';
+      google.script.run
+        .withSuccessHandler(function () {
+          document.getElementById('opNombre').value = '';
+          boton.disabled = false; boton.textContent = '+ Añadir operario';
+          cargarOperariosGestion_();
+        })
+        .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; boton.textContent = '+ Añadir operario'; })
+        .crearOperario(nombre, rol);
+    }
+
+    function cambiarActivoOperarioUI_(nombre, activo, boton) {
+      boton.disabled = true;
+      google.script.run
+        .withSuccessHandler(cargarOperariosGestion_)
+        .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; })
+        .cambiarActivoOperario(nombre, activo);
     }
 
     function cargarEtiquetasHodos_() {
