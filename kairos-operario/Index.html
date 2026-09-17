@@ -439,7 +439,7 @@
         '<h1>Kairos · Operario</h1>' +
         '<div id="operarioBar">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) +
           ' <span class="badge-modo ' + (esTrabajoEnEquipo_() ? 'equipo' : 'solo') + '">' + (esTrabajoEnEquipo_() ? '👥 En equipo' : '👤 En solitario') + '</span>' +
-          ' — <a href="#" id="cambiarOperario">cambiar</a></div>' +
+          ' — <a href="#" id="cambiarTienda">cambiar tienda</a> · <a href="#" id="cambiarOperario">cambiar operario</a></div>' +
         '<div class="filtros">' +
         '<select id="filtroTipo"><option value="">Todos los tipos</option><option value="refill">Refill</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option></select>' +
         '<select id="filtroSeccion"><option value="">Todas las secciones</option></select>' +
@@ -452,6 +452,11 @@
         e.preventDefault();
         OPERARIO = ''; ROL = 'operario'; TIENDA_ACTIVA = '';
         localStorage.removeItem('kairos_tienda_activa');
+        render();
+      };
+      document.getElementById('cambiarTienda').onclick = function (e) {
+        e.preventDefault();
+        VISTA = { nombre: 'elegirTienda', peticionId: null };
         render();
       };
       document.getElementById('filtroTipo').onchange = pintarCola_;
