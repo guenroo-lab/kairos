@@ -29,6 +29,37 @@ function listarTodasPeticiones() {
   return _json_(peticiones);
 }
 
+/** Historial del día para el jefe de equipo: peticiones ya cerradas hoy,
+ *  con quién preparó cada una (lineas.operario) — para revisar de un
+ *  vistazo qué se ha hecho y quién lo hizo, no solo lo pendiente. */
+function listarHistorialHoy() {
+  const ahora = new Date();
+  const inicioHoy = new Date(ahora.getFullYear(), ahora.getMonth(), ahora.getDate()).toISOString();
+  const peticiones = supaSelect_('peticiones',
+    'estado=eq.cerrada&cerrada_en=gte.' + encodeURIComponent(inicioHoy) +
+    '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,cerrada_en,solicitante_ldap' +
+    '&order=cerrada_en.desc&limit=200');
+  if (!peticiones.length) return _json_([]);
+
+  const ids = peticiones.map(function (p) { return p.id; }).join(',');
+  const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,codigo_lm,designacion,cantidad,unidad_medida,operario,estado_negocio');
+
+  peticiones.forEach(function (p) {
+    p.tiendaNombre = CFG.TIENDAS[p.tienda_origen] || p.tienda_origen;
+    const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
+    var operarios = [];
+    propias.forEach(function (l) { if (l.operario && operarios.indexOf(l.operario) === -1) operarios.push(l.operario); });
+    p.operarios = operarios;
+    p.articulos = propias.map(function (l) {
+      return { codigo_lm: l.codigo_lm, designacion: l.designacion, cantidad: l.cantidad, unidad_medida: l.unidad_medida };
+    });
+    p.tuvoIncidencia = propias.some(function (l) {
+      return l.estado_negocio && l.estado_negocio !== 'Preparado' && l.estado_negocio !== 'Consolidado';
+    });
+  });
+  return _json_(peticiones);
+}
+
 function listarEtiquetasHodos() {
   const lineas = supaSelect_('lineas', 'hodos_id=not.is.null&select=hodos_id&order=hodos_id.desc&limit=500');
   const ids = [];

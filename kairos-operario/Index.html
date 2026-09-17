@@ -343,6 +343,7 @@
         if (VISTA.nombre === 'volumenes') return renderVolumenes();
         if (VISTA.nombre === 'hodos') return renderHodos();
         if (VISTA.nombre === 'operarios') return renderOperariosGestion();
+        if (VISTA.nombre === 'historial') return renderHistorialHoy();
         if (VISTA.nombre === 'detalle') return renderDetalle();
         return renderPanel();
       }
@@ -1012,6 +1013,7 @@
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
         '<h1>Control de pedidos</h1>' +
         '<p class="meta">Toca "Mover a individual" para asignar a un solo operario en vez de la cola de equipo. Se actualiza solo cada 30s.</p>' +
+        '<button class="btn-ob btn-ob-tienda" type="button" onclick="event.preventDefault(); VISTA={nombre:\'historial\',peticionId:null}; render();" style="width:auto;margin-bottom:12px;">📋 Historial de hoy</button>' +
         '<div class="filtros-tipo" id="filtrosTipoPanel">' + TIPOS_FILTRO_PANEL_.map(function (t) {
           return '<button type="button" class="chip-tipo' + (t.tipo === PANEL_FILTRO_TIPO_ ? ' activo' : '') + '" data-tipo="' + t.tipo + '">' + t.label + '</button>';
         }).join('') + '</div>' +
@@ -1303,6 +1305,45 @@
         .withSuccessHandler(cargarOperariosGestion_)
         .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; })
         .cambiarActivoOperario(nombre, activo);
+    }
+
+    /** ============ Historial de hoy (jefe de equipo) ============ */
+
+    function renderHistorialHoy() {
+      document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
+        '<div class="volver"><a href="#" id="volverHistorial">← Control de pedidos</a></div>' +
+        '<h1>Historial de hoy</h1>' +
+        '<p class="meta">Peticiones ya completadas hoy, con quién las preparó.</p>' +
+        '<div id="listaHistorialHoy">Cargando…</div>';
+      sincronizarPickers_();
+      document.getElementById('volverHistorial').onclick = function (e) {
+        e.preventDefault();
+        VISTA = { nombre: 'panel', peticionId: null };
+        render();
+      };
+      google.script.run.withSuccessHandler(pintarHistorialHoy_).listarHistorialHoy();
+    }
+
+    function pintarHistorialHoy_(json) {
+      const filas = JSON.parse(json);
+      const cont = document.getElementById('listaHistorialHoy');
+      if (!filas.length) { cont.innerHTML = '<p class="meta">Sin preparaciones completadas hoy todavía.</p>'; return; }
+      cont.innerHTML = filas.map(function (p) {
+        const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || ''))
+          : p.tipo === 'cesion' ? ('Cesión ' + (p.num_cesion || '') + ' → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino))
+          : 'Refill';
+        const hora = new Date(p.cerrada_en).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+        const articulosTexto = (p.articulos || []).map(function (a) {
+          return (a.designacion || a.codigo_lm) + ' (' + a.cantidad + ' ' + a.unidad_medida + ')';
+        }).join(' · ');
+        return '<div class="fila tipo-' + p.tipo + '">' +
+          '<div class="tipo">' + etiquetaTipo + '</div>' +
+          '<div class="meta">' + p.tiendaNombre + ' · ' + hora + ' · pide: ' + (p.solicitante_ldap || '—') + '</div>' +
+          (articulosTexto ? '<div class="meta">' + articulosTexto + '</div>' : '') +
+          '<div class="meta"><strong>Preparado por:</strong> ' + (p.operarios && p.operarios.length ? p.operarios.join(' + ') : '—') + '</div>' +
+          (p.tuvoIncidencia ? '<span class="chip-modo individual">⚠ Con incidencia</span>' : '') +
+          '</div>';
+      }).join('');
     }
 
     function reintentarHodosUI(peticionId, boton) {
