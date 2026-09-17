@@ -110,9 +110,9 @@
     .chip-tipo { padding:7px 14px; border-radius:var(--radius-chip); background:var(--ink-800); border:1px solid var(--ink-700); color:var(--text-300); font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
     .chip-tipo.activo { background:var(--accent-dim); border-color:var(--accent-line); color:var(--accent-ink); }
     [data-kmode="light"] .chip-tipo.activo { color:var(--accent); }
-    .panel-contadores { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; }
-    .contador-flujo { display:flex; align-items:center; gap:8px; padding:10px 16px; border-radius:var(--radius-card); background:linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%); border:1px solid var(--ink-800); border-left:4px solid var(--ink-700); font-size:12.5px; font-weight:700; color:var(--text-300); box-shadow:var(--shadow-card); }
-    .contador-flujo b { font-size:22px; font-weight:800; color:var(--text-100); }
+    .panel-contadores { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+    .contador-flujo { display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:var(--radius-card); background:linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%); border:1px solid var(--ink-800); border-left:4px solid var(--ink-700); font-size:11.5px; font-weight:700; color:var(--text-300); box-shadow:var(--shadow-card); flex:1; min-width:88px; justify-content:center; }
+    .contador-flujo b { font-size:18px; font-weight:800; color:var(--text-100); }
     .contador-flujo.tipo-refill { border-left-color:var(--tipo-refill); }
     .contador-flujo.tipo-pedido_cliente { border-left-color:var(--tipo-pedido); }
     .contador-flujo.tipo-cesion { border-left-color:var(--tipo-cesion); }
@@ -940,10 +940,13 @@
         '<div class="filtros-tipo" id="filtrosTipoPanel">' + TIPOS_FILTRO_PANEL_.map(function (t) {
           return '<button type="button" class="chip-tipo' + (t.tipo === PANEL_FILTRO_TIPO_ ? ' activo' : '') + '" data-tipo="' + t.tipo + '">' + t.label + '</button>';
         }).join('') + '</div>' +
-        '<div class="panel-contadores" id="panelContadores"></div>' +
         '<div class="panel-tiendas-grid">' +
-          '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-marbella);"></span>Marbella</h3><div id="listaTodas-014">Cargando…</div></div>' +
-          '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-mijas);"></span>Mijas</h3><div id="listaTodas-279">Cargando…</div></div>' +
+          '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-marbella);"></span>Marbella</h3>' +
+            '<div class="panel-contadores" id="panelContadores-014"></div>' +
+            '<div id="listaTodas-014">Cargando…</div></div>' +
+          '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-mijas);"></span>Mijas</h3>' +
+            '<div class="panel-contadores" id="panelContadores-279"></div>' +
+            '<div id="listaTodas-279">Cargando…</div></div>' +
         '</div>';
       sincronizarPickers_();
       document.getElementById('filtrosTipoPanel').querySelectorAll('.chip-tipo').forEach(function (btn) {
@@ -989,18 +992,20 @@
     }
 
     function pintarPanel_() {
-      const contCont = document.getElementById('panelContadores');
-      if (contCont) {
-        const activasTodas = PANEL_CACHE_.filter(function (p) { return p.estado !== 'cerrada' && p.estado !== 'anulada'; });
-        const contadores = { pedido_cliente: 0, refill: 0, cesion: 0 };
-        activasTodas.forEach(function (p) { if (contadores[p.tipo] !== undefined) contadores[p.tipo]++; });
-        contCont.innerHTML =
-          '<div class="contador-flujo tipo-refill"><b>' + contadores.refill + '</b> Refill</div>' +
-          '<div class="contador-flujo tipo-pedido_cliente"><b>' + contadores.pedido_cliente + '</b> Pedido cliente</div>' +
-          '<div class="contador-flujo tipo-cesion"><b>' + contadores.cesion + '</b> Cesión</div>';
-      }
       const peticiones = PANEL_FILTRO_TIPO_ === 'todas' ? PANEL_CACHE_ : PANEL_CACHE_.filter(function (p) { return p.tipo === PANEL_FILTRO_TIPO_; });
       ['014', '279'].forEach(function (codigoTienda) {
+        const contCont = document.getElementById('panelContadores-' + codigoTienda);
+        if (contCont) {
+          const activasTienda = PANEL_CACHE_.filter(function (p) {
+            return p.tienda_origen === codigoTienda && p.estado !== 'cerrada' && p.estado !== 'anulada';
+          });
+          const contadores = { pedido_cliente: 0, refill: 0, cesion: 0 };
+          activasTienda.forEach(function (p) { if (contadores[p.tipo] !== undefined) contadores[p.tipo]++; });
+          contCont.innerHTML =
+            '<div class="contador-flujo tipo-refill"><b>' + contadores.refill + '</b> Refill</div>' +
+            '<div class="contador-flujo tipo-pedido_cliente"><b>' + contadores.pedido_cliente + '</b> Pedido cliente</div>' +
+            '<div class="contador-flujo tipo-cesion"><b>' + contadores.cesion + '</b> Cesión</div>';
+        }
         const cont = document.getElementById('listaTodas-' + codigoTienda);
         if (!cont) return;
         const deEstaTienda = peticiones.filter(function (p) { return p.tienda_origen === codigoTienda; });
