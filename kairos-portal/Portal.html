@@ -313,7 +313,7 @@
       '<div class="brand-badge"><img src="' + LOGO_TAISA_B64 + '" alt="Taisa"></div>' +
       '<span class="brand-x">×</span>' +
       '<div class="brand-badge"><img src="data:image/png;base64,' + LOGO_LM_B64 + '" alt="Leroy Merlin"></div>' +
-      '<span class="brand-nombre">Kairos</span>' +
+      '<span class="brand-nombre" style="cursor:pointer;" onclick="irAInicio_()">Kairos</span>' +
       '<div class="theme-toggle"><button class="theme-btn" onclick="toggleThemePanel()" type="button">' + ICONO_TEMA + 'Tema</button></div>' +
       '</div>' +
       '<div class="theme-panel" id="themePanel">' +
@@ -398,6 +398,11 @@
   function render() {
     app().innerHTML = '';
     if (!LDAP) { renderEntrar(); return; }
+    renderCola();
+  }
+
+  function irAInicio_() {
+    if (!LDAP) return;
     renderCola();
   }
 
