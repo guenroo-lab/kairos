@@ -22,16 +22,28 @@ function entrar(ldap) {
   });
 }
 
-function registrarUsuario(ldap, tienda, rol) {
+/** nombre/apellido/seccion: solo registro de quién se va dando de alta —
+ *  no se muestran en ninguna pantalla, el resto de la app sigue
+ *  identificando a todos por LDAP únicamente. */
+function registrarUsuario(ldap, tienda, rol, nombre, apellido, seccion) {
   ldap = String(ldap || '').trim();
+  nombre = String(nombre || '').trim();
+  apellido = String(apellido || '').trim();
+  seccion = String(seccion || '').trim();
   if (!/^\d+$/.test(ldap)) throw new Error('El número de empleado debe ser numérico.');
   if (!CFG.TIENDAS[tienda]) throw new Error('Tienda no válida.');
   if (ROLES_VALIDOS.indexOf(rol) === -1) throw new Error('Rol no válido.');
+  if (!nombre) throw new Error('Falta el nombre.');
+  if (!apellido) throw new Error('Falta el apellido.');
+  if (!seccion) throw new Error('Falta la sección.');
 
   const existentes = supaSelect_('usuarios_tienda', 'ldap=eq.' + encodeURIComponent(ldap));
   if (existentes.length) throw new Error('Ese número de empleado ya está registrado.');
 
-  supaInsert_('usuarios_tienda', { ldap: ldap, tienda: tienda, rol: rol, aprobado: false });
+  supaInsert_('usuarios_tienda', {
+    ldap: ldap, tienda: tienda, rol: rol, aprobado: false,
+    nombre: nombre, apellido: apellido, seccion: seccion,
+  });
   return _json_({ ok: true });
 }
 

@@ -436,6 +436,9 @@
       '<div class="wrap"><div class="card">' +
         '<h2>Primera vez</h2>' +
         '<p style="color:var(--text-500)">No encontramos el número ' + escHtml(ldap) + '. Regístrate:</p>' +
+        '<input class="entrada" id="inNombre" placeholder="Nombre">' +
+        '<input class="entrada" id="inApellido" placeholder="Apellido">' +
+        '<input class="entrada" id="inSeccion" placeholder="Sección">' +
         '<select class="entrada" id="selTienda">' +
           '<option value="" selected disabled>Elige tu tienda…</option>' +
           '<option value="014">Marbella</option>' +
@@ -456,11 +459,17 @@
     c.querySelector('#btnVolver').onclick = renderEntrar;
     c.querySelector('#btnAlta').onclick = function () {
       const err = c.querySelector('#errAlta');
+      const nombre = c.querySelector('#inNombre').value.trim();
+      const apellido = c.querySelector('#inApellido').value.trim();
+      const seccion = c.querySelector('#inSeccion').value.trim();
       const tienda = c.querySelector('#selTienda').value;
       const rol = c.querySelector('#selRol').value;
+      if (!nombre) { err.textContent = 'Escribe tu nombre.'; err.style.display = 'block'; return; }
+      if (!apellido) { err.textContent = 'Escribe tu apellido.'; err.style.display = 'block'; return; }
+      if (!seccion) { err.textContent = 'Escribe tu sección.'; err.style.display = 'block'; return; }
       if (!tienda) { err.textContent = 'Elige tu tienda.'; err.style.display = 'block'; return; }
       if (!rol) { err.textContent = 'Elige tu rol.'; err.style.display = 'block'; return; }
-      gas('registrarUsuario', ldap, tienda, rol).then(function () {
+      gas('registrarUsuario', ldap, tienda, rol, nombre, apellido, seccion).then(function () {
         renderPendiente();
       }).catch(function (e) {
         err.textContent = e.message; err.style.display = 'block';
