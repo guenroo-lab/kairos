@@ -627,7 +627,9 @@
 
       const preparada = l.estado_preparacion === 'preparado';
       if (preparada) {
-        const resumen = l.estado_negocio ? (l.estado_negocio + (l.incidencia_motivo ? ' — ' + l.incidencia_motivo : '')) : '';
+        const resumen = l.estado_negocio === 'Parcial'
+          ? ('Parcial: ' + l.cantidad_preparada + '/' + l.cantidad + ' ' + l.unidad_medida + (l.incidencia_motivo ? ' — ' + l.incidencia_motivo : ''))
+          : (l.estado_negocio ? (l.estado_negocio + (l.incidencia_motivo ? ' — ' + l.incidencia_motivo : '')) : '');
         var botonDeshacer = '';
         if (p.tipo === 'pedido_cliente' || p.tipo === 'cesion') {
           botonDeshacer = ' <button class="secundario" onclick="deshacerLinea(\'' + l.id + '\')">Deshacer</button>';
@@ -647,20 +649,43 @@
       // habiendo cogido mercancía de un solo palet cuando hacían falta varios.
       const partesPalet = parsearSsccMulti(l.sscc, l.cantidad);
       const esMultiPalet = partesPalet.length > 1;
-      if (!confirmadosPalet[l.id]) confirmadosPalet[l.id] = partesPalet.map(function () { return false; });
+      if (!confirmadosPalet[l.id]) {
+        confirmadosPalet[l.id] = partesPalet.map(function () { return p.tipo === 'refill' ? null : false; });
+      }
       const confirmados = confirmadosPalet[l.id];
-      const todosConfirmados = !esMultiPalet || confirmados.every(function (v) { return v; });
+      // refill: cada palet queda resuelto en 'confirmado' o 'falta' — permite
+      // seguir cuando falta alguno (parcial), no exige tenerlos todos.
+      // pedido_cliente/cesión: solo confirmación booleana (informativa, no
+      // bloquea — el reporte de incidencia/parcial ya cubre lo que falte).
+      const todosConfirmados = !esMultiPalet || (p.tipo === 'refill'
+        ? confirmados.every(function (v) { return v === 'confirmado' || v === 'falta'; })
+        : confirmados.every(function (v) { return v; }));
 
       var bloquePalet = '';
       if (esMultiPalet) {
         const direcciones = String(l.ubicacion || '').split(' + ').map(function (s) { return s.trim(); });
         bloquePalet += '<p class="meta" style="margin:8px 0 4px;font-weight:700;">📦 Repartido en ' + partesPalet.length + ' palets — confirma cada uno al cogerlo:</p>';
-        bloquePalet += partesPalet.map(function (parte, idx) {
-          const etiquetaPalet = 'SSCC ' + parte.sscc + ' · ' + (direcciones[idx] || '—') + ' · ' + parte.cantidad + ' ud';
-          return confirmados[idx]
-            ? '<button class="ok" style="width:100%;margin-bottom:6px;" onclick="marcarPaletConfirmado(\'' + l.id + '\', ' + idx + ', false)">✓ Confirmado — ' + etiquetaPalet + '</button>'
-            : '<button class="secundario" style="width:100%;margin-bottom:6px;" onclick="marcarPaletConfirmado(\'' + l.id + '\', ' + idx + ', true)">Confirmar palet cogido — ' + etiquetaPalet + '</button>';
-        }).join('');
+        if (p.tipo === 'refill') {
+          bloquePalet += partesPalet.map(function (parte, idx) {
+            const etiquetaPalet = 'SSCC ' + parte.sscc + ' · ' + (direcciones[idx] || '—') + ' · ' + parte.cantidad + ' ud';
+            if (confirmados[idx] === 'confirmado') {
+              return '<button class="ok" style="width:100%;margin-bottom:6px;" onclick="marcarEstadoPalet(\'' + l.id + '\', ' + idx + ', null)">✓ Confirmado — ' + etiquetaPalet + '</button>';
+            }
+            if (confirmados[idx] === 'falta') {
+              return '<button class="peligro" style="width:100%;margin-bottom:6px;" onclick="marcarEstadoPalet(\'' + l.id + '\', ' + idx + ', null)">✕ Falta — ' + etiquetaPalet + '</button>';
+            }
+            return '<div style="display:flex;gap:6px;margin-bottom:6px;">' +
+              '<button class="secundario" style="flex:1;" onclick="marcarEstadoPalet(\'' + l.id + '\', ' + idx + ', \'confirmado\')">Confirmar — ' + etiquetaPalet + '</button>' +
+              '<button class="peligro" onclick="marcarEstadoPalet(\'' + l.id + '\', ' + idx + ', \'falta\')">Falta</button></div>';
+          }).join('');
+        } else {
+          bloquePalet += partesPalet.map(function (parte, idx) {
+            const etiquetaPalet = 'SSCC ' + parte.sscc + ' · ' + (direcciones[idx] || '—') + ' · ' + parte.cantidad + ' ud';
+            return confirmados[idx]
+              ? '<button class="ok" style="width:100%;margin-bottom:6px;" onclick="marcarPaletConfirmado(\'' + l.id + '\', ' + idx + ', false)">✓ Confirmado — ' + etiquetaPalet + '</button>'
+              : '<button class="secundario" style="width:100%;margin-bottom:6px;" onclick="marcarPaletConfirmado(\'' + l.id + '\', ' + idx + ', true)">Confirmar palet cogido — ' + etiquetaPalet + '</button>';
+          }).join('');
+        }
       }
 
       const sel = selectorPalet[l.id];
@@ -714,7 +739,9 @@
             '<button class="aviso" onclick="verIncidenciaTipos(\'' + l.id + '\')">⚠ Con incidencia</button>' + cola + '</div>';
         }
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
-          '<button ' + (!todosConfirmados ? 'disabled title="Confirma todos los palets primero"' : 'onclick="verIncidenciaPregunta(\'' + l.id + '\')"') + '>Marcar preparada</button>' + cola + '</div>';
+          '<button ' + (!todosConfirmados ? 'disabled title="Marca cada palet (confirmado o falta) primero"' :
+            (esMultiPalet ? 'onclick="cerrarLineaRefillMultiPalet(\'' + l.id + '\')"' : 'onclick="verIncidenciaPregunta(\'' + l.id + '\')"')) +
+          '>Marcar preparada</button>' + cola + '</div>';
       }
 
       // pedido_cliente / cesion: flujo de incidencia
@@ -730,7 +757,15 @@
           '<button class="aviso" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Palet\', \'\')">Sin Palet</button> ' +
           '<button class="peligro" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Mercancía\', \'\')">Sin Mercancía</button> ' +
           '<button class="neutro" onclick="verIncidenciaMotivo(\'' + l.id + '\')">Otras Incidencias</button> ' +
+          '<button class="neutro" onclick="verIncidenciaParcial(\'' + l.id + '\')">Parcial</button> ' +
           '<button class="secundario" onclick="verIncidenciaPregunta(\'' + l.id + '\')">‹ Volver</button>' + cola + '</div>';
+      }
+      if (vista === 'parcial') {
+        return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
+          '<p class="meta">Pedían ' + l.cantidad + ' ' + l.unidad_medida + '. ¿Cuántas has cogido de verdad?</p>' +
+          '<input type="number" id="parcial-' + l.id + '" min="1" max="' + (Number(l.cantidad) - 1) + '" placeholder="Unidades cogidas"> ' +
+          '<button class="ok" onclick="confirmarParcial(\'' + l.id + '\')">Confirmar</button> ' +
+          '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">‹ Volver</button>' + cola + '</div>';
       }
       if (vista === 'pregunta') {
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
@@ -738,13 +773,38 @@
           '<button class="aviso" onclick="verIncidenciaTipos(\'' + l.id + '\')">⚠ Con incidencia</button>' + cola + '</div>';
       }
       return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
-        '<button ' + (!todosConfirmados ? 'disabled title="Confirma todos los palets primero"' : 'onclick="verIncidenciaPregunta(\'' + l.id + '\')"') + '>Marcar preparada</button>' + cola + '</div>';
+        '<button onclick="verIncidenciaPregunta(\'' + l.id + '\')">Marcar preparada</button>' + cola + '</div>';
     }
 
     function marcarPaletConfirmado(lineaId, idx, checked) {
       if (!confirmadosPalet[lineaId]) confirmadosPalet[lineaId] = [];
       confirmadosPalet[lineaId][idx] = checked;
       renderDetalleBody_();
+    }
+
+    // refill multi-palet: estado 'confirmado' | 'falta' | null (pendiente) por índice.
+    function marcarEstadoPalet(lineaId, idx, estado) {
+      if (!confirmadosPalet[lineaId]) confirmadosPalet[lineaId] = [];
+      confirmadosPalet[lineaId][idx] = estado;
+      renderDetalleBody_();
+    }
+
+    // Deriva el resultado de los palets ya marcados (confirmado/falta) — no
+    // hace falta preguntar tipo de incidencia, el checklist ya lo dice todo:
+    // todos confirmados = sin incidencia; ninguno = Sin Palet; algunos = Parcial.
+    function cerrarLineaRefillMultiPalet(lineaId) {
+      const l = ultimoDetalle.lineas.filter(function (x) { return x.id === lineaId; })[0];
+      const partes = parsearSsccMulti(l.sscc, l.cantidad);
+      const estados = confirmadosPalet[lineaId] || [];
+      const confirmadas = partes.filter(function (_, idx) { return estados[idx] === 'confirmado'; });
+      if (confirmadas.length === partes.length) {
+        cerrarLinea(lineaId, '', '');
+      } else if (confirmadas.length === 0) {
+        cerrarLinea(lineaId, 'Sin Palet', '');
+      } else {
+        const cantidadConfirmada = confirmadas.reduce(function (s, parte) { return s + Number(parte.cantidad || 0); }, 0);
+        cerrarLinea(lineaId, 'Parcial', '', cantidadConfirmada);
+      }
     }
 
     function abrirSelectorPalet(lineaId) {
@@ -771,6 +831,7 @@
     function verIncidenciaPregunta(lineaId) { vistaLinea[lineaId] = 'pregunta'; renderDetalleBody_(); }
     function verIncidenciaTipos(lineaId) { vistaLinea[lineaId] = 'tipos'; renderDetalleBody_(); }
     function verIncidenciaMotivo(lineaId) { vistaLinea[lineaId] = 'motivo'; renderDetalleBody_(); }
+    function verIncidenciaParcial(lineaId) { vistaLinea[lineaId] = 'parcial'; renderDetalleBody_(); }
 
     function confirmarOtrasIncidencias(lineaId) {
       const input = document.getElementById('motivo-' + lineaId);
@@ -779,13 +840,22 @@
       cerrarLinea(lineaId, 'Otras Incidencias', texto);
     }
 
-    function cerrarLinea(lineaId, incidencia, motivo) {
+    function confirmarParcial(lineaId) {
+      const l = ultimoDetalle.lineas.filter(function (x) { return x.id === lineaId; })[0];
+      const input = document.getElementById('parcial-' + lineaId);
+      const valor = Number(input.value);
+      if (!valor || valor <= 0) { input.focus(); return; }
+      if (valor >= Number(l.cantidad)) { kAlerta('Eso es la cantidad completa — usa "Sin incidencia" en vez de Parcial.'); return; }
+      cerrarLinea(lineaId, 'Parcial', '', valor);
+    }
+
+    function cerrarLinea(lineaId, incidencia, motivo, cantidadPreparada) {
       delete vistaLinea[lineaId];
-      dispararPuenteMyIsoSiProcede_(lineaId, !!incidencia);
+      dispararPuenteMyIsoSiProcede_(lineaId, incidencia, cantidadPreparada);
       google.script.run
         .withSuccessHandler(function () { renderDetalle(); })
         .withFailureHandler(function (err) { kAlerta(err.message); })
-        .marcarLineaPreparada(lineaId, OPERARIO, incidencia, motivo);
+        .marcarLineaPreparada(lineaId, OPERARIO, incidencia, motivo, cantidadPreparada);
     }
 
     function deshacerLinea(lineaId) {
@@ -799,24 +869,32 @@
     // respuesta de google.script.run (async), el navegador bloquea el salto
     // a http-shortcuts:// en silencio. Por eso usa ultimoDetalle (ya en
     // memoria desde que se abrió el detalle) y no espera nada del servidor.
-    // incidenciaMarcada: true/false para la línea que se está cerrando AHORA
-    // (su estado_negocio aún no está en ultimoDetalle — el resto de líneas sí).
-    function dispararPuenteMyIsoSiProcede_(lineaIdMarcada, incidenciaMarcada) {
+    // incidenciaMarcada: '' (sin incidencia) | 'Sin Palet'/'Sin Mercancía'/
+    // 'Otras Incidencias' (nada que mover) | 'Parcial' (mover solo lo real)
+    // para la línea que se está cerrando AHORA — su estado_negocio aún no
+    // está en ultimoDetalle, el resto de líneas sí (con su cantidad_preparada
+    // ya guardada si fueron Parcial en un cierre anterior).
+    function dispararPuenteMyIsoSiProcede_(lineaIdMarcada, incidenciaMarcada, cantidadParcial) {
       if (!ultimoDetalle) return;
       const p = ultimoDetalle.peticion;
       const lineas = ultimoDetalle.lineas;
 
       if (p.tipo === 'refill') {
-        if (incidenciaMarcada) return; // sin mercancía real que mover a XP1
+        if (incidenciaMarcada && incidenciaMarcada !== 'Parcial') return; // sin mercancía real que mover a XP1
         const l = lineas.filter(function (x) { return x.id === lineaIdMarcada; })[0];
         if (!l || !l.sscc) return;
         // l.sscc puede venir en formato "SSCC (Xud)" (repartido en varios
         // palets) — igual que en pedido_cliente/cesión, hay que extraer el
         // SSCC puro de cada parte antes de mandarlo, si no la API recibe
         // el " (Xud)" pegado en la URL y da 400.
-        const ssccList = parsearSsccMulti(l.sscc, l.cantidad)
-          .map(function (parte) { return limpiarSscc(parte.sscc); })
-          .filter(Boolean);
+        var partesAMover = parsearSsccMulti(l.sscc, l.cantidad);
+        if (incidenciaMarcada === 'Parcial') {
+          // Solo los palets marcados 'confirmado' en el checklist — los
+          // 'falta' nunca se cogieron, no hay nada que mover de esos.
+          const estados = confirmadosPalet[lineaIdMarcada] || [];
+          partesAMover = partesAMover.filter(function (_, idx) { return estados[idx] === 'confirmado'; });
+        }
+        const ssccList = partesAMover.map(function (parte) { return limpiarSscc(parte.sscc); }).filter(Boolean);
         dispararMoveToAddress_(ssccList, p.tienda_origen);
         return;
       }
@@ -827,13 +905,30 @@
         });
         if (quedanPendientes) return;
 
-        function esIncidencia(l) {
-          return l.id === lineaIdMarcada ? !!incidenciaMarcada : INCIDENCIAS.indexOf(l.estado_negocio) !== -1;
+        function tipoIncidencia(l) {
+          return l.id === lineaIdMarcada ? (incidenciaMarcada || '') : (l.estado_negocio || '');
+        }
+        function esIncidenciaCompleta(l) {
+          const tipo = tipoIncidencia(l);
+          return !!tipo && tipo !== 'Parcial' && INCIDENCIAS.indexOf(tipo) !== -1;
         }
 
         const transfers = [];
         lineas.forEach(function (l) {
-          if (esIncidencia(l)) return;
+          if (esIncidenciaCompleta(l)) return;
+          if (tipoIncidencia(l) === 'Parcial') {
+            // Cantidad real cogida: la que se acaba de confirmar (línea que
+            // se cierra ahora) o la ya guardada de un cierre anterior.
+            const cantidad = l.id === lineaIdMarcada ? Number(cantidadParcial) : Number(l.cantidad_preparada);
+            const primeraParte = parsearSsccMulti(l.sscc, l.cantidad)[0];
+            if (primeraParte && primeraParte.sscc && cantidad > 0) {
+              transfers.push({
+                source: limpiarSscc(primeraParte.sscc), sourceType: 'CONTAINER',
+                stock: { productId: l.codigo_lm, quantity: cantidad, measureUnit: 'EA', lotId: null, expirationDate: null, blocking: null },
+              });
+            }
+            return;
+          }
           parsearSsccMulti(l.sscc, l.cantidad).forEach(function (parte) {
             if (!parte.sscc || !parte.cantidad) return;
             transfers.push({

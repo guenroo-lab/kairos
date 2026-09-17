@@ -1093,11 +1093,13 @@
           '<div><b>Destino</b> ' + escHtml(NOMBRE_TIENDA[p.tienda_destino] || p.tienda_destino) + '</div>';
       }
       const filasLineas = r.lineas.map(function (l) {
+        const esParcial = l.estado_negocio === 'Parcial';
+        const estadoTexto = esParcial ? ('Parcial: ' + l.cantidad_preparada + '/' + l.cantidad) : l.estado_preparacion;
         return '<div class="linea-chip"><span>' + escHtml(l.codigo_lm) + ' · ' + escHtml(l.designacion || '—') +
           ' · ' + l.cantidad + ' ' + escHtml(l.unidad_medida) +
           (l.sscc ? ' · SSCC ' + escHtml(l.sscc) : '') +
           '</span>' +
-          '<span class="estado">' + escHtml(l.estado_preparacion) + '</span></div>';
+          '<span class="estado' + (esParcial ? ' estado-anulada' : '') + '">' + escHtml(estadoTexto) + '</span></div>';
       }).join('');
       const etiquetaEstadoEnvio = (p.tipo === 'pedido_cliente' && p.transporte) ? 'Envío' : 'HODOS';
       const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>' + etiquetaEstadoEnvio + '</b> ' + escHtml(r.hodosTexto) + '</div>' : '';

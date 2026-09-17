@@ -36,25 +36,31 @@ function obtenerPeticion(peticionId, operarioNombre) {
   return _json_({ peticion: peticion, lineas: lineas, otroEnCurso: otroEnCurso });
 }
 
-function marcarLineaPreparada(lineaId, operarioNombre, incidencia, motivo) {
+function marcarLineaPreparada(lineaId, operarioNombre, incidencia, motivo, cantidadPreparada) {
   operarioNombre = String(operarioNombre || '').trim();
   if (!operarioNombre) throw new Error('Selecciona tu nombre antes de preparar líneas.');
   incidencia = String(incidencia || '').trim();
   motivo = String(motivo || '').trim();
 
-  const lineaActual = supaSelect_('lineas', 'id=eq.' + encodeURIComponent(lineaId) + '&select=peticion_id');
+  const lineaActual = supaSelect_('lineas', 'id=eq.' + encodeURIComponent(lineaId) + '&select=peticion_id,cantidad');
   if (!lineaActual.length) throw new Error('Línea no encontrada.');
   const peticionId = lineaActual[0].peticion_id;
 
-  var estadoNegocio, incidenciaMotivo;
+  var estadoNegocio, incidenciaMotivo, cantidadPreparadaGuardar = null;
   if (incidencia) {
-    if (['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'].indexOf(incidencia) === -1) {
+    if (['Sin Palet', 'Sin Mercancía', 'Otras Incidencias', 'Parcial'].indexOf(incidencia) === -1) {
       throw new Error('Incidencia desconocida: ' + incidencia);
     }
     estadoNegocio = incidencia;
     if (incidencia === 'Otras Incidencias') {
       if (!motivo) throw new Error('Falta el motivo para la incidencia "Otras Incidencias".');
       incidenciaMotivo = motivo;
+    } else if (incidencia === 'Parcial') {
+      const cantidadNum = Number(cantidadPreparada);
+      if (!cantidadNum || cantidadNum <= 0) throw new Error('Falta la cantidad preparada para la incidencia "Parcial".');
+      if (cantidadNum >= Number(lineaActual[0].cantidad)) throw new Error('La cantidad parcial debe ser menor que la pedida.');
+      incidenciaMotivo = motivo || null;
+      cantidadPreparadaGuardar = cantidadNum;
     } else {
       incidenciaMotivo = null;
     }
@@ -69,6 +75,7 @@ function marcarLineaPreparada(lineaId, operarioNombre, incidencia, motivo) {
     estado_preparacion: 'preparado',
     estado_negocio: estadoNegocio,
     incidencia_motivo: incidenciaMotivo,
+    cantidad_preparada: cantidadPreparadaGuardar,
     operario: operarioNombre,
     preparada_en: new Date().toISOString(),
   });
