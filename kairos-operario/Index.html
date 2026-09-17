@@ -1411,11 +1411,33 @@
 
     /** ============ Historial de hoy (jefe de equipo y operario) ============ */
 
+    var HISTORIAL_CACHE_ = [];
+    var HIST_FILTRO_TIPO_ = 'todas';
+    var HIST_FILTRO_TIENDA_ = 'todas';
+    const TIPOS_FILTRO_HIST_ = [
+      { tipo: 'todas', label: 'Todas' },
+      { tipo: 'pedido_cliente', label: 'Pedido cliente' },
+      { tipo: 'refill', label: 'Refill' },
+      { tipo: 'cesion', label: 'Cesión' },
+    ];
+    const TIENDAS_FILTRO_HIST_ = [
+      { codigo: 'todas', label: 'Todas' },
+      { codigo: '014', label: 'Marbella' },
+      { codigo: '279', label: 'Mijas' },
+    ];
+
     function renderHistorialHoy() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
         '<div class="volver"><a href="#" id="volverHistorial">← ' + (MODO_JEFE ? 'Control de pedidos' : 'Cola') + '</a></div>' +
         '<h1>Historial de hoy</h1>' +
         '<p class="meta">Peticiones ya completadas hoy, con quién las preparó.</p>' +
+        '<div class="filtros-tipo" id="filtrosTipoHist">' + TIPOS_FILTRO_HIST_.map(function (t) {
+          return '<button type="button" class="chip-tipo' + (t.tipo === HIST_FILTRO_TIPO_ ? ' activo' : '') + '" data-tipo="' + t.tipo + '">' + t.label + '</button>';
+        }).join('') + '</div>' +
+        '<div class="filtros-tipo" id="filtrosTiendaHist">' + TIENDAS_FILTRO_HIST_.map(function (t) {
+          return '<button type="button" class="chip-tipo' + (t.codigo === HIST_FILTRO_TIENDA_ ? ' activo' : '') + '" data-tienda="' + t.codigo + '">' + t.label + '</button>';
+        }).join('') + '</div>' +
+        '<input class="entrada" id="buscarHistorial" placeholder="Buscar por nº pedido, quién pidió, quién preparó, artículo…" style="margin-bottom:10px;">' +
         '<div id="listaHistorialHoy">Cargando…</div>';
       sincronizarPickers_();
       document.getElementById('volverHistorial').onclick = function (e) {
@@ -1423,13 +1445,42 @@
         VISTA = { nombre: MODO_JEFE ? 'panel' : 'cola', peticionId: null };
         render();
       };
-      google.script.run.withSuccessHandler(pintarHistorialHoy_).listarHistorialHoy();
+      document.getElementById('filtrosTipoHist').querySelectorAll('.chip-tipo').forEach(function (btn) {
+        btn.onclick = function () {
+          HIST_FILTRO_TIPO_ = btn.getAttribute('data-tipo');
+          document.getElementById('filtrosTipoHist').querySelectorAll('.chip-tipo').forEach(function (b) { b.classList.toggle('activo', b === btn); });
+          pintarHistorialHoy_();
+        };
+      });
+      document.getElementById('filtrosTiendaHist').querySelectorAll('.chip-tipo').forEach(function (btn) {
+        btn.onclick = function () {
+          HIST_FILTRO_TIENDA_ = btn.getAttribute('data-tienda');
+          document.getElementById('filtrosTiendaHist').querySelectorAll('.chip-tipo').forEach(function (b) { b.classList.toggle('activo', b === btn); });
+          pintarHistorialHoy_();
+        };
+      });
+      document.getElementById('buscarHistorial').oninput = pintarHistorialHoy_;
+      google.script.run.withSuccessHandler(function (json) {
+        HISTORIAL_CACHE_ = JSON.parse(json);
+        pintarHistorialHoy_();
+      }).listarHistorialHoy();
     }
 
-    function pintarHistorialHoy_(json) {
-      const filas = JSON.parse(json);
+    function pintarHistorialHoy_() {
       const cont = document.getElementById('listaHistorialHoy');
-      if (!filas.length) { cont.innerHTML = '<p class="meta">Sin preparaciones completadas hoy todavía.</p>'; return; }
+      if (!cont) return;
+      const q = (document.getElementById('buscarHistorial').value || '').trim().toLowerCase();
+      var filas = HIST_FILTRO_TIPO_ === 'todas' ? HISTORIAL_CACHE_ : HISTORIAL_CACHE_.filter(function (p) { return p.tipo === HIST_FILTRO_TIPO_; });
+      if (HIST_FILTRO_TIENDA_ !== 'todas') filas = filas.filter(function (p) { return p.tienda_origen === HIST_FILTRO_TIENDA_; });
+      if (q) {
+        filas = filas.filter(function (p) {
+          return [
+            p.num_pedido, p.num_cesion, p.solicitante_ldap, (p.operarios || []).join(' '),
+            (p.articulos || []).map(function (a) { return a.designacion || a.codigo_lm; }).join(' '),
+          ].filter(Boolean).join(' ').toLowerCase().indexOf(q) !== -1;
+        });
+      }
+      if (!filas.length) { cont.innerHTML = '<p class="meta">Sin preparaciones con esos filtros.</p>'; return; }
       cont.innerHTML = filas.map(function (p) {
         const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || ''))
           : p.tipo === 'cesion' ? ('Cesión ' + (p.num_cesion || '') + ' → ' + (CFG_TIENDA_NOMBRE[p.tienda_destino] || p.tienda_destino))
