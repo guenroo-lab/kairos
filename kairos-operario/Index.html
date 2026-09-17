@@ -90,6 +90,10 @@
     #operarioBar { background:var(--accent-dim); border:1px solid var(--accent-line); color:var(--accent-ink); padding:9px 12px; border-radius:var(--radius-btn); margin-bottom:12px; font-size:13px; display:flex; align-items:center; justify-content:space-between; }
     [data-kmode="light"] #operarioBar { color:var(--accent); }
     #operarioBar a { color:inherit; opacity:.85; font-weight:600; }
+    .badge-modo { display:inline-flex; align-items:center; padding:3px 10px; border-radius:var(--radius-chip); font-size:11.5px; font-weight:800; margin:0 6px; }
+    .badge-modo.solo { background:var(--ink-950); color:var(--text-100); }
+    .badge-modo.equipo { background:var(--ink-950); color:var(--text-100); }
+    [data-kmode="light"] .badge-modo { background:rgba(255,255,255,.55); }
     #app { max-width:480px; margin:0 auto; }
     #app.ancho { max-width:1600px; }
     .tabs { display:flex; background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:4px; margin-bottom:14px; gap:2px; }
@@ -110,6 +114,9 @@
     .chip-tipo { padding:7px 14px; border-radius:var(--radius-chip); background:var(--ink-800); border:1px solid var(--ink-700); color:var(--text-300); font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
     .chip-tipo.activo { background:var(--accent-dim); border-color:var(--accent-line); color:var(--accent-ink); }
     [data-kmode="light"] .chip-tipo.activo { color:var(--accent); }
+    .chip-modo { font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:var(--radius-chip); white-space:nowrap; display:inline-block; vertical-align:middle; }
+    .chip-modo.individual { background:var(--warn-bg); color:var(--warn-fg); }
+    .chip-modo.equipo { background:var(--ink-800); color:var(--text-300); }
     .panel-contadores { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
     .contador-flujo { display:flex; align-items:center; gap:6px; padding:8px 12px; border-radius:var(--radius-card); background:linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%); border:1px solid var(--ink-800); border-left:4px solid var(--ink-700); font-size:11.5px; font-weight:700; color:var(--text-300); box-shadow:var(--shadow-card); flex:1; min-width:88px; justify-content:center; }
     .contador-flujo b { font-size:18px; font-weight:800; color:var(--text-100); }
@@ -430,11 +437,13 @@
         renderBrandHeaderHtml_() +
         renderTabsBar_() +
         '<h1>Kairos · Operario</h1>' +
-        '<div id="operarioBar">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) + ' — <a href="#" id="cambiarOperario">cambiar</a></div>' +
+        '<div id="operarioBar">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) +
+          ' <span class="badge-modo ' + (esTrabajoEnEquipo_() ? 'equipo' : 'solo') + '">' + (esTrabajoEnEquipo_() ? '👥 En equipo' : '👤 En solitario') + '</span>' +
+          ' — <a href="#" id="cambiarOperario">cambiar</a></div>' +
         '<div class="filtros">' +
         '<select id="filtroTipo"><option value="">Todos los tipos</option><option value="refill">Refill</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option></select>' +
         '<select id="filtroSeccion"><option value="">Todas las secciones</option></select>' +
-        '<input type="date" id="filtroFecha">' +
+        '<select id="filtroTransporte"><option value="">Pedido cliente: con/sin transporte</option><option value="con">Con transporte</option><option value="sin">Sin transporte</option></select>' +
         '</div>' +
         '<div id="listaCola">Cargando…</div>';
       sincronizarPickers_();
@@ -447,9 +456,13 @@
       };
       document.getElementById('filtroTipo').onchange = pintarCola_;
       document.getElementById('filtroSeccion').onchange = pintarCola_;
-      document.getElementById('filtroFecha').onchange = pintarCola_;
+      document.getElementById('filtroTransporte').onchange = pintarCola_;
       cargarCola();
     }
+
+    // OPERARIO = "Nombre" (1 persona) o "Nombre1 + Nombre2" (2 personas) —
+    // fijado en renderElegirOperarios, ver ahí.
+    function esTrabajoEnEquipo_() { return OPERARIO.indexOf(' + ') !== -1; }
 
     var PETICIONES_CACHE_ = [];
 
@@ -470,18 +483,31 @@
     function pintarCola_() {
       const tipo = document.getElementById('filtroTipo').value;
       const seccion = document.getElementById('filtroSeccion').value;
-      const fecha = document.getElementById('filtroFecha').value;
+      const transporte = document.getElementById('filtroTransporte').value;
+      const esEquipo = esTrabajoEnEquipo_();
       const filtradas = PETICIONES_CACHE_.filter(function (p) {
         if (tipo && p.tipo !== tipo) return false;
         if (seccion && (p.secciones || []).indexOf(seccion) === -1) return false;
-        if (fecha && p.creada_en.slice(0, 10) !== fecha) return false;
+        if (p.tipo === 'pedido_cliente' && transporte) {
+          const tieneTransporte = !!p.transporte;
+          if (transporte === 'con' && !tieneTransporte) return false;
+          if (transporte === 'sin' && tieneTransporte) return false;
+        }
+        // Pedido cliente / cesión reservados a individual (1 persona) o
+        // equipo (2 personas) según cola_individual — quien esté logeado
+        // solo ve lo que le corresponde, nunca lo del otro modo.
+        if (p.tipo !== 'refill') {
+          if (p.cola_individual && esEquipo) return false;
+          if (!p.cola_individual && !esEquipo) return false;
+        }
         return true;
       });
       const cont = document.getElementById('listaCola');
       if (!filtradas.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
 
       function filaHtml(p) {
-        const etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre : ('Refill' + (p.motivo ? ': ' + p.motivo : '')));
+        var etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre : ('Refill' + (p.motivo ? ': ' + p.motivo : '')));
+        if (p.tipo !== 'refill') etiquetaTipo += p.cola_individual ? ' <span class="chip-modo individual">👤 Individual</span>' : ' <span class="chip-modo equipo">👥 Equipo</span>';
         const fechaObj = new Date(p.creada_en);
         const fechaTexto = fechaObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + fechaObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
         const articuloTexto = p.articulo ? p.articulo : (p.totalLineas + ' artículo' + (p.totalLineas === 1 ? '' : 's'));
@@ -511,10 +537,7 @@
       GRUPOS.forEach(function (g) {
         const deEsteGrupo = filtradas.filter(function (p) { return p.tipo === g.tipo; });
         if (!deEsteGrupo.length) return;
-        const normales = deEsteGrupo.filter(function (p) { return !p.cola_individual; });
-        const individuales = deEsteGrupo.filter(function (p) { return p.cola_individual; });
-        html += '<h3>' + g.label + '</h3>' + normales.map(filaHtml).join('');
-        if (individuales.length) html += '<h3>' + g.label + ' · Individual</h3>' + individuales.map(filaHtml).join('');
+        html += '<h3>' + g.label + '</h3>' + deEsteGrupo.map(filaHtml).join('');
       });
       cont.innerHTML = html || '<p class="meta">No hay peticiones con esos filtros.</p>';
     }
