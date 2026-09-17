@@ -687,13 +687,36 @@
       }
       const cola = bloquePalet + bloqueSelector;
 
+      // refill y pedido_cliente/cesión comparten el mismo flujo de incidencia
+      // (Sin Palet / Sin Mercancía / Otras) — en refill, si hay más de un
+      // palet y solo uno falla, "🔄 Cambiar palet" ya resuelve ese caso;
+      // esto es para cuando no hay alternativa y hay que dejarlo constancia.
+      const vista = vistaLinea[l.id];
+
       if (p.tipo === 'refill') {
+        if (vista === 'motivo') {
+          return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
+            '<input type="text" id="motivo-' + l.id + '" placeholder="Motivo de la incidencia"> ' +
+            '<button class="ok" onclick="confirmarOtrasIncidencias(\'' + l.id + '\')">Confirmar</button> ' +
+            '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">‹ Volver</button>' + cola + '</div>';
+        }
+        if (vista === 'tipos') {
+          return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
+            '<button class="aviso" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Palet\', \'\')">Sin Palet</button> ' +
+            '<button class="peligro" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Mercancía\', \'\')">Sin Mercancía</button> ' +
+            '<button class="neutro" onclick="verIncidenciaMotivo(\'' + l.id + '\')">Otras Incidencias</button> ' +
+            '<button class="secundario" onclick="verIncidenciaPregunta(\'' + l.id + '\')">‹ Volver</button>' + cola + '</div>';
+        }
+        if (vista === 'pregunta') {
+          return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
+            '<button class="ok" onclick="cerrarLinea(\'' + l.id + '\', \'\', \'\')">Sin incidencia</button> ' +
+            '<button class="aviso" onclick="verIncidenciaTipos(\'' + l.id + '\')">⚠ Con incidencia</button>' + cola + '</div>';
+        }
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
-          '<button ' + (!todosConfirmados ? 'disabled title="Confirma todos los palets primero"' : 'onclick="marcarLinea(\'' + l.id + '\', this)"') + '>Marcar preparada</button>' + cola + '</div>';
+          '<button ' + (!todosConfirmados ? 'disabled title="Confirma todos los palets primero"' : 'onclick="verIncidenciaPregunta(\'' + l.id + '\')"') + '>Marcar preparada</button>' + cola + '</div>';
       }
 
       // pedido_cliente / cesion: flujo de incidencia
-      const vista = vistaLinea[l.id];
 
       if (vista === 'motivo') {
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
@@ -771,15 +794,6 @@
         .deshacerLineaPreparada(lineaId, OPERARIO);
     }
 
-    function marcarLinea(lineaId, boton) {
-      boton.disabled = true;
-      dispararPuenteMyIsoSiProcede_(lineaId, false);
-      google.script.run
-        .withSuccessHandler(function () { renderDetalle(); })
-        .withFailureHandler(function (err) { kAlerta(err.message); boton.disabled = false; })
-        .marcarLineaPreparada(lineaId, OPERARIO);
-    }
-
     // Debe llamarse SÍNCRONAMENTE dentro del onclick — si se dispara tras la
     // respuesta de google.script.run (async), el navegador bloquea el salto
     // a http-shortcuts:// en silencio. Por eso usa ultimoDetalle (ya en
@@ -792,6 +806,7 @@
       const lineas = ultimoDetalle.lineas;
 
       if (p.tipo === 'refill') {
+        if (incidenciaMarcada) return; // sin mercancía real que mover a XP1
         const l = lineas.filter(function (x) { return x.id === lineaIdMarcada; })[0];
         if (!l || !l.sscc) return;
         // l.sscc puede venir en formato "SSCC (Xud)" (repartido en varios
