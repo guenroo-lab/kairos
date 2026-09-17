@@ -452,6 +452,7 @@
             '<button class="btn-ob btn-ob-operario" id="cambiarOperario" type="button">👤 Cambiar operario</button>' +
           '</div>' +
         '</div>' +
+        '<div id="avisoOtroModo"></div>' +
         '<div class="filtros">' +
         '<select id="filtroTipo"><option value="">Todos los tipos</option><option value="refill">Refill</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option></select>' +
         '<select id="filtroSeccion"><option value="">Todas las secciones</option></select>' +
@@ -498,8 +499,28 @@
         secciones.sort();
         document.getElementById('filtroSeccion').innerHTML = '<option value="">Todas las secciones</option>' +
           secciones.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
+        pintarAvisoOtroModo_();
         pintarCola_();
       }).listarCola(TIENDA_ACTIVA, null);
+    }
+
+    // Pedido cliente/cesión reservados al otro modo (individual vs equipo)
+    // no aparecen filtrados en la cola — sin este aviso nadie se entera de
+    // que existen y pueden quedarse sin hacer por confusión.
+    function pintarAvisoOtroModo_() {
+      const cont = document.getElementById('avisoOtroModo');
+      if (!cont) return;
+      const esEquipo = esTrabajoEnEquipo_();
+      const ocultos = PETICIONES_CACHE_.filter(function (p) {
+        if (p.tipo === 'refill') return false;
+        return esEquipo ? !!p.cola_individual : !p.cola_individual;
+      }).length;
+      if (!ocultos) { cont.innerHTML = ''; return; }
+      const plural = ocultos === 1 ? '' : 's';
+      const texto = esEquipo
+        ? ('👤 Hay ' + ocultos + ' pedido' + plural + ' individual' + plural + ' esperando — hace falta alguien solo para prepararlo' + plural + '.')
+        : ('👥 Hay ' + ocultos + ' pedido' + plural + ' de equipo esperando — hacen falta 2 personas para prepararlo' + plural + '.');
+      cont.innerHTML = '<p class="meta" style="color:var(--warn-fg);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--radius-btn);padding:8px 10px;margin-bottom:10px;">' + texto + '</p>';
     }
 
     function pintarCola_() {
