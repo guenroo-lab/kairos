@@ -779,7 +779,14 @@
       if (p.tipo === 'refill') {
         const l = lineas.filter(function (x) { return x.id === lineaIdMarcada; })[0];
         if (!l || !l.sscc) return;
-        dispararMoveToAddress_([limpiarSscc(l.sscc)], p.tienda_origen);
+        // l.sscc puede venir en formato "SSCC (Xud)" (repartido en varios
+        // palets) — igual que en pedido_cliente/cesión, hay que extraer el
+        // SSCC puro de cada parte antes de mandarlo, si no la API recibe
+        // el " (Xud)" pegado en la URL y da 400.
+        const ssccList = parsearSsccMulti(l.sscc, l.cantidad)
+          .map(function (parte) { return limpiarSscc(parte.sscc); })
+          .filter(Boolean);
+        dispararMoveToAddress_(ssccList, p.tienda_origen);
         return;
       }
 
