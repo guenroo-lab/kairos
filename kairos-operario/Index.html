@@ -351,6 +351,7 @@
       if (!TIENDA_ACTIVA) return renderElegirTienda();
       if (VISTA.nombre === 'elegirTienda') return renderElegirTienda();
       if (VISTA.nombre === 'cola') return renderCola();
+      if (VISTA.nombre === 'historial') return renderHistorialHoy();
       if (VISTA.nombre === 'detalle') return renderDetalle();
       if (VISTA.nombre === 'stock') return renderStock();
       if (VISTA.nombre === 'estado') return renderEstado();
@@ -446,6 +447,7 @@
           '<div class="ob-info">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) +
             ' <span class="badge-modo ' + (esTrabajoEnEquipo_() ? 'equipo' : 'solo') + '">' + (esTrabajoEnEquipo_() ? '👥 En equipo' : '👤 En solitario') + '</span></div>' +
           '<div class="ob-acciones">' +
+            '<button class="btn-ob btn-ob-tienda" id="verHistorial" type="button">📋 Historial de hoy</button>' +
             '<button class="btn-ob btn-ob-tienda" id="cambiarTienda" type="button">🏬 Cambiar tienda</button>' +
             '<button class="btn-ob btn-ob-operario" id="cambiarOperario" type="button">👤 Cambiar operario</button>' +
           '</div>' +
@@ -467,6 +469,11 @@
       document.getElementById('cambiarTienda').onclick = function (e) {
         e.preventDefault();
         VISTA = { nombre: 'elegirTienda', peticionId: null };
+        render();
+      };
+      document.getElementById('verHistorial').onclick = function (e) {
+        e.preventDefault();
+        VISTA = { nombre: 'historial', peticionId: null };
         render();
       };
       document.getElementById('filtroTipo').onchange = pintarCola_;
@@ -1402,18 +1409,18 @@
         .cambiarActivoOperario(nombre, activo);
     }
 
-    /** ============ Historial de hoy (jefe de equipo) ============ */
+    /** ============ Historial de hoy (jefe de equipo y operario) ============ */
 
     function renderHistorialHoy() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
-        '<div class="volver"><a href="#" id="volverHistorial">← Control de pedidos</a></div>' +
+        '<div class="volver"><a href="#" id="volverHistorial">← ' + (MODO_JEFE ? 'Control de pedidos' : 'Cola') + '</a></div>' +
         '<h1>Historial de hoy</h1>' +
         '<p class="meta">Peticiones ya completadas hoy, con quién las preparó.</p>' +
         '<div id="listaHistorialHoy">Cargando…</div>';
       sincronizarPickers_();
       document.getElementById('volverHistorial').onclick = function (e) {
         e.preventDefault();
-        VISTA = { nombre: 'panel', peticionId: null };
+        VISTA = { nombre: MODO_JEFE ? 'panel' : 'cola', peticionId: null };
         render();
       };
       google.script.run.withSuccessHandler(pintarHistorialHoy_).listarHistorialHoy();
