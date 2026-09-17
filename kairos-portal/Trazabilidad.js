@@ -21,7 +21,7 @@
 function listarTrazabilidad(ldap, historico) {
   const u = _usuarioDe_(ldap);
   var q = 'tienda_origen=eq.' + encodeURIComponent(u.tienda) +
-    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo,en_curso_por,ubicacion_consolidacion&order=creada_en.desc&limit=200';
+    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo,motivo_anulacion,en_curso_por,ubicacion_consolidacion&order=creada_en.desc&limit=200';
   if (u.rol === 'vendedor') q += '&tipo=eq.refill'; // Vendedor solo ve Refill
   const peticiones = supaSelect_('peticiones', q);
   if (!peticiones.length) return _json_([]);

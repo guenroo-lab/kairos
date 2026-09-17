@@ -65,6 +65,18 @@
   body { margin:0; color:var(--text-100); font-family:'Inter',system-ui,-apple-system,sans-serif; -webkit-font-smoothing:antialiased; transition:background .15s ease,color .15s ease; }
   h2 { font-size:18px; font-weight:800; margin:0 0 10px; letter-spacing:-.01em; }
   .wrap { max-width:720px; margin:0 auto; padding:16px; }
+  .wrap-ancho { max-width:1600px; }
+  .tabla-historico-envoltorio { overflow-x:auto; border:1px solid var(--ink-800); border-radius:var(--radius-card); }
+  table.tabla-historico { width:100%; border-collapse:collapse; font-size:12.5px; font-variant-numeric:tabular-nums; }
+  .tabla-historico thead th { position:sticky; top:0; text-align:left; color:var(--text-500); background:var(--ink-900); border-bottom:1px solid var(--ink-800); padding:9px 10px; font-size:11px; text-transform:uppercase; letter-spacing:.04em; white-space:nowrap; }
+  .tabla-historico thead th.num { text-align:right; }
+  .tabla-historico td { padding:8px 10px; border-bottom:1px solid var(--ink-800); color:var(--text-300); vertical-align:top; }
+  .tabla-historico td.num { text-align:right; font-weight:700; color:var(--text-100); }
+  .tabla-historico tbody tr:nth-child(even) { background:var(--ink-900); }
+  .tabla-historico tbody tr.fila-historico { cursor:pointer; transition:background .1s ease; }
+  .tabla-historico tbody tr.fila-historico:hover { background:var(--accent-dim); }
+  .tabla-historico tbody tr:last-child td { border-bottom:none; }
+  .estado-anulada { background:var(--danger-bg); color:var(--danger-fg); }
   .top { display:flex; justify-content:space-between; align-items:center; padding:12px 16px; border-bottom:1px solid var(--ink-800); }
   .card {
     background: linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%);
@@ -685,7 +697,7 @@
     tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
     tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
 
-    const wrap = el('<div class="wrap"></div>');
+    const wrap = el('<div class="wrap' + (historico ? ' wrap-ancho' : '') + '"></div>');
     app().appendChild(wrap);
     const TIPOS_FILTRO_TRAZA = [
       { tipo: 'todas', label: 'Todas' },
@@ -743,42 +755,56 @@
     }
 
     // Histórico: tabla (para análisis - LDAP, tipo, sección...) en vez de
-    // tarjetas agrupadas.
+    // tarjetas agrupadas. Construida entera como un solo string (nunca <tr>
+    // sueltos vía innerHTML: pierden su estructura de celda).
+    const COLUMNAS_HISTORICO_ = [
+      { titulo: 'Fecha', ancho: 'white-space:nowrap;' },
+      { titulo: 'Tipo' },
+      { titulo: 'Nº' },
+      { titulo: 'Destino' },
+      { titulo: 'LDAP' },
+      { titulo: 'Sección' },
+      { titulo: 'Artículo' },
+      { titulo: 'Uds', num: true },
+      { titulo: 'Estado' },
+      { titulo: 'Motivo' },
+    ];
     function pintarHistoricoTabla_(filas) {
       lista.innerHTML = '';
       if (!filas.length) { lista.appendChild(el('<p style="color:var(--text-500)">No hay peticiones.</p>')); return; }
       const ordenadas = filas.slice().sort(function (a, b) { return new Date(b.creada_en) - new Date(a.creada_en); });
-      const envoltorio = el('<div style="overflow-x:auto;"></div>');
-      const tabla = el(
-        '<table style="width:100%;border-collapse:collapse;font-size:12.5px;">' +
-        '<tr style="text-align:left;color:var(--text-500);border-bottom:1px solid var(--ink-800);">' +
-          '<th style="padding:6px 8px;">Fecha</th><th style="padding:6px 8px;">Tipo</th><th style="padding:6px 8px;">Nº</th>' +
-          '<th style="padding:6px 8px;">LDAP</th><th style="padding:6px 8px;">Sección</th><th style="padding:6px 8px;">Artículo</th>' +
-          '<th style="padding:6px 8px;">Uds</th><th style="padding:6px 8px;">Estado</th>' +
-        '</tr></table>'
-      );
-      ordenadas.forEach(function (p) {
+      const filasHtml = ordenadas.map(function (p, i) {
         var detalle;
         if (p.estado === 'anulada') detalle = 'Anulada';
         else if (p.camino === 'a_ubicar') detalle = p.aUbicarTexto || p.estadoTexto;
         else if (p.camino === 'hodos') detalle = p.hodosTexto;
         else detalle = p.refillTexto;
-        const fila = el(
-          '<tr style="border-bottom:1px solid var(--ink-800);cursor:pointer;">' +
-            '<td style="padding:6px 8px;white-space:nowrap;">' + new Date(p.creada_en).toLocaleString('es-ES') + '</td>' +
-            '<td style="padding:6px 8px;">' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</td>' +
-            '<td style="padding:6px 8px;">' + escHtml(p.num_pedido || p.num_cesion || '—') + '</td>' +
-            '<td style="padding:6px 8px;">' + escHtml(p.solicitante_ldap || '—') + '</td>' +
-            '<td style="padding:6px 8px;">' + escHtml((p.secciones || []).join(', ') || '—') + '</td>' +
-            '<td style="padding:6px 8px;">' + escHtml(p.articulo || '') + '</td>' +
-            '<td style="padding:6px 8px;text-align:right;">' + (p.totalUnidades || 0) + '</td>' +
-            '<td style="padding:6px 8px;">' + escHtml(detalle || '') + '</td>' +
-          '</tr>'
-        );
-        fila.onclick = function () { renderDetalle(p.id, renderHistorico); };
-        tabla.appendChild(fila);
+        const destino = p.tipo === 'cesion' ? (NOMBRE_TIENDA[p.tienda_destino] || p.tienda_destino || '—') : '—';
+        const motivo = p.estado === 'anulada' ? (p.motivo_anulacion || '—') : (p.motivo || '—');
+        const celdas = [
+          new Date(p.creada_en).toLocaleString('es-ES'),
+          escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo),
+          escHtml(p.num_pedido || p.num_cesion || '—'),
+          escHtml(destino),
+          escHtml(p.solicitante_ldap || '—'),
+          escHtml((p.secciones || []).join(', ') || '—'),
+          escHtml(p.articulo || ''),
+          String(p.totalUnidades || 0),
+          '<span class="estado' + (p.estado === 'anulada' ? ' estado-anulada' : '') + '">' + escHtml(detalle || '') + '</span>',
+          escHtml(motivo),
+        ];
+        return '<tr class="fila-historico" data-idx="' + i + '">' +
+          celdas.map(function (v, c) { return '<td' + (COLUMNAS_HISTORICO_[c].num ? ' class="num"' : '') + '>' + v + '</td>'; }).join('') +
+          '</tr>';
+      }).join('');
+      const tablaHtml =
+        '<div class="tabla-historico-envoltorio"><table class="tabla-historico">' +
+        '<thead><tr>' + COLUMNAS_HISTORICO_.map(function (c) { return '<th' + (c.num ? ' class="num"' : '') + '>' + c.titulo + '</th>'; }).join('') + '</tr></thead>' +
+        '<tbody>' + filasHtml + '</tbody></table></div>';
+      const envoltorio = el(tablaHtml);
+      envoltorio.querySelectorAll('.fila-historico').forEach(function (tr) {
+        tr.onclick = function () { renderDetalle(ordenadas[Number(tr.getAttribute('data-idx'))].id, renderHistorico); };
       });
-      envoltorio.appendChild(tabla);
       lista.appendChild(envoltorio);
     }
 
@@ -1085,6 +1111,7 @@
         '<div style="margin-top:8px;color:var(--text-500);">Pedido por ' + escHtml(p.solicitante_ldap || '—') + ' · ' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
         '<div style="margin-top:8px;">' + camposTipo + '</div>' +
         (p.motivo ? '<div style="margin-top:8px;"><b>Motivo</b> ' + escHtml(p.motivo) + '</div>' : '') +
+        (p.motivo_anulacion ? '<div style="margin-top:8px;"><b>Motivo de anulación</b> ' + escHtml(p.motivo_anulacion) + '</div>' : '') +
         hodosLinea +
         (p.comentario ? '<div style="margin-top:8px;"><b>Comentario</b> ' + escHtml(p.comentario) + '</div>' : '') +
         (puedeAnular ? '<button class="btn btn-danger" id="btnAnular" style="margin-top:10px;">Anular petición</button>' : '') +
@@ -1093,10 +1120,14 @@
       cont.querySelector('#btnVolver2').onclick = origen;
       if (puedeAnular) {
         cont.querySelector('#btnAnular').onclick = function () {
-          kConfirmar('¿Anular esta petición? No se puede deshacer.').then(function (ok) {
-            if (!ok) return;
-            gas('anularPeticion', LDAP, id).then(function () { renderDetalle(id, origen); })
-              .catch(function (e) { kAlerta(e.message); });
+          kPedirTexto('Motivo de la anulación:').then(function (motivo) {
+            if (motivo === null) return;
+            if (!motivo.trim()) { kAlerta('Escribe el motivo.'); return; }
+            kConfirmar('¿Anular esta petición? No se puede deshacer.').then(function (ok) {
+              if (!ok) return;
+              gas('anularPeticion', LDAP, id, motivo.trim()).then(function () { renderDetalle(id, origen); })
+                .catch(function (e) { kAlerta(e.message); });
+            });
           });
         };
       }

@@ -9,15 +9,17 @@ const TRADUCCION_ESTADO = {
 /** Anular una petición abierta (rol gestor). No la borra — queda como
  *  histórico en trazabilidad, pero desaparece de la cola de preparación
  *  (kairos-operario solo lee estado in pendiente/en_preparacion). */
-function anularPeticion(ldap, peticionId) {
+function anularPeticion(ldap, peticionId, motivo) {
   const u = _usuarioDe_(ldap);
   if (u.rol !== 'gestor' && u.rol !== 'master') throw new Error('Solo un gestor puede anular peticiones.');
+  motivo = String(motivo || '').trim();
+  if (!motivo) throw new Error('Escribe el motivo de la anulación.');
 
   const cab = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(peticionId) + '&tienda_origen=eq.' + encodeURIComponent(u.tienda) + '&select=id,estado');
   if (!cab.length) throw new Error('Petición no encontrada.');
   if (cab[0].estado === 'cerrada' || cab[0].estado === 'anulada') throw new Error('Esta petición ya no se puede anular.');
 
-  supaUpdate_('peticiones', 'id=eq.' + encodeURIComponent(peticionId), { estado: 'anulada' });
+  supaUpdate_('peticiones', 'id=eq.' + encodeURIComponent(peticionId), { estado: 'anulada', motivo_anulacion: motivo });
   return _json_({ ok: true });
 }
 
