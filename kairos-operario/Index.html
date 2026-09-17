@@ -105,6 +105,14 @@
     .chip-urgencia.ok { background:var(--ink-800); color:var(--ok); }
     .chip-urgencia.aviso { background:var(--warn-bg); color:var(--warn-fg); }
     .chip-urgencia.peligro { background:var(--danger-bg); color:var(--danger-fg); }
+    .tarjeta-puente { border-radius:var(--radius-card); padding:14px 16px; margin:10px 0 16px; box-shadow:var(--shadow-card); }
+    .tarjeta-puente.aviso { background:linear-gradient(155deg, var(--warn-bg), var(--ink-900)); border:1px solid var(--warn-line); }
+    .tarjeta-puente.error { background:linear-gradient(155deg, var(--danger-bg), var(--ink-900)); border:1px solid var(--danger-line); }
+    .tarjeta-puente .tp-titulo { font-size:15px; font-weight:800; margin-bottom:6px; }
+    .tarjeta-puente.aviso .tp-titulo { color:var(--warn-fg); }
+    .tarjeta-puente.error .tp-titulo { color:var(--danger-fg); }
+    .tarjeta-puente .tp-texto { font-size:13px; color:var(--text-300); line-height:1.4; margin-bottom:10px; }
+    .tarjeta-puente button { width:100%; }
     .panel-tiendas-grid { display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:16px; align-items:start; }
     .filtros-tipo { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
     .chip-tipo { padding:7px 14px; border-radius:var(--radius-chip); background:var(--ink-800); border:1px solid var(--ink-700); color:var(--text-300); font-size:12.5px; font-weight:700; cursor:pointer; white-space:nowrap; }
@@ -212,15 +220,22 @@
     var vistaLinea = {}; // lineaId -> 'pregunta' | 'tipos' | 'motivo' (ausente = vista normal)
     var confirmadosPalet = {}; // lineaId -> array<boolean>, checklist multi-palet antes de poder marcar preparada
     var selectorPalet = {}; // lineaId -> 'cargando' | array de alternativas (ausente = cerrado)
+    // No hay forma de saber si http-shortcuts:// realmente completó el
+    // movimiento en MyISO (fire-and-forget, sin canal de vuelta al navegador)
+    // — así que SIEMPRE se avisa al operario: {enviado:true} = se lanzó pero
+    // sin confirmar, {enviado:false} = el puente no está disponible y hay
+    // que hacerlo a mano. Se limpia solo al abrir OTRA petición (abrirDetalle),
+    // no al refrescar esta tras marcar/cerrar línea.
+    var ultimoResultadoPuente_ = null;
     var INCIDENCIAS = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'];
 
     var CFG_SHORTCUTS = {
       // TRANSFERS — reutiliza el shortcut YA configurado en el dispositivo
       // Android del operario para PreparacionPedidosPC (misma operación).
       STOCK_SHORTCUT_ID: 'b02c92a5-ca50-418f-93e9-4a7e8770cdfb',
-      // move-to-address a 05-XP1-A-1-10-A — shortcut NUEVO, pendiente de
-      // crear con Pedro. Rellenar el ID real tras crearlo.
-      SHORTCUT_ID_REFILL: 'PENDIENTE-crear-con-Pedro',
+      // move-to-address a 05-XP1-A-1-10-A (fija, igual en Marbella y Mijas) —
+      // shortcut "Mover a XP1 (Refill)".
+      SHORTCUT_ID_REFILL: 'a4f2e8d1-7b3c-4f6a-9e21-5c8d3f7a1b90',
     };
 
     // ——— Tema: modo (claro/oscuro) + acento (4 colores), persistente por dispositivo ———
@@ -519,8 +534,14 @@
     }
 
     function abrirDetalle(id) {
+      ultimoResultadoPuente_ = null;
       VISTA = { nombre: 'detalle', peticionId: id };
       render();
+    }
+
+    function reconocerPuente_() {
+      ultimoResultadoPuente_ = null;
+      renderDetalleBody_();
     }
 
     function renderDetalle() {
@@ -544,6 +565,15 @@
       var titulo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (p.num_pedido || '')) : (p.tipo === 'cesion' ? ('Cesión ' + (p.num_cesion || '') + ' → ' + p.tiendaDestinoNombre) : ('Refill: ' + (p.motivo || '')));
 
       var html = '<h1>' + titulo + '</h1><p class="meta">' + p.tiendaNombre + '</p>';
+      if (ultimoResultadoPuente_) {
+        html += ultimoResultadoPuente_.enviado
+          ? '<div class="tarjeta-puente aviso"><div class="tp-titulo">⚠ Verifica MyISO</div>' +
+            '<div class="tp-texto">Se ha lanzado la gestión de stock al puente automático, pero no hay forma de confirmar desde aquí que se completó. Entra en MyISO y comprueba que el movimiento se hizo bien.</div>' +
+            '<button class="secundario" onclick="reconocerPuente_()">Entendido, ya lo comprobé</button></div>'
+          : '<div class="tarjeta-puente error"><div class="tp-titulo">✕ Error: haz la gestión desde MyISO</div>' +
+            '<div class="tp-texto">El puente automático no está disponible ahora mismo. Tienes que mover o descontar este stock a mano en MyISO.</div>' +
+            '<button class="peligro" onclick="reconocerPuente_()">Entendido</button></div>';
+      }
       if (ultimoDetalle.otroEnCurso) {
         html += '<p class="meta" style="color:var(--warn-fg);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--radius-btn);padding:8px 10px;margin:8px 0;">⚠ ' +
           ultimoDetalle.otroEnCurso.operario + ' también está en este pedido (' + tiempoDesde_(ultimoDetalle.otroEnCurso.desde) + ')</p>';
@@ -801,7 +831,12 @@
     }
 
     function dispararTransfers_(transfers, tienda) {
-      if (!transfers.length) return;
+      if (!transfers.length) return; // nada que mover (todo incidencia) — no es un fallo del puente
+      if (!CFG_SHORTCUTS.STOCK_SHORTCUT_ID || CFG_SHORTCUTS.STOCK_SHORTCUT_ID.indexOf('PENDIENTE') === 0) {
+        ultimoResultadoPuente_ = { enviado: false };
+        return;
+      }
+      ultimoResultadoPuente_ = { enviado: true };
       var url = 'http-shortcuts://' + CFG_SHORTCUTS.STOCK_SHORTCUT_ID +
         '?TRANSFERS=' + encodeURIComponent(JSON.stringify(transfers)) +
         '&TIENDA=' + encodeURIComponent(tienda);
@@ -809,7 +844,12 @@
     }
 
     function dispararMoveToAddress_(ssccList, tienda) {
-      if (!CFG_SHORTCUTS.SHORTCUT_ID_REFILL || CFG_SHORTCUTS.SHORTCUT_ID_REFILL.indexOf('PENDIENTE') === 0) return;
+      if (!ssccList.length) return; // sin SSCC que mover — no es un fallo del puente
+      if (!CFG_SHORTCUTS.SHORTCUT_ID_REFILL || CFG_SHORTCUTS.SHORTCUT_ID_REFILL.indexOf('PENDIENTE') === 0) {
+        ultimoResultadoPuente_ = { enviado: false };
+        return;
+      }
+      ultimoResultadoPuente_ = { enviado: true };
       var url = 'http-shortcuts://' + CFG_SHORTCUTS.SHORTCUT_ID_REFILL +
         '?SSCC_LIST=' + encodeURIComponent(JSON.stringify(ssccList)) +
         '&TIENDA=' + encodeURIComponent(tienda);
