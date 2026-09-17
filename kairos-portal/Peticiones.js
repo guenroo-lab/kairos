@@ -171,6 +171,18 @@ function crearPeticion(ldap, tipo, datos, lineas) {
     cabecera.motivo = String(datos.motivo).trim();
   }
 
+  // Asignación automática individual/equipo por peso — solo pedido_cliente
+  // (ver Peso.js). Si algo falla leyendo el CSV de pesos, no debe bloquear
+  // la creación de la petición: se queda con el default de la tabla.
+  if (tipo === 'pedido_cliente') {
+    try {
+      const codigos = lineas.map(function (l) { return l.codigoLm; });
+      cabecera.cola_individual = _calcularColaIndividualPorPeso_(tienda, codigos);
+    } catch (err) {
+      console.error('_calcularColaIndividualPorPeso_: ' + err.message);
+    }
+  }
+
   const peticion = supaInsert_('peticiones', cabecera);
 
   const unidadMedida = tipo === 'refill' ? 'palet' : 'ud';
