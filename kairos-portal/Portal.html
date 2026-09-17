@@ -557,8 +557,10 @@
       if (!pendientes.length) lista.appendChild(el('<p style="color:var(--text-500)">Ninguno.</p>'));
       pendientes.forEach(function (u) {
         const fila = el(
-          '<div class="fila" style="cursor:default;">' +
-            '<div><b>' + escHtml(u.ldap) + '</b> · rol solicitado: ' + escHtml(ETIQUETA_ROL[u.rol] || u.rol) + '</div>' +
+          '<div class="fila" style="cursor:default;flex-wrap:wrap;">' +
+            '<div><b>' + escHtml(u.ldap) + '</b> · rol solicitado: ' + escHtml(ETIQUETA_ROL[u.rol] || u.rol) +
+              '<div style="color:var(--text-500);font-size:12px;">' + escHtml([u.nombre, u.apellido].filter(Boolean).join(' ') || '(sin nombre)') + (u.seccion ? ' · ' + escHtml(u.seccion) : '') + '</div>' +
+            '</div>' +
             '<div style="display:flex;gap:6px;">' +
               '<button class="btn-ghost" style="width:auto;padding:6px 10px;" data-a="ap">Aprobar</button>' +
               '<button class="btn-ghost" style="width:auto;padding:6px 10px;color:var(--danger-fg);" data-a="re">Rechazar</button>' +

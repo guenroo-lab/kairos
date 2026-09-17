@@ -91,7 +91,7 @@ function _gestorDe_(ldap) {
 function listarUsuariosGestion(ldap) {
   const u = _gestorDe_(ldap);
   const filas = supaSelect_('usuarios_tienda',
-    'tienda=eq.' + encodeURIComponent(u.tienda) + '&rol=neq.master&select=id,ldap,tienda,rol,aprobado,creado_en&order=aprobado.asc,creado_en.asc');
+    'tienda=eq.' + encodeURIComponent(u.tienda) + '&rol=neq.master&select=id,ldap,tienda,rol,aprobado,creado_en,nombre,apellido,seccion&order=aprobado.asc,creado_en.asc');
   filas.forEach(function (f) { f.tiendaNombre = CFG.TIENDAS[f.tienda] || f.tienda; });
   return _json_(filas);
 }
