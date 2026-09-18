@@ -4,15 +4,18 @@ const CFG = {
   SUPABASE_SCHEMA: 'preparacion',
   // SUPABASE_SERVICE_KEY -> Propiedades del script (service_role, NO se versiona)
 
+  // 2026-09-17: fuente cambiada de Power BI (.xlsx) al csv del robot StockSearch
+  // (API MyIso) — mismos datos, columnas identificadas por nombre de cabecera
+  // en vez de posición fija.
   DRIVE_FOLDER_ID: '10A5-v9FmN2MasXjbG3hvWdQeIYfPZGIg', // carpeta InventarioSIE
-  INVENTARIOS: ['014.xlsx', '279.xlsx'],
+  INVENTARIOS: ['014.csv', '279.csv'],
 
-  // Columnas del Excel de inventario (1-indexed)
-  COL: { lm: 5, ean: 6, foto: 7, designacion: 8, seccion: 9 },
+  // Cabeceras del CSV de inventario (StockSearch_bucle.ps1)
+  COL: { lm: 'Ref_LM', ean: 'EAN', foto: 'Foto_URL', designacion: 'Articulo', seccion: 'Seccion' },
 
-  // Stock físico por ubicación — mismo Excel, solo edificio 05
+  // Stock físico por ubicación — mismo CSV, solo edificio 05
   PREFIJO_EDIFICIO_STOCK: '05',
-  COL_STOCK: { direccion: 1, sscc: 4, producto: 5, cantidad: 14 }, // A, D, E, N
+  COL_STOCK: { direccion: 'Ubicacion', sscc: 'SSCC', producto: 'Ref_LM', cantidad: 'Cantidad_Total' },
 
   LOTE_UPSERT: 500,
 };

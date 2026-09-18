@@ -1,11 +1,11 @@
-/** Carga/reemplaza preparacion.stock_fisico desde los mismos Excel de
+/** Carga/reemplaza preparacion.stock_fisico desde los mismos CSV de
  *  inventario que usa CatalogoLoader.js — pero sin deduplicar (una fila por
  *  ubicación/SSCC real) y solo edificio 05 (mismo filtro que el sistema
  *  viejo, PreparacionPedidosPC/config.js PREFIJO_EDIFICIO). El nombre del
- *  fichero (014.xlsx / 279.xlsx) indica la tienda de cada fila — mapeo
+ *  fichero (014.csv / 279.csv) indica la tienda de cada fila — mapeo
  *  directo al código de tienda (014→Marbella, 279→Mijas). */
 
-const MAPA_ARCHIVO_TIENDA_ = { '014.xlsx': '014', '279.xlsx': '279' };
+const MAPA_ARCHIVO_TIENDA_ = { '014.csv': '014', '279.csv': '279' };
 
 function _leerStockFisicoDeExcels_() {
   const folder = DriveApp.getFolderById(CFG.DRIVE_FOLDER_ID);
@@ -17,34 +17,35 @@ function _leerStockFisicoDeExcels_() {
     const it = folder.getFilesByName(nombre);
     if (!it.hasNext()) { Logger.log('AVISO: no encontrado ' + nombre); return; }
     const file = it.next();
-    const tmp = Drive.Files.create(
-      { name: '__tmp_stock_' + nombre, mimeType: MimeType.GOOGLE_SHEETS },
-      file.getBlob()
-    );
-    try {
-      const sh = SpreadsheetApp.openById(tmp.id).getSheets()[0];
-      const vals = sh.getDataRange().getValues();
-      for (var i = 1; i < vals.length; i++) { // fila 0 = cabecera
-        const row = vals[i];
-        const direccion = String(row[CFG.COL_STOCK.direccion - 1] || '').trim();
-        if (direccion.slice(0, 2) !== CFG.PREFIJO_EDIFICIO_STOCK) continue;
 
-        const sscc = String(row[CFG.COL_STOCK.sscc - 1] || '').trim();
-        const codigoLm = String(row[CFG.COL_STOCK.producto - 1] || '').trim();
-        const cantidad = Number(row[CFG.COL_STOCK.cantidad - 1]) || 0;
-        if (!sscc || !codigoLm) continue;
+    const csv = _leerCsvConCabeceraSync_(file);
+    const colDireccion = csv.indice[CFG.COL_STOCK.direccion];
+    const colSscc = csv.indice[CFG.COL_STOCK.sscc];
+    const colProducto = csv.indice[CFG.COL_STOCK.producto];
+    const colCantidad = csv.indice[CFG.COL_STOCK.cantidad];
+    if ([colDireccion, colSscc, colProducto, colCantidad].some(function (c) { return c === undefined; })) {
+      throw new Error('Cabecera inesperada en ' + nombre + '. Se esperaban las columnas: ' +
+        CFG.COL_STOCK.direccion + ', ' + CFG.COL_STOCK.sscc + ', ' + CFG.COL_STOCK.producto + ', ' + CFG.COL_STOCK.cantidad);
+    }
 
-        filas.push({
-          tienda: tienda,
-          codigo_lm: codigoLm,
-          sscc: sscc,
-          ubicacion: direccion,
-          cantidad: cantidad,
-          sincronizado_en: ahora,
-        });
-      }
-    } finally {
-      try { DriveApp.getFileById(tmp.id).setTrashed(true); } catch (e) {}
+    for (var i = 1; i < csv.filas.length; i++) { // fila 0 = cabecera
+      const row = csv.filas[i];
+      const direccion = String(row[colDireccion] || '').trim();
+      if (direccion.slice(0, 2) !== CFG.PREFIJO_EDIFICIO_STOCK) continue;
+
+      const sscc = _limpiarCampoCsvSync_(row[colSscc]);
+      const codigoLm = String(row[colProducto] || '').trim();
+      const cantidad = Number(row[colCantidad]) || 0;
+      if (!sscc || !codigoLm) continue;
+
+      filas.push({
+        tienda: tienda,
+        codigo_lm: codigoLm,
+        sscc: sscc,
+        ubicacion: direccion,
+        cantidad: cantidad,
+        sincronizado_en: ahora,
+      });
     }
   });
   return filas;

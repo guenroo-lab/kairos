@@ -1,7 +1,8 @@
-/** Carga/actualiza preparacion.catalogo desde los Excel de inventario de Drive.
- *  Mismo patrón de Excel->hoja temporal (Drive API v3) que el sistema viejo. */
+/** Carga/actualiza preparacion.catalogo desde los CSV de inventario de Drive
+ *  (StockSearch_bucle.ps1, API MyIso). Lee el blob directo con Utilities.parseCsv
+ *  -- evita depender de que Drive detecte bien el delimitador ";" al convertir. */
 
-/** Lee 014.xlsx y 279.xlsx y devuelve un array de
+/** Lee 014.csv y 279.csv y devuelve un array de
  *  { codigo_lm, ean, designacion, seccion, foto_url } sin duplicados (primer visto gana). */
 function _leerCatalogoDeExcels_() {
   const folder = DriveApp.getFolderById(CFG.DRIVE_FOLDER_ID);
@@ -10,27 +11,29 @@ function _leerCatalogoDeExcels_() {
     const it = folder.getFilesByName(nombre);
     if (!it.hasNext()) { Logger.log('AVISO: no encontrado ' + nombre); return; }
     const file = it.next();
-    const tmp = Drive.Files.create(
-      { name: '__tmp_cat_' + nombre, mimeType: MimeType.GOOGLE_SHEETS },
-      file.getBlob()
-    );
-    try {
-      const sh = SpreadsheetApp.openById(tmp.id).getSheets()[0];
-      const vals = sh.getDataRange().getValues();
-      for (var i = 1; i < vals.length; i++) { // fila 0 = cabecera
-        const row = vals[i];
-        const lm = String(row[CFG.COL.lm - 1] || '').trim();
-        if (!lm || vistos[lm]) continue;
-        vistos[lm] = {
-          codigo_lm: lm,
-          ean: String(row[CFG.COL.ean - 1] || '').trim() || null,
-          designacion: String(row[CFG.COL.designacion - 1] || '').trim() || null,
-          seccion: String(row[CFG.COL.seccion - 1] || '').trim() || null,
-          foto_url: String(row[CFG.COL.foto - 1] || '').trim() || null,
-        };
-      }
-    } finally {
-      try { DriveApp.getFileById(tmp.id).setTrashed(true); } catch (e) {}
+
+    const csv = _leerCsvConCabeceraSync_(file);
+    const colLm = csv.indice[CFG.COL.lm];
+    const colEan = csv.indice[CFG.COL.ean];
+    const colDesignacion = csv.indice[CFG.COL.designacion];
+    const colSeccion = csv.indice[CFG.COL.seccion];
+    const colFoto = csv.indice[CFG.COL.foto];
+    if ([colLm, colEan, colDesignacion, colSeccion, colFoto].some(function (c) { return c === undefined; })) {
+      throw new Error('Cabecera inesperada en ' + nombre + '. Se esperaban las columnas: ' +
+        CFG.COL.lm + ', ' + CFG.COL.ean + ', ' + CFG.COL.designacion + ', ' + CFG.COL.seccion + ', ' + CFG.COL.foto);
+    }
+
+    for (var i = 1; i < csv.filas.length; i++) { // fila 0 = cabecera
+      const row = csv.filas[i];
+      const lm = String(row[colLm] || '').trim();
+      if (!lm || vistos[lm]) continue;
+      vistos[lm] = {
+        codigo_lm: lm,
+        ean: _limpiarCampoCsvSync_(row[colEan]) || null,
+        designacion: String(row[colDesignacion] || '').trim() || null,
+        seccion: String(row[colSeccion] || '').trim() || null,
+        foto_url: String(row[colFoto] || '').trim() || null,
+      };
     }
   });
   return Object.keys(vistos).map(function (k) { return vistos[k]; });
