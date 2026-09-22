@@ -32,9 +32,16 @@ function _dispararEtiquetaSiProcede_(peticionId) {
       ? (CFG.TIENDAS[peticion.tienda_destino] || peticion.tienda_destino)
       : (CFG.TIENDAS[peticion.tienda_origen] || peticion.tienda_origen);
 
+    // Bug real (2026-09-22, encontrado revisando con Codex CLI el bug de
+    // HODOS_WEBAPP_URL): una cesión guarda su identificador en num_cesion, no en
+    // num_pedido — la propia BD lo exige (006_peticiones.sql: num_pedido debe ser
+    // NULL fuera de pedido_cliente). Antes se mandaba siempre num_pedido, así que
+    // toda cesión llegaba a HODOS con pedido:null y HODOS la rechazaba con "Falta
+    // el número de pedido" (nunca se vio en el E2E del 14-sep porque en ese momento
+    // fallaba antes, por la URL).
     const idUnico = _enviarEtiquetaHodos_({
       destino: destino,
-      pedido: peticion.num_pedido || null,
+      pedido: peticion.tipo === 'cesion' ? peticion.num_cesion : peticion.num_pedido,
       tipo: SUBTIPO_HODOS_PREPARACION_,
       origenIntegracion: 'preparacion',
       operario: (limpias[0].operario || ''),
