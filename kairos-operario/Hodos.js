@@ -12,6 +12,16 @@ const SUBTIPO_HODOS_PREPARACION_ = 'Petición Reserva';
 const INCIDENCIAS_ = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'];
 
 function _dispararEtiquetaSiProcede_(peticionId) {
+  // Bug real (revisión con Codex CLI, 2026-09-22): comprobar hodos_id y
+  // crear la etiqueta eran dos pasos sin nada que los serializara — dos
+  // cierres casi a la vez (última línea marcada dos veces, reintento tras
+  // fallo de guardado) podían pasar juntos el check y crear la etiqueta dos
+  // veces. LockService serializa las ejecuciones de este script.
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (errLock) {
+    console.error('_dispararEtiquetaSiProcede_ (' + peticionId + '): no se pudo obtener el lock, se reintentará en el próximo cierre de línea.');
+    return;
+  }
   try {
     const cab = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(peticionId));
     if (!cab.length) return;
@@ -45,7 +55,14 @@ function _dispararEtiquetaSiProcede_(peticionId) {
       tipo: SUBTIPO_HODOS_PREPARACION_,
       origenIntegracion: 'preparacion',
       operario: (limpias[0].operario || ''),
-      items: limpias.map(function (l) { return { referencia: String(l.codigo_lm), cantidad: Number(l.cantidad) }; }),
+      // Bug real (revisión con Codex CLI, 2026-09-22): una línea 'Parcial'
+      // manda a HODOS la cantidad PEDIDA (l.cantidad), no la que de verdad
+      // se preparó (l.cantidad_preparada) — la etiqueta HODOS anunciaba más
+      // mercancía de la que MyISO llegó a mover.
+      items: limpias.map(function (l) {
+        const cantidad = l.estado_negocio === 'Parcial' ? Number(l.cantidad_preparada) : Number(l.cantidad);
+        return { referencia: String(l.codigo_lm), cantidad: cantidad };
+      }),
     });
 
     const idsLimpias = limpias.map(function (l) { return l.id; }).join(',');
@@ -54,6 +71,8 @@ function _dispararEtiquetaSiProcede_(peticionId) {
     // No debe romper el marcado de línea (ya guardado) — solo se pierde la
     // etiqueta HODOS; reintentable (hodos_id queda vacío, sin bloqueo).
     console.error('_dispararEtiquetaSiProcede_ (' + peticionId + '): ' + err.message);
+  } finally {
+    lock.releaseLock();
   }
 }
 

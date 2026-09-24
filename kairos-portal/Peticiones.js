@@ -19,32 +19,92 @@ function anularPeticion(ldap, peticionId, motivo) {
   if (!cab.length) throw new Error('Petición no encontrada.');
   if (cab[0].estado === 'cerrada' || cab[0].estado === 'anulada') throw new Error('Esta petición ya no se puede anular.');
 
-  supaUpdate_('peticiones', 'id=eq.' + encodeURIComponent(peticionId), { estado: 'anulada', motivo_anulacion: motivo });
+  // Filtro por estado también en el UPDATE (no solo en el SELECT previo): si
+  // dos anulaciones o un cierre y una anulación llegan a la vez, solo una
+  // gana; la otra no pisa el resultado.
+  const filas = supaUpdate_('peticiones',
+    'id=eq.' + encodeURIComponent(peticionId) + '&estado=not.in.(cerrada,anulada)',
+    { estado: 'anulada', motivo_anulacion: motivo });
+  if (!filas.length) throw new Error('Esta petición ya no se puede anular.');
   return _json_({ ok: true });
 }
 
-/** Unidades ya comprometidas en peticiones abiertas (no cerradas, aún no
- *  preparadas) de esa tienda + código LM — para no ofrecer dos veces el
- *  mismo stock a peticiones distintas. */
-function _comprometidoEnPeticionesAbiertas_(tienda, codigoLm) {
-  const abiertas = supaSelect_('peticiones',
-    'tienda_origen=eq.' + encodeURIComponent(tienda) + '&estado=neq.cerrada&select=id');
-  if (!abiertas.length) return 0;
-  const ids = abiertas.map(function (p) { return p.id; }).join(',');
-  const lineas = supaSelect_('lineas',
-    'peticion_id=in.(' + ids + ')&codigo_lm=eq.' + encodeURIComponent(codigoLm) + '&estado_preparacion=neq.preparado&select=cantidad');
-  return lineas.reduce(function (s, l) { return s + Number(l.cantidad); }, 0);
+/** Unidades que representa una línea: en refill, la suma de los "(Nud)" de
+ *  los palets elegidos (su cantidad es el nº de palets); en el resto, su
+ *  cantidad. */
+function _unidadesDeLinea_(linea, tipo) {
+  if (tipo !== 'refill') return Number(linea.cantidad) || 0;
+  const partes = String(linea.sscc || '').match(/\((\d+(?:[.,]\d+)?)\s*ud\)/g) || [];
+  return partes.reduce(function (s, p) {
+    return s + (Number(p.replace(/[^\d.,]/g, '').replace(',', '.')) || 0);
+  }, 0);
 }
 
-/** Unidades disponibles ahora mismo en edificio 5 (stock_fisico) para esa
- *  tienda + código LM, sumando todos los SSCC, menos lo ya comprometido en
- *  peticiones abiertas de otras peticiones. */
-function _stockDisponible_(tienda, codigoLm) {
+/** Stock de un código en una tienda: físico (snapshot de stock_fisico,
+ *  edificio 05) y lo ya comprometido por peticiones no anuladas — las aún
+ *  sin preparar, y las preparadas después del último sync (el snapshot
+ *  todavía no refleja lo que consumieron). disponible = físico − comprometido. */
+function _stockDetalle_(tienda, codigoLm) {
+  const codigo = String(codigoLm || '').trim();
   const filas = supaSelect_('stock_fisico',
-    'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(codigoLm) + '&select=cantidad');
-  const fisico = filas.reduce(function (s, f) { return s + Number(f.cantidad); }, 0);
-  const comprometido = _comprometidoEnPeticionesAbiertas_(tienda, codigoLm);
-  return Math.max(0, fisico - comprometido);
+    'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(codigo) + '&select=cantidad,sincronizado_en');
+  var fisico = 0, desde = null;
+  filas.forEach(function (f) {
+    fisico += Number(f.cantidad) || 0;
+    if (!desde || f.sincronizado_en > desde) desde = f.sincronizado_en;
+  });
+
+  const base = 'codigo_lm=eq.' + encodeURIComponent(codigo) +
+    '&select=cantidad,sscc,estado_negocio,cantidad_preparada,peticiones!inner(tipo)' +
+    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) +
+    '&peticiones.estado=neq.anulada';
+  const pendientes = supaSelect_('lineas', base + '&estado_preparacion=neq.preparado');
+  const consumidas = desde
+    ? supaSelect_('lineas', base + '&estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde))
+    : [];
+
+  var comprometido = 0;
+  pendientes.forEach(function (l) {
+    comprometido += _unidadesDeLinea_(l, l.peticiones && l.peticiones.tipo);
+  });
+  consumidas.forEach(function (l) {
+    if (l.peticiones && l.peticiones.tipo === 'refill') return; // el palet sigue en edificio 05 (XP1)
+    if (l.estado_negocio === 'Parcial') comprometido += Number(l.cantidad_preparada) || 0;
+    else if (l.estado_negocio === 'Sin Palet' || l.estado_negocio === 'Sin Mercancía' || l.estado_negocio === 'Otras Incidencias') return;
+    else comprometido += Number(l.cantidad) || 0;
+  });
+  return { fisico: fisico, comprometido: comprometido, disponible: Math.max(0, fisico - comprometido) };
+}
+
+function _mensajeSinStock_(etiqueta, pedidas, d) {
+  if (d.fisico <= 0) return 'No hay stock de ' + etiqueta + ' en almacén.';
+  if (d.disponible <= 0) {
+    return 'Otras peticiones abiertas ya han agotado el stock de ' + etiqueta + ': hay ' + d.fisico +
+      ' en almacén y ' + d.comprometido + ' ya están comprometidas en otros pedidos.';
+  }
+  return 'Solo quedan ' + d.disponible + ' unidades de ' + etiqueta +
+    (d.comprometido > 0 ? ' (otras peticiones abiertas ya tienen comprometidas ' + d.comprometido + ' de las ' + d.fisico + ' que hay en almacén)' : '') +
+    ' y pides ' + pedidas + '.';
+}
+
+/** Pedido cliente: no se puede pedir más de lo disponible. Se suma por
+ *  código (el mismo artículo puede venir en varias líneas). */
+function _exigirStockPedidoCliente_(tienda, lineas) {
+  const pedido = {};
+  lineas.forEach(function (l) {
+    const codigo = String(l.codigoLm || '').trim();
+    if (!pedido[codigo]) pedido[codigo] = { cantidad: 0, designacion: l.designacion || '' };
+    pedido[codigo].cantidad += Number(l.cantidad) || 0;
+  });
+  const faltan = [];
+  Object.keys(pedido).forEach(function (codigo) {
+    const d = _stockDetalle_(tienda, codigo);
+    if (pedido[codigo].cantidad > d.disponible) {
+      const etiqueta = codigo + (pedido[codigo].designacion ? ' · ' + pedido[codigo].designacion : '');
+      faltan.push(_mensajeSinStock_(etiqueta, pedido[codigo].cantidad, d));
+    }
+  });
+  if (faltan.length) throw new Error('No se ha enviado la petición, falta stock:\n' + faltan.join('\n'));
 }
 
 /** Buscar un palet directamente por SSCC (Refill) — devuelve todos los LM
@@ -116,7 +176,7 @@ function listarSsccDisponibles(ldap, codigoLm) {
  *  código LM — aviso de posible duplicado, no bloqueante. */
 function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
   const tienda = _tiendaDe_(ldap);
-  const disponible = _stockDisponible_(tienda, codigoLm);
+  const stock = _stockDetalle_(tienda, codigoLm);
 
   const abiertas = supaSelect_('peticiones',
     'tienda_origen=eq.' + encodeURIComponent(tienda) + '&estado=in.(pendiente,en_preparacion,a_ubicar)&select=id,tipo,creada_en');
@@ -130,12 +190,23 @@ function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
   }
 
   return _json_({
-    disponible: disponible,
+    disponible: stock.disponible,
+    fisico: stock.fisico,
+    comprometido: stock.comprometido,
     duplicados: duplicados.map(function (p) { return { tipo: p.tipo, fecha: p.creada_en }; }),
   });
 }
 
+/** Pedido cliente comprueba stock al enviar: se serializa con un lock para
+ *  que dos peticiones simultáneas no reserven las mismas últimas unidades. */
 function crearPeticion(ldap, tipo, datos, lineas) {
+  if (tipo !== 'pedido_cliente') return _crearPeticion_(ldap, tipo, datos, lineas);
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (err) { throw new Error('El sistema está ocupado, inténtalo de nuevo en unos segundos.'); }
+  try { return _crearPeticion_(ldap, tipo, datos, lineas); } finally { lock.releaseLock(); }
+}
+
+function _crearPeticion_(ldap, tipo, datos, lineas) {
   const u = _usuarioDe_(ldap);
   const tienda = u.tienda;
   if (['pedido_cliente', 'cesion', 'refill'].indexOf(tipo) === -1) {
@@ -144,10 +215,16 @@ function crearPeticion(ldap, tipo, datos, lineas) {
   if (u.rol === 'vendedor' && tipo !== 'refill') {
     throw new Error('Tu rol (Vendedor) solo puede crear peticiones de Refill.');
   }
+  // Refill se puede apagar desde Master (Ajustes.js) — este es el bloqueo
+  // real, el botón oculto/deshabilitado en Portal.html es solo UX.
+  if (tipo === 'refill' && !_refillHabilitado_()) {
+    throw new Error('Refill está desactivado temporalmente.');
+  }
   if (!lineas || !lineas.length) throw new Error('Añade al menos una línea.');
-  // Sin stock suficiente NO bloquea — es un aviso informativo (ya mostrado
-  // al añadir el artículo, ver verificarAntesDeAnadir); un compañero de la
-  // misma tienda debe poder pedir igual aunque ya esté comprometido.
+  // Pedido cliente: sin stock suficiente NO se puede enviar (se re-comprueba
+  // aquí aunque ya se avisara al añadir el artículo — el stock pudo agotarse
+  // entretanto). Cesión y refill solo avisan al añadir, no bloquean.
+  if (tipo === 'pedido_cliente') _exigirStockPedidoCliente_(tienda, lineas);
 
   const cabecera = {
     tipo: tipo,
@@ -183,13 +260,15 @@ function crearPeticion(ldap, tipo, datos, lineas) {
     }
   }
 
-  const peticion = supaInsert_('peticiones', cabecera);
-
+  // Validar TODAS las líneas antes de crear nada — si una línea viene
+  // incompleta no debe quedar una cabecera huérfana sin líneas (bug real,
+  // revisión con Codex CLI 2026-09-22: antes se insertaba la cabecera y
+  // LUEGO se validaba, así que una línea mala dejaba una petición fantasma,
+  // pendiente para siempre, sin nada que preparar).
   const unidadMedida = tipo === 'refill' ? 'palet' : 'ud';
   const lineasPayload = lineas.map(function (l) {
     if (!l.codigoLm || !l.cantidad) throw new Error('Línea incompleta.');
     const payload = {
-      peticion_id: peticion.id,
       codigo_lm: String(l.codigoLm).trim(),
       cantidad: Number(l.cantidad),
       unidad_medida: unidadMedida,
@@ -207,7 +286,17 @@ function crearPeticion(ldap, tipo, datos, lineas) {
     }
     return payload;
   });
-  supaInsertMany_('lineas', lineasPayload);
+
+  const peticion = supaInsert_('peticiones', cabecera);
+  try {
+    supaInsertMany_('lineas', lineasPayload.map(function (l) { return Object.assign({ peticion_id: peticion.id }, l); }));
+  } catch (err) {
+    // Sin transacción real entre dos llamadas REST: si fallan las líneas,
+    // se borra la cabecera para no dejarla huérfana en 'pendiente' para
+    // siempre.
+    try { supaDelete_('peticiones', 'id=eq.' + encodeURIComponent(peticion.id)); } catch (err2) { /* mejor esfuerzo */ }
+    throw err;
+  }
 
   return _json_({ ok: true, id: peticion.id });
 }

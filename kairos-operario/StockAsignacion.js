@@ -105,10 +105,42 @@ function _repartirEntreCandidatos_(tienda, linea, candidatos) {
 
 /** Punto de entrada. Si la línea ya tiene sscc, no hace nada (devuelve
  *  null). Si no hay stock suficiente, lanza Error (el caller decide si
- *  bloquear o solo avisar). */
+ *  bloquear o solo avisar).
+ *
+ *  Bug real (revisión con Codex CLI, 2026-09-22): lee stock/comprometido y
+ *  escribe la asignación en pasos separados, sin nada que serialice dos
+ *  ejecuciones a la vez — dos operarios abriendo el mismo pedido, o pedidos
+ *  distintos del mismo código, a la vez, podían leer el mismo remanente y
+ *  asignarse el mismo SSCC por duplicado. LockService serializa las
+ *  ejecuciones de ESTE script (kairos-operario) — no es una transacción de
+ *  base de datos real, pero cubre el caso real (todo el tráfico de
+ *  asignación pasa por este único Apps Script).
+ *
+ *  Segunda pasada (revisión adversarial con Codex CLI, mismo día): el `if
+ *  (linea.sscc) return null` de arriba mira el objeto `linea` tal como lo
+ *  pasó el caller, leído ANTES de coger el lock — dos llamadas para la
+ *  MISMA línea (p.ej. dos operarios abriendo el mismo pedido a la vez)
+ *  pasaban las dos ese check con el mismo objeto viejo, y las dos
+ *  reasignaban la línea en su turno (el lock serializaba pero no impedía
+ *  la segunda reasignación). Ahora se relee la línea DENTRO del lock y el
+ *  PATCH final es condicional (sscc=is.null) — si otra ejecución ya la
+ *  asignó, se devuelve esa asignación en vez de pisarla. */
 function asignarSsccSiFalta_(linea, peticion) {
   if (linea.sscc) return null;
 
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (err) { throw new Error('El sistema está ocupado asignando stock, inténtalo de nuevo en unos segundos.'); }
+  try {
+    const actual = supaSelect_('lineas', 'id=eq.' + encodeURIComponent(linea.id) + '&select=id,sscc,ubicacion');
+    if (!actual.length) throw new Error('Línea no encontrada.');
+    if (actual[0].sscc) return { sscc: actual[0].sscc, ubicacion: actual[0].ubicacion }; // ya asignada por otra ejecución mientras esperábamos el lock
+    return _asignarSsccSiFalta_(linea, peticion);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function _asignarSsccSiFalta_(linea, peticion) {
   const tienda = peticion.tienda_origen;
   const candidatos = _candidatosStock_(tienda, linea.codigo_lm);
   if (!candidatos.length) {
@@ -124,11 +156,17 @@ function asignarSsccSiFalta_(linea, peticion) {
     resultado = _repartirEntreCandidatos_(tienda, linea, candidatos);
   }
 
-  supaUpdate_('lineas', 'id=eq.' + encodeURIComponent(linea.id), {
+  const filas = supaUpdate_('lineas', 'id=eq.' + encodeURIComponent(linea.id) + '&sscc=is.null', {
     sscc: resultado.sscc,
     ubicacion: resultado.ubicacion,
     sscc_asignado_en: new Date().toISOString(),
   });
+  if (!filas.length) {
+    // Carrera improbable dentro del propio lock (no debería pasar) — releer y devolver lo que quedó.
+    const relectura = supaSelect_('lineas', 'id=eq.' + encodeURIComponent(linea.id) + '&select=sscc,ubicacion');
+    if (relectura.length && relectura[0].sscc) return { sscc: relectura[0].sscc, ubicacion: relectura[0].ubicacion };
+    throw new Error('No se pudo asignar el palet a la línea ' + linea.id + '.');
+  }
   return resultado;
 }
 
@@ -171,9 +209,15 @@ function cambiarPaletLinea(lineaId, sscc, ubicacion) {
   ubicacion = String(ubicacion || '').trim();
   if (!sscc || !ubicacion) throw new Error('Falta el SSCC o la ubicación del palet elegido.');
 
+  // sscc_asignado_en también se actualiza aquí (bug real, revisión con Codex
+  // CLI 2026-09-22): si no, un palet elegido a mano después del último sync
+  // quedaba con la marca de tiempo vieja y _usoComprometidoPorSscc_ (filtro
+  // sscc_asignado_en >= último sync) lo trataba como si no estuviera
+  // comprometido — podía volver a asignarse a otra línea.
   const filas = supaUpdate_('lineas', 'id=eq.' + encodeURIComponent(lineaId), {
     sscc: sscc,
     ubicacion: ubicacion,
+    sscc_asignado_en: new Date().toISOString(),
   });
   if (!filas.length) throw new Error('Línea no encontrada.');
   return _json_({ ok: true });

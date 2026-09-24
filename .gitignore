@@ -3,3 +3,4 @@ node_modules/
 *.log
 kairos-sync/.clasp.json
 .clasp.json
+.claude/settings.local.json

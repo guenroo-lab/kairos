@@ -20,10 +20,22 @@
  *  cambia algo más adelante. */
 function listarTrazabilidad(ldap, historico) {
   const u = _usuarioDe_(ldap);
-  var q = 'tienda_origen=eq.' + encodeURIComponent(u.tienda) +
-    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo,motivo_anulacion,en_curso_por,ubicacion_consolidacion&order=creada_en.desc&limit=200';
-  if (u.rol === 'vendedor') q += '&tipo=eq.refill'; // Vendedor solo ve Refill
-  const peticiones = supaSelect_('peticiones', q);
+  const campos = 'id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo,motivo_anulacion,en_curso_por,ubicacion_consolidacion';
+  const filtroTienda = 'tienda_origen=eq.' + encodeURIComponent(u.tienda);
+  const filtroRol = u.rol === 'vendedor' ? '&tipo=eq.refill' : ''; // Vendedor solo ve Refill
+
+  // Bug real (revisión con Codex CLI, 2026-09-22): antes se pedían las 200
+  // últimas peticiones y LUEGO se separaban activas/histórico en memoria —
+  // en una tienda con más de 200 peticiones (activas + cerradas + anuladas)
+  // una activa antigua podía quedar fuera de las 200 y desaparecer de la
+  // vista "activas" sin más aviso. pendiente/en_preparacion/a_ubicar nunca
+  // son histórico, así que se piden aparte y sin límite práctico; cerrada/
+  // anulada sí se acotan a las últimas 200 (volumen real de histórico).
+  const abiertas = supaSelect_('peticiones',
+    filtroTienda + '&estado=in.(pendiente,en_preparacion,a_ubicar)&select=' + campos + '&order=creada_en.desc&limit=1000' + filtroRol);
+  const cerradasOAnuladas = supaSelect_('peticiones',
+    filtroTienda + '&estado=in.(cerrada,anulada)&select=' + campos + '&order=creada_en.desc&limit=200' + filtroRol);
+  const peticiones = abiertas.concat(cerradasOAnuladas);
   if (!peticiones.length) return _json_([]);
 
   peticiones.forEach(function (p) {
@@ -102,8 +114,18 @@ function listarTrazabilidad(ldap, historico) {
     const ids = peticionesRefill.map(function (p) { return p.id; }).join(',');
     const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,sscc,estado_preparacion');
 
+    // Bug real (revisión con Codex CLI, 2026-09-22): lineas.sscc puede venir
+    // decorado "SSCC (Nud)" o "SSCC1 (Nud) + SSCC2 (Mud)" cuando se eligió
+    // más de un palet al pedir el refill — public.palets guarda el SSCC
+    // puro. Comparar el string tal cual nunca hacía match: esos refills se
+    // quedaban "Petición Realizada" para siempre, aunque HODOS ya los
+    // hubiera cargado. Hay que extraer los SSCC puros con _parseSsccMulti_.
     const todosSscc = [];
-    lineas.forEach(function (l) { if (l.sscc && todosSscc.indexOf(l.sscc) === -1) todosSscc.push(l.sscc); });
+    lineas.forEach(function (l) {
+      _parseSsccMulti_(l.sscc, 0).forEach(function (parte) {
+        if (parte.sscc && todosSscc.indexOf(parte.sscc) === -1) todosSscc.push(parte.sscc);
+      });
+    });
     const palets = todosSscc.length
       ? supaSelect_('palets', 'sscc=in.(' + todosSscc.map(encodeURIComponent).join(',') + ')&select=sscc,encontrado,batea_id', CFG.SCHEMA_HODOS)
       : [];
@@ -115,9 +137,20 @@ function listarTrazabilidad(ldap, historico) {
 
     peticionesRefill.forEach(function (p) {
       const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
-      const ssccPeticion = propias.map(function (l) { return l.sscc; }).filter(Boolean);
+      const ssccPeticion = [];
+      propias.forEach(function (l) {
+        _parseSsccMulti_(l.sscc, 0).forEach(function (parte) { if (parte.sscc && ssccPeticion.indexOf(parte.sscc) === -1) ssccPeticion.push(parte.sscc); });
+      });
       const paletesPeticion = palets.filter(function (pa) { return ssccPeticion.indexOf(pa.sscc) !== -1; });
-      const cargado = paletesPeticion.filter(function (pa) { return pa.encontrado === true; })[0];
+      // Bug real (revisión adversarial con Codex CLI, mismo día): en un
+      // refill de varios palets, con que UNO estuviera cargado ya se
+      // marcaba la petición entera "Cargado" — ahora hacen falta todos los
+      // SSCC esperados, cada uno con fila en public.palets y encontrado=true.
+      const todosCargados = ssccPeticion.length > 0 && ssccPeticion.every(function (sscc) {
+        const pa = palets.filter(function (x) { return x.sscc === sscc; })[0];
+        return !!pa && pa.encontrado === true;
+      });
+      const cargado = todosCargados ? paletesPeticion.filter(function (pa) { return pa.encontrado === true; })[0] : null;
 
       if (cargado) {
         const carga = cargas.filter(function (c) { return c.id_carga === cargado.batea_id; })[0];

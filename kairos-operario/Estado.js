@@ -78,8 +78,18 @@ function listarEstadoPeticiones() {
     const ids = peticionesRefill.map(function (p) { return p.id; }).join(',');
     const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,sscc,estado_preparacion');
 
+    // Bug real (revisión con Codex CLI, 2026-09-22): lineas.sscc puede venir
+    // decorado "SSCC (Nud)" o "SSCC1 (Nud) + SSCC2 (Mud)" cuando se eligió
+    // más de un palet al pedir el refill — public.palets guarda el SSCC
+    // puro. Comparar el string tal cual nunca hacía match: esos refills se
+    // quedaban "Petición Realizada" para siempre. Extraer los SSCC puros
+    // con _parseSsccMulti_ (StockAsignacion.js).
     const todosSscc = [];
-    lineas.forEach(function (l) { if (l.sscc && todosSscc.indexOf(l.sscc) === -1) todosSscc.push(l.sscc); });
+    lineas.forEach(function (l) {
+      _parseSsccMulti_(l.sscc, 0).forEach(function (parte) {
+        if (parte.sscc && todosSscc.indexOf(parte.sscc) === -1) todosSscc.push(parte.sscc);
+      });
+    });
     const palets = todosSscc.length
       ? supaSelect_('palets', 'sscc=in.(' + todosSscc.map(encodeURIComponent).join(',') + ')&select=sscc,encontrado,batea_id', 'public')
       : [];
@@ -91,9 +101,20 @@ function listarEstadoPeticiones() {
 
     peticionesRefill.forEach(function (p) {
       const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
-      const ssccPeticion = propias.map(function (l) { return l.sscc; }).filter(Boolean);
+      const ssccPeticion = [];
+      propias.forEach(function (l) {
+        _parseSsccMulti_(l.sscc, 0).forEach(function (parte) { if (parte.sscc && ssccPeticion.indexOf(parte.sscc) === -1) ssccPeticion.push(parte.sscc); });
+      });
       const paletesPeticion = palets.filter(function (pa) { return ssccPeticion.indexOf(pa.sscc) !== -1; });
-      const cargado = paletesPeticion.filter(function (pa) { return pa.encontrado === true; })[0];
+      // Bug real (revisión adversarial con Codex CLI, mismo día): en un
+      // refill de varios palets, con que UNO estuviera cargado ya se
+      // marcaba la petición entera "Cargado" — ahora hacen falta todos los
+      // SSCC esperados, cada uno con fila en public.palets y encontrado=true.
+      const todosCargados = ssccPeticion.length > 0 && ssccPeticion.every(function (sscc) {
+        const pa = palets.filter(function (x) { return x.sscc === sscc; })[0];
+        return !!pa && pa.encontrado === true;
+      });
+      const cargado = todosCargados ? paletesPeticion.filter(function (pa) { return pa.encontrado === true; })[0] : null;
 
       if (cargado) {
         const carga = cargas.filter(function (c) { return c.id_carga === cargado.batea_id; })[0];
