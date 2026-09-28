@@ -902,6 +902,12 @@
 <script>
   const ETIQUETA_TIPO = { pedido_cliente: 'Pedido cliente', cesion: 'Cesión', refill: 'Refill' };
   const NOMBRE_TIENDA = { '014': 'Marbella', '279': 'Mijas' };
+  // Destinos válidos de cesión — Málaga (036) nunca opera Kairos (no tiene
+  // reserva propia, nunca pide), pero SÍ puede recibir una cesión de
+  // Marbella o Mijas. Mapa aparte de NOMBRE_TIENDA a propósito: ese otro
+  // alimenta el selector de "tienda en la que opera Master" y Málaga no
+  // debe aparecer ahí.
+  const NOMBRE_TIENDA_DESTINO_ = Object.assign({}, NOMBRE_TIENDA, { '036': 'Málaga' });
   const ROLES_ASIGNABLES_ = ['vendedor', 'logistico', 'gestor']; // 'master' nunca asignable desde aquí
 
   /** Gestor puede entrar en la tienda que quiera (no está atado a una) —
@@ -1287,7 +1293,7 @@
         else if (p.camino === 'a_ubicar') detalle = p.aUbicarTexto || p.estadoTexto;
         else if (p.camino === 'hodos') detalle = p.hodosTexto;
         else detalle = p.refillTexto;
-        const destino = p.tipo === 'cesion' ? (NOMBRE_TIENDA[p.tienda_destino] || p.tienda_destino || '—') : '—';
+        const destino = p.tipo === 'cesion' ? (NOMBRE_TIENDA_DESTINO_[p.tienda_destino] || p.tienda_destino || '—') : '—';
         const motivo = p.estado === 'anulada' ? (p.motivo_anulacion || '—') : (p.motivo || '—');
         const celdas = [
           new Date(p.creada_en).toLocaleString('es-ES'),
@@ -1599,8 +1605,8 @@
         '<input class="entrada" id="inNumCesion" placeholder="Nº de cesión">' +
         btnBuscarPedidoPyxisHtml +
         '<select class="entrada" id="inDestino">' +
-          '<option value="014">Marbella</option>' +
-          '<option value="279">Mijas</option>' +
+          Object.keys(NOMBRE_TIENDA_DESTINO_).filter(function (cod) { return cod !== TIENDA; })
+            .map(function (cod) { return '<option value="' + cod + '">' + NOMBRE_TIENDA_DESTINO_[cod] + '</option>'; }).join('') +
         '</select>';
     } else {
       camposTipo = '<input class="entrada" id="inMotivo" placeholder="Motivo del refill">';
@@ -1845,7 +1851,8 @@
       });
     }
 
-    c.querySelector('#btnEnviar').onclick = function () {
+    const btnEnviar = c.querySelector('#btnEnviar');
+    btnEnviar.onclick = function () {
       const err = c.querySelector('#errForm');
       err.style.display = 'none';
       if (!lineas.length) { err.textContent = 'Añade al menos un artículo.'; err.style.display = 'block'; return; }
@@ -1862,9 +1869,14 @@
         datos.motivo = c.querySelector('#inMotivo').value.trim();
         if (!datos.motivo) { err.textContent = 'Falta el motivo.'; err.style.display = 'block'; return; }
       }
+      // Evita doble envío por doble clic/toque (bug real 2026-09-28: mismo
+      // pedido creado dos veces) — el guardado real en el servidor bloquea
+      // igual si esto fallara, pero así ni se intenta.
+      btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando…';
       gas('crearPeticion', LDAP, tipo, datos, lineas).then(function () {
         renderCola();
       }).catch(function (e) {
+        btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar petición';
         err.style.whiteSpace = 'pre-line';
         err.textContent = e.message; err.style.display = 'block';
       });
@@ -1893,7 +1905,7 @@
           '<div><b>Transporte</b> ' + (p.transporte ? 'Sí (consolida en plataforma)' : 'No') + '</div>';
       } else if (p.tipo === 'cesion') {
         camposTipo = '<div><b>Nº cesión</b> ' + escHtml(p.num_cesion) + '</div>' +
-          '<div><b>Destino</b> ' + escHtml(NOMBRE_TIENDA[p.tienda_destino] || p.tienda_destino) + '</div>';
+          '<div><b>Destino</b> ' + escHtml(NOMBRE_TIENDA_DESTINO_[p.tienda_destino] || p.tienda_destino) + '</div>';
       }
       const filasLineas = r.lineas.map(function (l) {
         const esParcial = l.estado_negocio === 'Parcial';

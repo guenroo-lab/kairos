@@ -206,6 +206,48 @@ function crearPeticion(ldap, tipo, datos, lineas) {
   try { return _crearPeticion_(ldap, tipo, datos, lineas); } finally { lock.releaseLock(); }
 }
 
+/** Bloqueo de doble envío accidental (bug real 2026-09-28: un pedido_cliente
+ *  enviado dos veces por doble clic, misma mercancía, 6s de diferencia).
+ *  Ventana corta a propósito: solo bloquea lo que es casi con toda
+ *  seguridad un reenvío accidental, nunca un pedido legítimo repetido más
+ *  tarde en el día. */
+var VENTANA_DUPLICADO_MS_ = 30000;
+
+function _bloquearSiDuplicadoReciente_(tienda, ldap, tipo, cabecera, lineasPayload) {
+  const desde = new Date(Date.now() - VENTANA_DUPLICADO_MS_).toISOString();
+  const recientes = supaSelect_('peticiones',
+    'tienda_origen=eq.' + encodeURIComponent(tienda) +
+    '&solicitante_ldap=eq.' + encodeURIComponent(ldap) +
+    '&tipo=eq.' + encodeURIComponent(tipo) +
+    '&creada_en=gte.' + encodeURIComponent(desde) +
+    '&select=id,num_pedido,num_cesion');
+  if (!recientes.length) return;
+
+  if (tipo === 'pedido_cliente' && cabecera.num_pedido) {
+    if (recientes.some(function (p) { return p.num_pedido === cabecera.num_pedido; })) {
+      throw new Error('Ya has enviado este mismo pedido (' + cabecera.num_pedido + ') hace unos segundos — revisa "Mis peticiones" antes de repetirlo.');
+    }
+    return;
+  }
+  if (tipo === 'cesion' && cabecera.num_cesion) {
+    if (recientes.some(function (p) { return p.num_cesion === cabecera.num_cesion; })) {
+      throw new Error('Ya has enviado esta misma cesión (' + cabecera.num_cesion + ') hace unos segundos — revisa "Mis peticiones" antes de repetirla.');
+    }
+    return;
+  }
+  if (tipo === 'refill') {
+    const codigosNuevos = lineasPayload.map(function (l) { return l.codigo_lm; }).sort().join(',');
+    const lineasRecientes = supaSelect_('lineas',
+      'peticion_id=in.(' + recientes.map(function (p) { return p.id; }).map(encodeURIComponent).join(',') + ')&select=peticion_id,codigo_lm');
+    const porPeticion = {};
+    lineasRecientes.forEach(function (l) { (porPeticion[l.peticion_id] = porPeticion[l.peticion_id] || []).push(l.codigo_lm); });
+    const hayDuplicado = Object.keys(porPeticion).some(function (id) { return porPeticion[id].sort().join(',') === codigosNuevos; });
+    if (hayDuplicado) {
+      throw new Error('Ya has pedido este mismo refill hace unos segundos — revisa "Mis peticiones" antes de repetirlo.');
+    }
+  }
+}
+
 function _crearPeticion_(ldap, tipo, datos, lineas) {
   const u = _usuarioDe_(ldap);
   const tienda = u.tienda;
@@ -286,6 +328,8 @@ function _crearPeticion_(ldap, tipo, datos, lineas) {
     }
     return payload;
   });
+
+  _bloquearSiDuplicadoReciente_(tienda, ldap, tipo, cabecera, lineasPayload);
 
   const peticion = supaInsert_('peticiones', cabecera);
   try {
