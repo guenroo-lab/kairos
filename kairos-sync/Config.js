@@ -18,4 +18,20 @@ const CFG = {
   COL_STOCK: { direccion: 'Ubicacion', sscc: 'SSCC', producto: 'Ref_LM', cantidad: 'Cantidad_Total' },
 
   LOTE_UPSERT: 500,
+
+  // Excel de Pyxis ("Listado Inventario Pedido Cliente") — carpeta
+  // Inventarios_Plataforma, mismo sitio donde vive pedidos_totales_2.csv
+  // (de INCPC) pero un archivo distinto, uno por tienda.
+  PEDIDOS_FOLDER_ID: '1_1muNRzTzLrgSLyZdWtpf7GJeRqbplIG',
+  PEDIDOS_ARCHIVOS: { '014.xlsx': '014', '279.xlsx': '279' },
+  COL_PEDIDO: {
+    direccion: ['dirección', 'direccion'],
+    numPedido: ['nº ped', 'n ped', 'num ped', 'numero ped'],
+    seccion: ['sección', 'seccion'],
+    ref: ['ref.', 'ref', 'referencia'],
+    ean: ['código ean', 'codigo ean', 'ean'],
+    designacion: ['designación', 'designacion'],
+    cantidad: ['ctd recep.', 'ctd recep', 'ctd', 'cantidad'],
+    fechaEntrega: ['fecha entre.', 'fecha entre', 'fecha entrega'],
+  },
 };
