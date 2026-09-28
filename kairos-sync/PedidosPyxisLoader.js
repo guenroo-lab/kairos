@@ -82,13 +82,23 @@ function _leerPedidosPyxisDeExcels_() {
     const valores = _leerXlsxComoFilas_(it.next());
     if (valores.length < 2) { porTienda[tienda] = []; return; }
 
-    const idx = _indiceColumnas_(valores[0], CFG.COL_PEDIDO);
-    if (idx.numPedido === -1 || idx.ref === -1 || idx.direccion === -1) {
-      throw new Error('Cabecera inesperada en ' + nombre + ' — no se encuentran Nº Ped / Ref. / Dirección. Cabecera real: ' + JSON.stringify(valores[0]));
+    // La fila 0 es un título/banner ("Listado Inventario Pedido Cliente"),
+    // NO la cabecera real (confirmado en real, 2026-09-28) — hay que buscar
+    // en las primeras filas cuál es la que de verdad trae los nombres de
+    // columna, en vez de asumir que siempre es la fila 0.
+    var filaCabecera = -1, idx = null;
+    for (var h = 0; h < Math.min(5, valores.length); h++) {
+      const candidato = _indiceColumnas_(valores[h], CFG.COL_PEDIDO);
+      if (candidato.numPedido !== -1 && candidato.ref !== -1 && candidato.direccion !== -1) {
+        filaCabecera = h; idx = candidato; break;
+      }
+    }
+    if (filaCabecera === -1) {
+      throw new Error('No se encuentra la cabecera (Nº Ped / Ref. / Dirección) en las primeras 5 filas de ' + nombre + '. Primeras filas: ' + JSON.stringify(valores.slice(0, 5)));
     }
 
     const filas = [];
-    for (var i = 1; i < valores.length; i++) {
+    for (var i = filaCabecera + 1; i < valores.length; i++) {
       const fila = valores[i];
       const numPedido = String(fila[idx.numPedido] || '').trim();
       const refLm = String(fila[idx.ref] || '').trim();
