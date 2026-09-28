@@ -151,7 +151,11 @@ function _asignarSsccSiFalta_(linea, peticion) {
   if (peticion.tipo === 'refill') {
     const c = candidatos.filter(function (x) { return x.cantidad > 0; })[0];
     if (!c) throw new Error('Sin palet disponible para el código ' + linea.codigo_lm + '.');
-    resultado = { sscc: c.sscc, ubicacion: c.ubicacion };
+    // Refill se lleva el palet ENTERO: se guarda la cantidad real en el
+    // propio string del sscc (mismo formato "sscc (Xud)" que ya usa el
+    // reparto normal) para que el remanente de otras líneas del mismo
+    // código se calcule bien — límite conocido, ver README.md:106.
+    resultado = { sscc: c.sscc + ' (' + c.cantidad + 'ud)', ubicacion: c.ubicacion };
   } else {
     resultado = _repartirEntreCandidatos_(tienda, linea, candidatos);
   }
@@ -209,13 +213,35 @@ function cambiarPaletLinea(lineaId, sscc, ubicacion) {
   ubicacion = String(ubicacion || '').trim();
   if (!sscc || !ubicacion) throw new Error('Falta el SSCC o la ubicación del palet elegido.');
 
+  const lineaFilas = supaSelect_('lineas', 'id=eq.' + encodeURIComponent(lineaId) + '&select=id,codigo_lm,peticion_id');
+  if (!lineaFilas.length) throw new Error('Línea no encontrada.');
+  const linea = lineaFilas[0];
+
+  const peticionFilas = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(linea.peticion_id) + '&select=tipo,tienda_origen');
+  if (!peticionFilas.length) throw new Error('Petición no encontrada.');
+  const peticion = peticionFilas[0];
+
+  var ssccGuardar = sscc;
+  if (peticion.tipo === 'refill') {
+    // Mismo motivo que en _asignarSsccSiFalta_: refill se lleva el palet
+    // entero, hay que guardar su cantidad real en el string del sscc —
+    // si no, el remanente de otras líneas del mismo código vuelve a salir
+    // mal tras un cambio manual de palet (límite conocido, README.md:106).
+    const candidato = supaSelect_('stock_fisico',
+      'tienda=eq.' + encodeURIComponent(peticion.tienda_origen) +
+      '&codigo_lm=eq.' + encodeURIComponent(linea.codigo_lm) +
+      '&sscc=eq.' + encodeURIComponent(sscc));
+    if (!candidato.length) throw new Error('No se pudo verificar la cantidad de ese palet, prueba de nuevo.');
+    ssccGuardar = sscc + ' (' + candidato[0].cantidad + 'ud)';
+  }
+
   // sscc_asignado_en también se actualiza aquí (bug real, revisión con Codex
   // CLI 2026-09-22): si no, un palet elegido a mano después del último sync
   // quedaba con la marca de tiempo vieja y _usoComprometidoPorSscc_ (filtro
   // sscc_asignado_en >= último sync) lo trataba como si no estuviera
   // comprometido — podía volver a asignarse a otra línea.
   const filas = supaUpdate_('lineas', 'id=eq.' + encodeURIComponent(lineaId), {
-    sscc: sscc,
+    sscc: ssccGuardar,
     ubicacion: ubicacion,
     sscc_asignado_en: new Date().toISOString(),
   });
