@@ -1601,9 +1601,10 @@
           '<input type="checkbox" id="inTransporte"> Con transporte (se consolida en plataforma)' +
         '</label>';
     } else if (tipo === 'cesion') {
+      // Sin buscador por pedido aquí: la cesión mueve palets completos, no
+      // va ligada a un pedido cliente de Pyxis.
       camposTipo =
         '<input class="entrada" id="inNumCesion" placeholder="Nº de cesión">' +
-        btnBuscarPedidoPyxisHtml +
         '<select class="entrada" id="inDestino">' +
           Object.keys(NOMBRE_TIENDA_DESTINO_).filter(function (cod) { return cod !== TIENDA; })
             .map(function (cod) { return '<option value="' + cod + '">' + NOMBRE_TIENDA_DESTINO_[cod] + '</option>'; }).join('') +
@@ -1653,7 +1654,7 @@
     const btnBuscarPedidoPyxis = c.querySelector('#btnBuscarPedidoPyxis');
     if (btnBuscarPedidoPyxis) {
       btnBuscarPedidoPyxis.onclick = function () {
-        const campoNum = tipo === 'pedido_cliente' ? c.querySelector('#inNumPedido') : c.querySelector('#inNumCesion');
+        const campoNum = c.querySelector('#inNumPedido'); // solo pedido_cliente tiene este botón
         const num = campoNum.value.trim();
         if (!num) { kAlerta('Escribe primero el número de pedido.'); return; }
         btnBuscarPedidoPyxis.disabled = true; btnBuscarPedidoPyxis.textContent = 'Buscando…';
