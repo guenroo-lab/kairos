@@ -19,13 +19,28 @@ function _leerXlsxComoFilas_(archivo) {
   }
 }
 
+/** Quita acentos/diacríticos para comparar cabeceras sin depender de qué
+ *  variante exacta de un carácter trae el Excel (visto real: Pyxis es un
+ *  POS francés, "Réf." en vez de "Ref.", "N° Ped" con signo de grado °
+ *  en vez del ordinal º español — ninguno de los dos es un simple typo,
+ *  son variantes reales de origen). */
+function _sinAcentos_(s) {
+  return String(s).normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[°º]/g, 'o');
+}
+
+/** Coincidencia por CONTIENE, no por igualdad exacta (mismo criterio que
+ *  encontrarColumna en lm_produccion/ImportarPyxis.gs) — una cabecera con
+ *  espacio extra, mayúsculas distintas o texto añadido igual encuentra la
+ *  columna. */
 function _indiceColumnas_(cabecera, mapa) {
-  const normalizada = cabecera.map(function (c) { return String(c).trim().toLowerCase(); });
+  const normalizada = cabecera.map(function (c) { return _sinAcentos_(String(c).trim().toLowerCase()); });
   const idx = {};
   Object.keys(mapa).forEach(function (clave) {
     idx[clave] = -1;
-    for (var i = 0; i < normalizada.length; i++) {
-      if (mapa[clave].indexOf(normalizada[i]) !== -1) { idx[clave] = i; break; }
+    for (var i = 0; i < normalizada.length && idx[clave] === -1; i++) {
+      for (var j = 0; j < mapa[clave].length; j++) {
+        if (normalizada[i].indexOf(_sinAcentos_(mapa[clave][j])) !== -1) { idx[clave] = i; break; }
+      }
     }
   });
   return idx;
@@ -69,7 +84,7 @@ function _leerPedidosPyxisDeExcels_() {
 
     const idx = _indiceColumnas_(valores[0], CFG.COL_PEDIDO);
     if (idx.numPedido === -1 || idx.ref === -1 || idx.direccion === -1) {
-      throw new Error('Cabecera inesperada en ' + nombre + ' — no se encuentran Nº Ped / Ref. / Dirección.');
+      throw new Error('Cabecera inesperada en ' + nombre + ' — no se encuentran Nº Ped / Ref. / Dirección. Cabecera real: ' + JSON.stringify(valores[0]));
     }
 
     const filas = [];
