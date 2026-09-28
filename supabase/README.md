@@ -103,14 +103,14 @@ automática de SSCC (`kairos-operario/StockAsignacion.js`) replica el
 algoritmo real de `PreparacionPedidosPC/SSCC y Ubicacion.js`
 (`buscarYAsignarSSCC_`) contra esta tabla.
 
-⚠️ **Limitación conocida:** cuando un refill se lleva un palet completo, el
-cálculo de remanente para otras líneas del mismo código/tienda sigue
-contando solo la cantidad "consumida" (1 palet), no la cantidad real del
-stock. Si el mismo día otra línea (pedido_cliente/cesión) compite por ese
-mismo palet después de un refill, podría asignársele remanente que en
-realidad ya no existe físicamente. Edge case raro (mismo LM, mismo día,
-refill + picking cruzándose) — no bloqueante, pendiente de revisar si se
-convierte en problema real.
+✅ **Limitación cerrada 2026-09-28** (Pieza 13): cuando un refill se
+llevaba un palet completo, el cálculo de remanente para otras líneas del
+mismo código/tienda solo contaba la cantidad "consumida" (1 palet), no la
+cantidad real del stock. Fix: refill guarda ahora la cantidad real del
+palet en el propio string del sscc (`"sscc (Xud)"`, mismo formato que ya
+usaba el reparto normal de pedido_cliente/cesión), en los dos caminos de
+escritura (`_asignarSsccSiFalta_` y `cambiarPaletLinea`). Ver
+`docs/superpowers/specs/2026-09-28-buscar-pedido-pyxis-stock-plataforma-design.md`.
 
 Verificado E2E en vivo 2026-09-14: asignación simple, reparto entre 2
 palets, aviso + checkbox bloqueado sin stock suficiente, refill (palet
