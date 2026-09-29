@@ -729,7 +729,7 @@
       '<a href="#" id="tabPeticiones" class="' + (activa === 'cola' ? 'activa' : '') + '">' + ICONO_PETICIONES + '<span>Peticiones</span></a>' +
       '<a href="#" id="tabTrazabilidad" class="' + (activa === 'traza' ? 'activa' : '') + '">' + ICONO_TRAZA + '<span>Trazabilidad</span></a>' +
       '<a href="#" id="tabHistorico" class="' + (activa === 'historico' ? 'activa' : '') + '">' + ICONO_HISTORICO + '<span>Histórico</span></a>' +
-      '<a href="#" id="tabRevisiones" class="' + (activa === 'revisiones' ? 'activa' : '') + '">' + ICONO_REVISIONES + '<span>Revisiones</span></a>' +
+      '<a href="#" id="tabRevisiones" class="' + (activa === 'revisiones' ? 'activa' : '') + '">' + ICONO_REVISIONES + '<span>Revisión de stock</span></a>' +
       '</div>';
   }
 
@@ -1435,7 +1435,8 @@
         '<div id="bloqueRefill"></div>' +
         (soloRefill ? '' :
           '<button class="btn btn-primary" id="btnPC">Pedido cliente</button>' +
-          '<button class="btn btn-primary" id="btnCesion">Cesión</button>') +
+          '<button class="btn btn-primary" id="btnCesion">Cesión</button>' +
+          '<button class="btn btn-primary" id="btnRevision">Revisión de palet</button>') +
       '</div></div>'
     );
     app().appendChild(c);
@@ -1443,6 +1444,7 @@
     if (!soloRefill) {
       c.querySelector('#btnPC').onclick = function () { renderFormulario('pedido_cliente'); };
       c.querySelector('#btnCesion').onclick = function () { renderFormulario('cesion'); };
+      c.querySelector('#btnRevision').onclick = renderFormularioRevision;
     }
 
     // Botón Refill oculto hasta confirmar que está activado — nunca se
