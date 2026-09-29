@@ -884,6 +884,9 @@
         err.textContent = e.message; err.style.display = 'block';
       });
     };
+    ['#inNombre', '#inApellido', '#inSeccion'].forEach(function (sel) {
+      c.querySelector(sel).onkeydown = function (e) { if (e.key === 'Enter') c.querySelector('#btnAlta').click(); };
+    });
   }
 
   function renderPendiente() {
@@ -1647,6 +1650,7 @@
         .then(function () { renderRevisiones(); })
         .catch(function (e) { err.textContent = e.message; err.style.display = 'block'; });
     };
+    c.querySelector('#inComentario').onkeydown = function (e) { if (e.key === 'Enter') c.querySelector('#btnEnviar').click(); };
   }
 
   function renderFormulario(tipo) {
@@ -1729,6 +1733,7 @@
           kAlerta(e.message);
         });
       };
+      c.querySelector('#inNumPedido').onkeydown = function (e) { if (e.key === 'Enter') btnBuscarPedidoPyxis.click(); };
     }
 
     /** Pedido cliente bloquea añadir una línea sin stock (mismo criterio que
@@ -1945,6 +1950,7 @@
         err.textContent = e.message; err.style.display = 'block';
       });
     };
+    c.querySelector('#inComentario').onkeydown = function (e) { if (e.key === 'Enter') btnEnviar.click(); };
   }
 </script>
 <script>
@@ -2038,6 +2044,7 @@
       const pass = c.querySelector('#inPass').value;
       renderAdmin(pass);
     };
+    c.querySelector('#inPass').onkeydown = function (e) { if (e.key === 'Enter') c.querySelector('#btnAdminEntrar').click(); };
   }
 
   function renderAdmin(passwordAdmin) {
