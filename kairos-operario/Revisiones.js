@@ -127,14 +127,27 @@ function completarRevisionPalet(id, operario, resultado) {
   });
 }
 
-/** Monitor del jefe de equipo: abiertas, diferencias sin gestionar y
- *  contadores del día por tienda. */
+/** Monitor del jefe de equipo: abiertas, diferencias sin gestionar,
+ *  resueltas (conformes o diferencias ya gestionadas — antes desaparecían
+ *  sin dejar rastro visible en ningún sitio) y contadores del día por
+ *  tienda. */
 function listarRevisionesJefe() {
-  const campos = 'id,tienda_origen,sscc,ubicacion_esperada,contenido_esperado,revisar,comentario,estado,creada_en,solicitante_ldap,en_curso_por,en_curso_desde,resultado,revisada_por,revisada_en';
+  const campos = 'id,tienda_origen,sscc,ubicacion_esperada,contenido_esperado,revisar,comentario,estado,creada_en,solicitante_ldap,en_curso_por,en_curso_desde,resultado,revisada_por,revisada_en,conforme,gestionada_en,gestion_nota';
   const abiertas = supaSelect_('revisiones_palet',
     'estado=in.(pendiente,en_revision)&select=' + campos + '&order=creada_en.asc&limit=200');
   const diferencias = supaSelect_('revisiones_palet',
     'estado=eq.revisada&conforme=eq.false&gestionada_en=is.null&select=' + campos + '&order=revisada_en.desc&limit=200');
+  // Dos consultas simples en vez de un or() de PostgREST (sin precedente ya
+  // probado en este archivo) — se fusionan y ordenan aquí, más barato de
+  // verificar que arriesgar una sintaxis de filtro nueva sin probar.
+  const conformes = supaSelect_('revisiones_palet',
+    'estado=eq.revisada&conforme=eq.true&select=' + campos + '&order=revisada_en.desc&limit=100');
+  const gestionadas = supaSelect_('revisiones_palet',
+    'estado=eq.revisada&conforme=eq.false&gestionada_en=not.is.null&select=' + campos + '&order=revisada_en.desc&limit=100');
+  const resueltas = conformes.concat(gestionadas)
+    .sort(function (a, b) { return new Date(b.revisada_en) - new Date(a.revisada_en); })
+    .slice(0, 100);
+
   const hoy = supaSelect_('revisiones_palet',
     'creada_en=gte.' + encodeURIComponent(_inicioHoyRevisionesIso_()) + '&select=tienda_origen');
   const conformesHoy = supaSelect_('revisiones_palet',
@@ -145,7 +158,7 @@ function listarRevisionesJefe() {
     filas.forEach(function (f) { c[f.tienda_origen] = (c[f.tienda_origen] || 0) + 1; });
     return c;
   }
-  return _json_({ abiertas: abiertas, diferencias: diferencias, creadasHoy: contar(hoy), conformesHoy: contar(conformesHoy) });
+  return _json_({ abiertas: abiertas, diferencias: diferencias, resueltas: resueltas, creadasHoy: contar(hoy), conformesHoy: contar(conformesHoy) });
 }
 
 /** Seguimiento del jefe: ya se verificó y, si hacía falta, se rectificó en MyISO. */

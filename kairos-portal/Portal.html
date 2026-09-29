@@ -233,7 +233,6 @@
   .kmodal { max-height:min(85vh, 85dvh); }
   .theme-btn-txt { display:inline; }
   .wrap > .btn + .card { margin-top:14px; }
-  #listaRevisiones > b { display:block; margin-bottom:10px; }
 
   /* El "pointer:coarse and hover:none" se suma al ancho porque, dentro del
      iframe de Apps Script, el ancho CSS que ve la página a veces no coincide
@@ -724,11 +723,13 @@
   var ICONO_PETICIONES = '<svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg>';
   var ICONO_TRAZA = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>';
   var ICONO_HISTORICO = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>';
+  var ICONO_REVISIONES = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
   function renderTabsPortal_(activa) {
     return '<div class="tabs">' +
       '<a href="#" id="tabPeticiones" class="' + (activa === 'cola' ? 'activa' : '') + '">' + ICONO_PETICIONES + '<span>Peticiones</span></a>' +
       '<a href="#" id="tabTrazabilidad" class="' + (activa === 'traza' ? 'activa' : '') + '">' + ICONO_TRAZA + '<span>Trazabilidad</span></a>' +
       '<a href="#" id="tabHistorico" class="' + (activa === 'historico' ? 'activa' : '') + '">' + ICONO_HISTORICO + '<span>Histórico</span></a>' +
+      '<a href="#" id="tabRevisiones" class="' + (activa === 'revisiones' ? 'activa' : '') + '">' + ICONO_REVISIONES + '<span>Revisiones</span></a>' +
       '</div>';
   }
 
@@ -1097,6 +1098,7 @@
     app().appendChild(tabs);
     tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
     tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
+    tabs.querySelector('#tabRevisiones').onclick = function (e) { e.preventDefault(); renderRevisiones(); };
 
     const wrap = el('<div class="wrap"></div>');
     app().appendChild(wrap);
@@ -1126,13 +1128,56 @@
       lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });
 
-    const listaRev = el('<div class="card" id="listaRevisiones" style="display:none;"></div>');
-    wrap.appendChild(listaRev);
-    gas('listarMisRevisiones', LDAP).then(function (revs) {
-      if (!revs.length) return;
-      listaRev.style.display = '';
-      listaRev.appendChild(el('<b>Revisiones de palet</b>'));
-      revs.forEach(function (r) {
+  }
+
+  /** Revisiones de palet, aparte de "Mis peticiones" — pestaña propia para
+   *  que la tienda pueda ir siguiendo cada una hasta que plataforma la
+   *  resuelve, sin que se mezclen con pedido cliente/cesión/refill. */
+  function renderRevisiones() {
+    app().innerHTML = '';
+    pintarCabecera_();
+    const top = el(
+      '<div class="top">' +
+        '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--text-500)">· ' + escHtml(LDAP) + ' · ' + escHtml(ETIQUETA_ROL[ROL] || ROL) + '</span></div>' +
+        '<div style="display:flex;gap:6px;align-items:center;" id="topAcciones">' +
+          '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
+        '</div>' +
+      '</div>'
+    );
+    app().appendChild(top);
+    top.querySelector('#btnSalir').onclick = salir;
+    pintarSelectorTienda_(top.querySelector('#topAcciones'));
+    pintarBotonUsuarios_(top.querySelector('#topAcciones'));
+    pintarBotonAjustes_(top.querySelector('#topAcciones'));
+    const tabs = el(renderTabsPortal_('revisiones'));
+    app().appendChild(tabs);
+    tabs.querySelector('#tabPeticiones').onclick = function (e) { e.preventDefault(); renderCola(); };
+    tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
+    tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
+
+    const wrap = el('<div class="wrap"></div>');
+    app().appendChild(wrap);
+    wrap.appendChild(el('<button class="btn btn-primary" id="btnNuevaRevision">+ Pedir revisión de palet</button>'));
+
+    const ESTADOS_FILTRO_REV_ = [
+      { valor: 'todas', label: 'Todas' },
+      { valor: 'pendiente', label: 'Solicitadas' },
+      { valor: 'en_revision', label: 'En revisión' },
+      { valor: 'revisada', label: 'Resueltas' },
+    ];
+    var filtroEstadoRev = 'todas';
+    const chips = el('<div class="filtros-tipo">' + ESTADOS_FILTRO_REV_.map(function (e) {
+      return '<button type="button" class="chip-tipo' + (e.valor === 'todas' ? ' activo' : '') + '" data-estado="' + e.valor + '">' + e.label + '</button>';
+    }).join('') + '</div>');
+    wrap.appendChild(chips);
+    const lista = el('<div class="card" id="listaRevisiones"><p style="color:var(--text-500)">Cargando…</p></div>');
+    wrap.appendChild(lista);
+
+    var todasRev = [];
+    function pintarRevisiones_(filas) {
+      lista.innerHTML = '';
+      if (!filas.length) { lista.appendChild(el('<p style="color:var(--text-500)">No hay revisiones con ese filtro.</p>')); return; }
+      filas.forEach(function (r) {
         const fila = el(
           '<div class="fila tipo-revision_palet">' +
             '<div><b>' + escHtml(etiquetaRevision_(r)) + '</b>' +
@@ -1143,9 +1188,28 @@
           '</div>'
         );
         fila.onclick = function () { kAlerta(detalleRevisionHtml_(r)); };
-        listaRev.appendChild(fila);
+        lista.appendChild(fila);
       });
-    }).catch(function () { /* la lista de peticiones ya se ha pintado; las revisiones son secundarias */ });
+    }
+    function aplicarFiltroRev_() {
+      const filas = filtroEstadoRev === 'todas' ? todasRev : todasRev.filter(function (r) { return r.estado === filtroEstadoRev; });
+      pintarRevisiones_(filas);
+    }
+    chips.querySelectorAll('.chip-tipo').forEach(function (btn) {
+      btn.onclick = function () {
+        filtroEstadoRev = btn.getAttribute('data-estado');
+        chips.querySelectorAll('.chip-tipo').forEach(function (b) { b.classList.toggle('activo', b === btn); });
+        aplicarFiltroRev_();
+      };
+    });
+
+    gas('listarMisRevisiones', LDAP).then(function (revs) {
+      todasRev = revs;
+      aplicarFiltroRev_();
+    }).catch(function (e) {
+      lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
+    });
+    wrap.querySelector('#btnNuevaRevision').onclick = renderFormularioRevision;
   }
 
   function etiquetaRevision_(r) {
@@ -1210,6 +1274,7 @@
     tabs.querySelector('#tabPeticiones').onclick = function (e) { e.preventDefault(); renderCola(); };
     tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
     tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
+    tabs.querySelector('#tabRevisiones').onclick = function (e) { e.preventDefault(); renderRevisiones(); };
 
     const wrap = el('<div class="wrap' + (historico ? ' wrap-ancho' : '') + '"></div>');
     app().appendChild(wrap);
@@ -1370,8 +1435,7 @@
         '<div id="bloqueRefill"></div>' +
         (soloRefill ? '' :
           '<button class="btn btn-primary" id="btnPC">Pedido cliente</button>' +
-          '<button class="btn btn-primary" id="btnCesion">Cesión</button>' +
-          '<button class="btn btn-primary" id="btnRevision">Revisión de palet</button>') +
+          '<button class="btn btn-primary" id="btnCesion">Cesión</button>') +
       '</div></div>'
     );
     app().appendChild(c);
@@ -1379,7 +1443,6 @@
     if (!soloRefill) {
       c.querySelector('#btnPC').onclick = function () { renderFormulario('pedido_cliente'); };
       c.querySelector('#btnCesion').onclick = function () { renderFormulario('cesion'); };
-      c.querySelector('#btnRevision').onclick = renderFormularioRevision;
     }
 
     // Botón Refill oculto hasta confirmar que está activado — nunca se
@@ -1428,7 +1491,7 @@
       '</div></div>'
     );
     app().appendChild(c);
-    c.querySelector('#btnVolver').onclick = renderCola;
+    c.querySelector('#btnVolver').onclick = renderRevisiones;
 
     var cupo = { usadas: 0, maximo: 3 };
     var palets = []; // { sscc, ubicacion, cantidad, contenido }
@@ -1581,7 +1644,7 @@
       gas('crearRevisionesPalet', LDAP, palets.map(function (p) {
         return p.busqueda ? { busqueda: true, codigo_lm: p.codigo_lm, cantidad: p.cantidad } : { sscc: p.sscc };
       }), revisar, c.querySelector('#inComentario').value.trim())
-        .then(function () { renderCola(); })
+        .then(function () { renderRevisiones(); })
         .catch(function (e) { err.textContent = e.message; err.style.display = 'block'; });
     };
   }

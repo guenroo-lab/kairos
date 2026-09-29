@@ -49,6 +49,24 @@
     [data-ktheme="amber"]    { --accent:#f0a020; --accent-ink:#241400; --accent-dim:#3a2708; --accent-line:#93672a; }
     [data-kmode="light"][data-ktheme="lmgreen"]  { --accent:#2f9e3f; --accent-ink:#ffffff; --accent-dim:#e4f5e7; --accent-line:#a9dab4; }
     [data-kmode="light"][data-ktheme="taisared"] { --accent:#dc1a23; --accent-ink:#ffffff; --accent-dim:#fde6e6; --accent-line:#f0aaac; }
+    [data-ktheme="retro80s"]                     { --accent:#FF1493; --accent-ink:#ffffff; --accent-dim:#3a0f28; --accent-line:#a80f5c; }
+    [data-kmode="light"][data-ktheme="retro80s"] { --accent:#d6127a; --accent-ink:#ffffff; --accent-dim:#ffe0f0; --accent-line:#ffb3d9; }
+
+    /* ——— Retro 80s Color-Block: tema opcional (rompevientos deportivo años 80-90),
+       bandas diagonales de color sólido con paradas duras (NO degradados suaves).
+       Solo decora cabecera/marca/botones/acentos — nunca texto de cuerpo ni tablas. ——— */
+    [data-ktheme="retro80s"] .brand-head { position:relative; padding-top:16px; }
+    [data-ktheme="retro80s"] .brand-head::before {
+      content:""; position:absolute; top:0; left:0; right:0; height:6px; border-radius:3px;
+      background:linear-gradient(135deg,
+        #FF1493 0%, #FF1493 20%, #00C5B5 20%, #00C5B5 40%, #3B2F85 40%, #3B2F85 60%,
+        #FFD700 60%, #FFD700 80%, #FF2400 80%, #FF2400 100%);
+    }
+    [data-ktheme="retro80s"] .brand-nombre {
+      background:linear-gradient(135deg,
+        #FF1493 0%, #FF1493 25%, #00C5B5 25%, #00C5B5 50%, #3B2F85 50%, #3B2F85 75%, #FFD700 75%, #FFD700 100%);
+      -webkit-background-clip:text; background-clip:text; -webkit-text-fill-color:transparent;
+    }
 
     * { box-sizing: border-box; }
     html, body { background: var(--ink-950); }
@@ -179,6 +197,9 @@
     .pick[data-for="lmgreen"] .dot { background:#3fb54a; }
     .pick[data-for="taisared"] .dot { background:#e2263a; }
     .pick[data-for="amber"] .dot { background:#f0a020; }
+    .pick[data-for="retro80s"] .dot { background:linear-gradient(135deg,
+      #FF1493 0%, #FF1493 20%, #00C5B5 20%, #00C5B5 40%, #3B2F85 40%, #3B2F85 60%,
+      #FFD700 60%, #FFD700 80%, #FF2400 80%, #FF2400 100%); }
     .pick.active { background:var(--accent-dim); border-color:var(--accent-line); color:var(--accent-ink); }
     [data-kmode="light"] .pick.active { color:var(--accent); }
     .pick[data-hidden] { display:none; }
@@ -242,7 +263,7 @@
     };
 
     // ——— Tema: modo (claro/oscuro) + acento (4 colores), persistente por dispositivo ———
-    var TEMAS_MODOS = { indigo: ['dark'], lmgreen: ['dark', 'light'], taisared: ['dark', 'light'], amber: ['dark'] };
+    var TEMAS_MODOS = { indigo: ['dark'], lmgreen: ['dark', 'light'], taisared: ['dark', 'light'], amber: ['dark'], retro80s: ['dark', 'light'] };
 
     // ——— Modal in-página (sustituye prompt/confirm/alert nativos) ———
     function kModal_(opts) {
@@ -316,6 +337,7 @@
         '<button class="pick" data-for="lmgreen" onclick="setKTema(\'lmgreen\')" type="button"><span class="dot"></span>Verde LM</button>' +
         '<button class="pick" data-for="taisared" onclick="setKTema(\'taisared\')" type="button"><span class="dot"></span>Rojo Taisa</button>' +
         '<button class="pick" data-for="amber" onclick="setKTema(\'amber\')" type="button"><span class="dot"></span>Ámbar</button>' +
+        '<button class="pick" data-for="retro80s" onclick="setKTema(\'retro80s\')" type="button"><span class="dot"></span>Retro 80s</button>' +
         '</div></div>';
     }
 
@@ -1510,27 +1532,65 @@
       return h;
     }
 
+    var REV_JEFE_CACHE_ = null;
+    var REV_JEFE_FILTRO_ = 'todas';
+    const REV_JEFE_FILTROS_ = [
+      { valor: 'todas', label: 'Todas' },
+      { valor: 'pendientes', label: 'Pendientes' },
+      { valor: 'diferencias', label: 'Con diferencias' },
+      { valor: 'resueltas', label: 'Resueltas' },
+    ];
+
     function renderRevisionesJefe() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
         '<h1>Revisiones de palet</h1>' +
-        '<p class="meta">Palets que tienda ha pedido revisar (máximo 3 al día por tienda). Las diferencias se quedan aquí hasta que las marques como gestionadas.</p>' +
+        '<p class="meta">Palets que tienda ha pedido revisar (máximo 3 al día por tienda). Las diferencias se quedan en "por gestionar" hasta que las marques como gestionadas.</p>' +
+        '<div class="filtros-tipo" id="filtrosRevJefe">' + REV_JEFE_FILTROS_.map(function (f) {
+          return '<button type="button" class="chip-tipo' + (f.valor === REV_JEFE_FILTRO_ ? ' activo' : '') + '" data-filtro="' + f.valor + '">' + f.label + '</button>';
+        }).join('') + '</div>' +
         '<div class="panel-tiendas-grid">' +
           '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-marbella);"></span>Marbella</h3><div id="revJefe-014">Cargando…</div></div>' +
           '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-mijas);"></span>Mijas</h3><div id="revJefe-279">Cargando…</div></div>' +
         '</div>';
       sincronizarPickers_();
+      document.getElementById('filtrosRevJefe').querySelectorAll('.chip-tipo').forEach(function (btn) {
+        btn.onclick = function () {
+          REV_JEFE_FILTRO_ = btn.getAttribute('data-filtro');
+          document.getElementById('filtrosRevJefe').querySelectorAll('.chip-tipo').forEach(function (b) { b.classList.toggle('activo', b === btn); });
+          pintarRevisionesJefe_();
+        };
+      });
       cargarRevisionesJefe_();
     }
 
     function cargarRevisionesJefe_() {
       google.script.run.withSuccessHandler(function (json) {
-        const d = JSON.parse(json);
-        ['014', '279'].forEach(function (cod) {
-          const cont = document.getElementById('revJefe-' + cod);
-          if (!cont) return;
-          const abiertas = d.abiertas.filter(function (r) { return r.tienda_origen === cod; });
-          const difs = d.diferencias.filter(function (r) { return r.tienda_origen === cod; });
-          var html = '<p class="meta">Hoy: ' + (d.creadasHoy[cod] || 0) + '/3 pedidas · ' + (d.conformesHoy[cod] || 0) + ' revisadas conformes</p>';
+        REV_JEFE_CACHE_ = JSON.parse(json);
+        pintarRevisionesJefe_();
+      }).listarRevisionesJefe();
+    }
+
+    function resultadoResueltaHtml_(r) {
+      if (r.conforme) return '<div class="meta">✅ Conforme, sin diferencias.</div>';
+      var h = resumenResultadoRevision_(r);
+      if (r.gestion_nota) h += '<div class="meta">Nota de gestión: ' + escHtmlSie_(r.gestion_nota) + '</div>';
+      return h;
+    }
+
+    function pintarRevisionesJefe_() {
+      const d = REV_JEFE_CACHE_;
+      if (!d) return;
+      const verPendientes = REV_JEFE_FILTRO_ === 'todas' || REV_JEFE_FILTRO_ === 'pendientes';
+      const verDiferencias = REV_JEFE_FILTRO_ === 'todas' || REV_JEFE_FILTRO_ === 'diferencias';
+      const verResueltas = REV_JEFE_FILTRO_ === 'resueltas'; // no en "todas": son historial, no monitorización activa
+      ['014', '279'].forEach(function (cod) {
+        const cont = document.getElementById('revJefe-' + cod);
+        if (!cont) return;
+        const abiertas = d.abiertas.filter(function (r) { return r.tienda_origen === cod; });
+        const difs = d.diferencias.filter(function (r) { return r.tienda_origen === cod; });
+        const resueltas = (d.resueltas || []).filter(function (r) { return r.tienda_origen === cod; });
+        var html = '<p class="meta">Hoy: ' + (d.creadasHoy[cod] || 0) + '/3 pedidas · ' + (d.conformesHoy[cod] || 0) + ' revisadas conformes</p>';
+        if (verPendientes) {
           html += '<h3>Pendientes de revisar</h3>';
           html += abiertas.length ? abiertas.map(function (r) {
             const estado = r.estado === 'en_revision'
@@ -1543,6 +1603,8 @@
               (r.comentario ? '<div class="meta">Comentario: ' + escHtmlSie_(r.comentario) + '</div>' : '') +
               '<div class="meta">Pide: ' + escHtmlSie_(r.solicitante_ldap || '—') + ' · ' + tiempoDesde_(r.creada_en) + '</div></div>';
           }).join('') : '<p class="meta">Nada pendiente.</p>';
+        }
+        if (verDiferencias) {
           html += '<h3>Con diferencias — por gestionar</h3>';
           html += difs.length ? difs.map(function (r) {
             return '<div class="fila tipo-revision" style="cursor:default;">' +
@@ -1552,12 +1614,22 @@
               '<div class="meta">Revisó: ' + escHtmlSie_(r.revisada_por || '—') + ' · ' + tiempoDesde_(r.revisada_en) + ' · pedía: ' + escHtmlSie_(r.solicitante_ldap || '—') + '</div>' +
               '<button class="btn-ob" style="margin-top:8px;" data-gestionar="' + r.id + '">Marcar gestionada</button></div>';
           }).join('') : '<p class="meta">Nada por gestionar.</p>';
-          cont.innerHTML = html;
-          cont.querySelectorAll('[data-gestionar]').forEach(function (btn) {
-            btn.onclick = function () { gestionarRevision_(btn.getAttribute('data-gestionar')); };
-          });
+        }
+        if (verResueltas) {
+          html += '<h3>Resueltas</h3>';
+          html += resueltas.length ? resueltas.map(function (r) {
+            return '<div class="fila tipo-revision" style="cursor:default;">' +
+              '<div class="tipo"><span>' + escHtmlSie_(etiquetaRevisionOp_(r)) + '</span><span class="chip-urgencia ' + (r.conforme ? 'ok' : 'aviso') + '">' +
+                (r.conforme ? 'Conforme' : 'Gestionada') + '</span></div>' +
+              resultadoResueltaHtml_(r) +
+              '<div class="meta">Revisó: ' + escHtmlSie_(r.revisada_por || '—') + ' · ' + tiempoDesde_(r.revisada_en) + ' · pedía: ' + escHtmlSie_(r.solicitante_ldap || '—') + '</div></div>';
+          }).join('') : '<p class="meta">Sin resueltas todavía.</p>';
+        }
+        cont.innerHTML = html;
+        cont.querySelectorAll('[data-gestionar]').forEach(function (btn) {
+          btn.onclick = function () { gestionarRevision_(btn.getAttribute('data-gestionar')); };
         });
-      }).listarRevisionesJefe();
+      });
     }
 
     function gestionarRevision_(id) {
