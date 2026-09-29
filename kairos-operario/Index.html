@@ -679,7 +679,7 @@
       }
 
       if (p.estado === 'a_ubicar') {
-        html += '<h3>A ubicar</h3><input type="text" id="ubicacion" placeholder="Ubicación de consolidación"> <button onclick="guardarUbicacion(\'' + p.id + '\')">Guardar</button>';
+        html += '<h3>A ubicar</h3><input type="text" id="ubicacion" placeholder="Ubicación de consolidación" onkeydown="if(event.key===\'Enter\')guardarUbicacion(\'' + p.id + '\')"> <button onclick="guardarUbicacion(\'' + p.id + '\')">Guardar</button>';
       } else if (p.estado === 'cerrada') {
         html += '<p><strong>Petición completada.</strong></p>';
       }
@@ -800,7 +800,7 @@
       if (p.tipo === 'refill') {
         if (vista === 'motivo') {
           return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
-            '<input type="text" id="motivo-' + l.id + '" placeholder="Motivo de la incidencia"> ' +
+            '<input type="text" id="motivo-' + l.id + '" placeholder="Motivo de la incidencia" onkeydown="if(event.key===\'Enter\')confirmarOtrasIncidencias(\'' + l.id + '\')"> ' +
             '<button class="ok" onclick="confirmarOtrasIncidencias(\'' + l.id + '\')">Confirmar</button> ' +
             '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">‹ Volver</button>' + cola + '</div>';
         }
@@ -826,7 +826,7 @@
 
       if (vista === 'motivo') {
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
-          '<input type="text" id="motivo-' + l.id + '" placeholder="Motivo de la incidencia"> ' +
+          '<input type="text" id="motivo-' + l.id + '" placeholder="Motivo de la incidencia" onkeydown="if(event.key===\'Enter\')confirmarOtrasIncidencias(\'' + l.id + '\')"> ' +
           '<button class="ok" onclick="confirmarOtrasIncidencias(\'' + l.id + '\')">Confirmar</button> ' +
           '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">‹ Volver</button>' + cola + '</div>';
       }
@@ -841,7 +841,7 @@
       if (vista === 'parcial') {
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' +
           '<p class="meta">Pedían ' + l.cantidad + ' ' + l.unidad_medida + '. ¿Cuántas has cogido de verdad?</p>' +
-          '<input type="number" id="parcial-' + l.id + '" min="1" max="' + (Number(l.cantidad) - 1) + '" placeholder="Unidades cogidas"> ' +
+          '<input type="number" id="parcial-' + l.id + '" min="1" max="' + (Number(l.cantidad) - 1) + '" placeholder="Unidades cogidas" onkeydown="if(event.key===\'Enter\')confirmarParcial(\'' + l.id + '\')"> ' +
           '<button class="ok" onclick="confirmarParcial(\'' + l.id + '\')">Confirmar</button> ' +
           '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">‹ Volver</button>' + cola + '</div>';
       }
@@ -1500,6 +1500,13 @@
           kAlerta(err.message);
         }).completarRevisionPalet(r.id, OPERARIO, resultado);
       };
+      ['ubiReal', 'ssccEncontrado', 'notaRev'].forEach(function (id) {
+        const campo = document.getElementById(id);
+        if (campo) campo.onkeydown = function (e) { if (e.key === 'Enter') document.getElementById('terminarRev').click(); };
+      });
+      for (var iEnter = 0; iEnter < esperado.length; iEnter++) {
+        document.getElementById('cont-' + iEnter).onkeydown = function (e) { if (e.key === 'Enter') document.getElementById('terminarRev').click(); };
+      }
     }
 
     function resumenResultadoRevision_(r) {
@@ -1868,11 +1875,11 @@
       const cont = document.getElementById('formCrearEtiqueta');
       cont.innerHTML =
         '<div class="linea" style="flex-direction:column;align-items:stretch;gap:6px;">' +
-        '<input class="entrada" id="ceDestino" placeholder="Destino (ej. Marbella, Mijas, Granada…)">' +
-        '<input class="entrada" id="ceNumPedido" placeholder="Nº de pedido (opcional)">' +
-        '<input class="entrada" id="ceCodigoLm" placeholder="Código LM">' +
-        '<input class="entrada" id="ceCantidad" type="number" placeholder="Cantidad">' +
-        '<button onclick="crearEtiquetaUI_(this)">Crear etiqueta</button>' +
+        '<input class="entrada" id="ceDestino" placeholder="Destino (ej. Marbella, Mijas, Granada…)" onkeydown="if(event.key===\'Enter\')document.getElementById(\'btnCrearEtiqueta\').click()">' +
+        '<input class="entrada" id="ceNumPedido" placeholder="Nº de pedido (opcional)" onkeydown="if(event.key===\'Enter\')document.getElementById(\'btnCrearEtiqueta\').click()">' +
+        '<input class="entrada" id="ceCodigoLm" placeholder="Código LM" onkeydown="if(event.key===\'Enter\')document.getElementById(\'btnCrearEtiqueta\').click()">' +
+        '<input class="entrada" id="ceCantidad" type="number" placeholder="Cantidad" onkeydown="if(event.key===\'Enter\')document.getElementById(\'btnCrearEtiqueta\').click()">' +
+        '<button id="btnCrearEtiqueta" onclick="crearEtiquetaUI_(this)">Crear etiqueta</button>' +
         '</div>';
     }
 
@@ -1940,12 +1947,12 @@
         '<h1>Operarios del almacén</h1>' +
         '<p class="meta">Quitar no borra el histórico, solo lo saca de la lista para preparar.</p>' +
         '<div class="linea" style="flex-direction:column;align-items:stretch;gap:6px;">' +
-        '<input class="entrada" id="opNombre" placeholder="Nombre (ej. Antonio.M)">' +
+        '<input class="entrada" id="opNombre" placeholder="Nombre (ej. Antonio.M)" onkeydown="if(event.key===\'Enter\')document.getElementById(\'btnAnadirOperario\').click()">' +
         '<select class="entrada" id="opRol">' +
         '<option value="operario">Operario</option>' +
         '<option value="jefe_equipo">Jefe de equipo</option>' +
         '</select>' +
-        '<button onclick="crearOperarioUI_(this)">+ Añadir operario</button>' +
+        '<button id="btnAnadirOperario" onclick="crearOperarioUI_(this)">+ Añadir operario</button>' +
         '</div>' +
         '<div id="listaOperariosGestion" style="margin-top:10px;">Cargando…</div>';
       sincronizarPickers_();
