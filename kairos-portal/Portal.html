@@ -1157,7 +1157,6 @@
 
     const wrap = el('<div class="wrap"></div>');
     app().appendChild(wrap);
-    wrap.appendChild(el('<button class="btn btn-primary" id="btnNuevaRevision">+ Pedir revisión de palet</button>'));
 
     const ESTADOS_FILTRO_REV_ = [
       { valor: 'todas', label: 'Todas' },
@@ -1209,7 +1208,6 @@
     }).catch(function (e) {
       lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });
-    wrap.querySelector('#btnNuevaRevision').onclick = renderFormularioRevision;
   }
 
   function etiquetaRevision_(r) {
