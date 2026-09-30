@@ -25,10 +25,16 @@ function entrar(ldap) {
 /** nombre/apellido/seccion: se muestran solo en la pantalla de gestión de
  *  usuarios (pendientes y activos) — el resto de la app sigue identificando
  *  a todos por LDAP. Los usuarios anteriores a este registro no los tienen. */
+function _capitalizarNombre_(texto) {
+  return String(texto || '').trim().toLowerCase().replace(/(^|[\s-])(\S)/g, function (_, sep, letra) {
+    return sep + letra.toUpperCase();
+  });
+}
+
 function registrarUsuario(ldap, tienda, rol, nombre, apellido, seccion) {
   ldap = String(ldap || '').trim();
-  nombre = String(nombre || '').trim();
-  apellido = String(apellido || '').trim();
+  nombre = _capitalizarNombre_(nombre);
+  apellido = _capitalizarNombre_(apellido);
   seccion = String(seccion || '').trim();
   if (!/^\d+$/.test(ldap)) throw new Error('El número de empleado debe ser numérico.');
   if (!CFG.TIENDAS[tienda]) throw new Error('Tienda no válida.');
