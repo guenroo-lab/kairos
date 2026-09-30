@@ -599,7 +599,7 @@
       if (!filtradas.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
 
       function filaHtml(p) {
-        var etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + escHtmlSie_(p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + escHtmlSie_(p.num_cesion || '') + ' → ' + escHtmlSie_(p.tiendaDestinoNombre) : ('Refill' + (p.motivo ? ': ' + escHtmlSie_(p.motivo) : '')));
+        var etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + escHtmlSie_(p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + escHtmlSie_(p.num_cesion || '') + ' → ' + escHtmlSie_(p.tiendaDestinoNombre) : ('Refill' + (p.motivo ? ': ' + escHtmlSie_(p.motivo) : '') + (p.fecha_entrega ? ' <span class="chip">📅 Entrega ' + fechaCortaEntrega_(p.fecha_entrega) + '</span>' : '')));
         if (p.tipo !== 'refill') etiquetaTipo += p.cola_individual ? ' <span class="chip-modo individual">👤 Individual</span>' : ' <span class="chip-modo equipo">👥 Equipo</span>';
         const fechaObj = new Date(p.creada_en);
         const fechaTexto = fechaObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + fechaObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -665,7 +665,7 @@
 
     function renderDetalleBody_() {
       const p = ultimoDetalle.peticion;
-      var titulo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + escHtmlSie_(p.num_pedido || '')) : (p.tipo === 'cesion' ? ('Cesión ' + escHtmlSie_(p.num_cesion || '') + ' → ' + escHtmlSie_(p.tiendaDestinoNombre)) : ('Refill: ' + escHtmlSie_(p.motivo || '')));
+      var titulo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + escHtmlSie_(p.num_pedido || '')) : (p.tipo === 'cesion' ? ('Cesión ' + escHtmlSie_(p.num_cesion || '') + ' → ' + escHtmlSie_(p.tiendaDestinoNombre)) : ('Refill: ' + escHtmlSie_(p.motivo || '') + (p.fecha_entrega ? ' · entrega ' + fechaCortaEntrega_(p.fecha_entrega) : '')));
 
       var html = '<h1>' + titulo + '</h1><p class="meta">' + escHtmlSie_(p.tiendaNombre) + '</p>';
       if (ultimoDetalle.otroEnCurso) {
@@ -1038,6 +1038,11 @@
     }
 
     function limpiarSscc(sscc) { return String(sscc || '').replace(/^0+/, ''); }
+
+    function fechaCortaEntrega_(iso) {
+      const m = String(iso || '').match(/^\d{4}-(\d{2})-(\d{2})$/);
+      return m ? m[2] + '/' + m[1] : '';
+    }
 
     function tiempoDesde_(iso) {
       if (!iso) return '';
