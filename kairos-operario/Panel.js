@@ -8,7 +8,8 @@
  *  fecha de creación (para el contador de urgencia, calculado en cliente). */
 function listarTodasPeticiones() {
   const peticiones = supaSelect_('peticiones',
-    'select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,estado,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap' +
+    'visible_desde=lte.' + _hoyMadridIso_() +
+    '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,estado,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap,fecha_entrega' +
     '&order=creada_en.asc&limit=300');
   if (!peticiones.length) return _json_([]);
 

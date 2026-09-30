@@ -15,6 +15,7 @@
 
 function listarEstadoPeticiones() {
   var q = 'estado=in.(pendiente,en_preparacion,a_ubicar,cerrada)' +
+    '&visible_desde=lte.' + _hoyMadridIso_() +
     '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,estado,creada_en,en_curso_por,ubicacion_consolidacion&order=creada_en.desc&limit=100';
   const peticiones = supaSelect_('peticiones', q);
   if (!peticiones.length) return _json_([]);

@@ -1,6 +1,7 @@
 function listarCola(filtroTienda, filtroTipo) {
   var q = 'estado=in.(pendiente,en_preparacion)' +
-    '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,motivo,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap' +
+    '&visible_desde=lte.' + _hoyMadridIso_() +
+    '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,motivo,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap,fecha_entrega' +
     '&order=creada_en.asc&limit=200';
   if (filtroTienda) q += '&tienda_origen=eq.' + encodeURIComponent(filtroTienda);
   if (filtroTipo) q += '&tipo=eq.' + encodeURIComponent(filtroTipo);
@@ -39,7 +40,7 @@ function listarCola(filtroTienda, filtroTipo) {
 /** Recuento de peticiones pendientes/en preparación por tienda, para la
  *  pantalla de selección de tienda (iconos grandes con contador). */
 function contarPeticionesPorTienda() {
-  const filas = supaSelect_('peticiones', 'estado=in.(pendiente,en_preparacion)&select=tienda_origen');
+  const filas = supaSelect_('peticiones', 'estado=in.(pendiente,en_preparacion)&visible_desde=lte.' + _hoyMadridIso_() + '&select=tienda_origen');
   const conteo = {};
   filas.forEach(function (f) { conteo[f.tienda_origen] = (conteo[f.tienda_origen] || 0) + 1; });
   return _json_(conteo);
