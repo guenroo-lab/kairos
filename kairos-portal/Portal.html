@@ -912,6 +912,25 @@
   // alimenta el selector de "tienda en la que opera Master" y Málaga no
   // debe aparecer ahí.
   const NOMBRE_TIENDA_DESTINO_ = Object.assign({}, NOMBRE_TIENDA, { '036': 'Málaga' });
+
+  function fechaCorta_(iso) {
+    const m = String(iso || '').match(/^\d{4}-(\d{2})-(\d{2})$/);
+    return m ? m[2] + '/' + m[1] : '';
+  }
+  function hoyIso_() {
+    const d = new Date();
+    return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0');
+  }
+  function ultimoLaborableAnteriorIso_(iso) {
+    const p = String(iso).split('-').map(Number);
+    const d = new Date(Date.UTC(p[0], p[1] - 1, p[2]));
+    do { d.setUTCDate(d.getUTCDate() - 1); } while (d.getUTCDay() === 0 || d.getUTCDay() === 6);
+    return d.toISOString().slice(0, 10);
+  }
+  function textoEntrega_(p) {
+    if (!p.fecha_entrega) return '';
+    return 'Entrega ' + fechaCorta_(p.fecha_entrega) + (p.reservaFutura ? ' · sale a preparación ' + fechaCorta_(p.visible_desde) : '');
+  }
   const ROLES_ASIGNABLES_ = ['vendedor', 'logistico', 'gestor']; // 'master' nunca asignable desde aquí
 
   /** Gestor puede entrar en la tienda que quiera (no está atado a una) —
@@ -1121,6 +1140,7 @@
             '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
               ((p.num_pedido || p.num_cesion) ? ' · ' + escHtml(p.num_pedido || p.num_cesion) : '') +
               '<div style="color:var(--text-500);font-size:12px;">' + escHtml(p.articulo || '') + '</div>' +
+              (p.fecha_entrega ? '<div style="color:var(--text-500);font-size:12px;">' + escHtml(textoEntrega_(p)) + '</div>' : '') +
               '<div style="color:var(--text-500);font-size:12px;">' + escHtml(p.solicitante_ldap || '—') + ' · ' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
             '</div>' +
             '<span class="estado">' + escHtml(p.estadoTexto) + '</span>' +
@@ -1323,6 +1343,7 @@
               '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
                 ((p.num_pedido || p.num_cesion) ? ' · ' + escHtml(p.num_pedido || p.num_cesion) : '') +
                 '<div style="color:var(--text-500);font-size:12px;">' + escHtml(p.articulo || '') + (p.motivo ? ' · ' + escHtml(p.motivo) : '') + '</div>' +
+                (p.fecha_entrega ? '<div style="color:var(--text-500);font-size:12px;">' + escHtml(textoEntrega_(p)) + '</div>' : '') +
                 (p.sscc && p.sscc.length ? '<div style="color:var(--text-500);font-size:12px;">SSCC ' + escHtml(p.sscc.join(' · ')) + '</div>' : '') +
                 '<div style="color:var(--text-500);font-size:12px;">' + escHtml(p.solicitante_ldap || '—') + ' · ' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
               '</div>' +
@@ -1679,7 +1700,11 @@
             .map(function (cod) { return '<option value="' + cod + '">' + NOMBRE_TIENDA_DESTINO_[cod] + '</option>'; }).join('') +
         '</select>';
     } else {
-      camposTipo = '<input class="entrada" id="inMotivo" placeholder="Motivo del refill">';
+      camposTipo =
+        '<input class="entrada" id="inMotivo" placeholder="Motivo del refill">' +
+        '<label style="display:block;margin:8px 0 2px;color:var(--text-500);font-size:13px;" for="inFechaEntrega">Fecha de entrega (reserva, opcional)</label>' +
+        '<input class="entrada" id="inFechaEntrega" type="date">' +
+        '<div id="ayudaFechaEntrega" style="color:var(--text-500);font-size:12px;margin-bottom:8px;">Vacío = refill normal, se prepara hoy.</div>';
     }
 
     const unidadLabel = tipo === 'refill' ? 'nº de palets' : 'unidades';
@@ -1702,6 +1727,24 @@
     );
     app().appendChild(c);
     c.querySelector('#btnVolver').onclick = renderCola;
+
+    const inFechaEntrega = c.querySelector('#inFechaEntrega');
+    if (inFechaEntrega) {
+      inFechaEntrega.min = (function () {
+        const m = new Date(); m.setDate(m.getDate() + 1);
+        return m.getFullYear() + '-' + String(m.getMonth() + 1).padStart(2, '0') + '-' + String(m.getDate()).padStart(2, '0');
+      })();
+      inFechaEntrega.onchange = function () {
+        const ayuda = c.querySelector('#ayudaFechaEntrega');
+        const f = inFechaEntrega.value;
+        if (!f) { ayuda.textContent = 'Vacío = refill normal, se prepara hoy.'; return; }
+        if (f <= hoyIso_()) { ayuda.textContent = 'La fecha de entrega debe ser posterior a hoy.'; return; }
+        const sale = ultimoLaborableAnteriorIso_(f);
+        ayuda.textContent = sale <= hoyIso_()
+          ? 'Saldrá a preparación hoy.'
+          : 'No la verán en almacén hasta el ' + fechaCorta_(sale) + ' (último día laborable antes de la entrega).';
+      };
+    }
 
     var lineas = []; // { codigoLm, designacion, ean, seccion, cantidad }
     var articuloElegido = null;
@@ -1939,6 +1982,7 @@
       } else {
         datos.motivo = c.querySelector('#inMotivo').value.trim();
         if (!datos.motivo) { err.textContent = 'Falta el motivo.'; err.style.display = 'block'; return; }
+        datos.fechaEntrega = c.querySelector('#inFechaEntrega').value || null;
       }
       // Evita doble envío por doble clic/toque (bug real 2026-09-28: mismo
       // pedido creado dos veces) — el guardado real en el servidor bloquea
@@ -1991,6 +2035,7 @@
       const etiquetaEstadoEnvio = (p.tipo === 'pedido_cliente' && p.transporte) ? 'Envío' : 'HODOS';
       const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>' + etiquetaEstadoEnvio + '</b> ' + escHtml(r.hodosTexto) + '</div>' : '';
       const puedeAnular = (ROL === 'gestor' || ROL === 'master') && p.estado !== 'cerrada' && p.estado !== 'anulada';
+      const puedeCambiarFecha = (ROL === 'gestor' || ROL === 'master') && p.reservaFutura && p.estado === 'pendiente';
 
       const cont = app().querySelector('#detalle');
       cont.innerHTML =
@@ -2000,6 +2045,12 @@
         '<div style="margin-top:8px;color:var(--text-500);">Pedido por ' + escHtml(p.solicitante_ldap || '—') + ' · ' + new Date(p.creada_en).toLocaleString('es-ES') + '</div>' +
         '<div style="margin-top:8px;">' + camposTipo + '</div>' +
         (p.motivo ? '<div style="margin-top:8px;"><b>Motivo</b> ' + escHtml(p.motivo) + '</div>' : '') +
+        (p.fecha_entrega ? '<div style="margin-top:8px;"><b>Entrega</b> ' + escHtml(fechaCorta_(p.fecha_entrega)) + (p.reservaFutura ? ' · sale a preparación ' + escHtml(fechaCorta_(p.visible_desde)) : '') + '</div>' : '') +
+        (puedeCambiarFecha
+          ? '<div style="margin-top:8px;"><label style="display:block;color:var(--text-500);font-size:13px;" for="inNuevaFecha">Cambiar fecha de entrega</label>' +
+            '<input class="entrada" id="inNuevaFecha" type="date" value="' + escHtml(p.fecha_entrega) + '">' +
+            '<button class="btn btn-ghost" id="btnCambiarFecha">Guardar nueva fecha</button></div>'
+          : '') +
         (p.motivo_anulacion ? '<div style="margin-top:8px;"><b>Motivo de anulación</b> ' + escHtml(p.motivo_anulacion) + '</div>' : '') +
         hodosLinea +
         (p.comentario ? '<div style="margin-top:8px;"><b>Comentario</b> ' + escHtml(p.comentario) + '</div>' : '') +
@@ -2007,6 +2058,17 @@
         '<hr style="border-color:var(--ink-800);margin:12px 0;">' +
         filasLineas;
       cont.querySelector('#btnVolver2').onclick = origen;
+      if (puedeCambiarFecha) {
+        const btnCambiarFecha = cont.querySelector('#btnCambiarFecha');
+        btnCambiarFecha.onclick = function () {
+          const nueva = cont.querySelector('#inNuevaFecha').value;
+          if (!nueva) { kAlerta('Elige la nueva fecha.'); return; }
+          btnCambiarFecha.disabled = true;
+          gas('cambiarFechaEntrega', LDAP, id, nueva).then(function () { renderDetalle(id, origen); })
+            .catch(function (e) { btnCambiarFecha.disabled = false; kAlerta(e.message); });
+        };
+        cont.querySelector('#inNuevaFecha').onkeydown = function (e) { if (e.key === 'Enter') btnCambiarFecha.click(); };
+      }
       if (puedeAnular) {
         cont.querySelector('#btnAnular').onclick = function () {
           kPedirTexto('Motivo de la anulación:').then(function (motivo) {
