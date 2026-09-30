@@ -1056,7 +1056,9 @@
       activos.forEach(function (u) {
         const fila = el(
           '<div class="fila" style="cursor:default;flex-wrap:wrap;">' +
-            '<div><b>' + escHtml(u.ldap) + '</b></div>' +
+            '<div><b>' + escHtml([u.nombre, u.apellido].filter(Boolean).join(' ') || '(sin nombre)') + '</b>' +
+              '<div style="color:var(--text-500);font-size:12px;">' + escHtml(u.ldap) + (u.seccion ? ' · ' + escHtml(u.seccion) : '') + '</div>' +
+            '</div>' +
             '<div style="display:flex;gap:6px;align-items:center;">' +
               '<select class="entrada" style="width:auto;margin:0;padding:6px 8px;font-size:12px;" data-a="rol">' +
                 ROLES_ASIGNABLES_.map(function (r) { return '<option value="' + r + '"' + (r === u.rol ? ' selected' : '') + '>' + ETIQUETA_ROL[r] + '</option>'; }).join('') +
@@ -1069,7 +1071,7 @@
           gas('cambiarRolUsuarioPortal', LDAP, u.id, e.target.value).then(cargar).catch(function (err) { kAlerta(err.message); });
         };
         fila.querySelector('[data-a="rev"]').onclick = function () {
-          kConfirmar('¿Revocar acceso a ' + u.ldap + '?').then(function (ok) {
+          kConfirmar('¿Revocar acceso a ' + ([u.nombre, u.apellido].filter(Boolean).join(' ') || u.ldap) + '?').then(function (ok) {
             if (!ok) return;
             gas('revocarUsuarioPortal', LDAP, u.id).then(cargar).catch(function (e) { kAlerta(e.message); });
           });

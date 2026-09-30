@@ -22,9 +22,9 @@ function entrar(ldap) {
   });
 }
 
-/** nombre/apellido/seccion: solo registro de quién se va dando de alta —
- *  no se muestran en ninguna pantalla, el resto de la app sigue
- *  identificando a todos por LDAP únicamente. */
+/** nombre/apellido/seccion: se muestran solo en la pantalla de gestión de
+ *  usuarios (pendientes y activos) — el resto de la app sigue identificando
+ *  a todos por LDAP. Los usuarios anteriores a este registro no los tienen. */
 function registrarUsuario(ldap, tienda, rol, nombre, apellido, seccion) {
   ldap = String(ldap || '').trim();
   nombre = String(nombre || '').trim();
