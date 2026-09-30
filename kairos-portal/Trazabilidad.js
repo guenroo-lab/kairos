@@ -20,7 +20,7 @@
  *  cambia algo más adelante. */
 function listarTrazabilidad(ldap, historico) {
   const u = _usuarioDe_(ldap);
-  const campos = 'id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo,motivo_anulacion,en_curso_por,ubicacion_consolidacion';
+  const campos = 'id,tipo,num_pedido,num_cesion,tienda_destino,transporte,estado,creada_en,solicitante_ldap,motivo,motivo_anulacion,en_curso_por,ubicacion_consolidacion,fecha_entrega,visible_desde';
   const filtroTienda = 'tienda_origen=eq.' + encodeURIComponent(u.tienda);
   const filtroRol = u.rol === 'vendedor' ? '&tipo=eq.refill' : ''; // Vendedor solo ve Refill
 
@@ -38,6 +38,7 @@ function listarTrazabilidad(ldap, historico) {
   const peticiones = abiertas.concat(cerradasOAnuladas);
   if (!peticiones.length) return _json_([]);
 
+  const hoyReservas = _hoyMadridIso_();
   peticiones.forEach(function (p) {
     p.estadoTexto = TRADUCCION_ESTADO[p.estado] || p.estado;
     p.camino = (p.tipo === 'pedido_cliente' && p.transporte) ? 'a_ubicar'
@@ -46,6 +47,7 @@ function listarTrazabilidad(ldap, historico) {
     if (p.camino === 'a_ubicar' && p.ubicacion_consolidacion) {
       p.aUbicarTexto = 'Consolidado: ' + p.ubicacion_consolidacion;
     }
+    _marcarReserva_(p, hoyReservas);
   });
 
   const idsTodas = peticiones.map(function (p) { return p.id; }).join(',');
@@ -136,6 +138,7 @@ function listarTrazabilidad(ldap, historico) {
       : [];
 
     peticionesRefill.forEach(function (p) {
+      if (p.reservaFutura) { p.refillTexto = 'Reservada'; return; }
       const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
       const ssccPeticion = [];
       propias.forEach(function (l) {

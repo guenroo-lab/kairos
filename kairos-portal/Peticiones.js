@@ -288,6 +288,11 @@ function _crearPeticion_(ldap, tipo, datos, lineas) {
   } else {
     if (!datos.motivo) throw new Error('Falta el motivo del refill.');
     cabecera.motivo = String(datos.motivo).trim();
+    if (datos.fechaEntrega) {
+      const fecha = _validarFechaEntrega_(datos.fechaEntrega, _hoyMadridIso_());
+      cabecera.fecha_entrega = fecha;
+      cabecera.visible_desde = _ultimoLaborableAnterior_(fecha);
+    }
   }
 
   // Asignación automática individual/equipo por peso — solo pedido_cliente
@@ -349,11 +354,15 @@ function listarMisPeticiones(ldap) {
   const u = _usuarioDe_(ldap);
   var q = 'tienda_origen=eq.' + encodeURIComponent(u.tienda) +
     '&estado=not.in.(cerrada,anulada)' +
-    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,estado,creada_en,solicitante_ldap' +
+    '&select=id,tipo,num_pedido,num_cesion,tienda_destino,estado,creada_en,solicitante_ldap,fecha_entrega,visible_desde' +
     '&order=creada_en.desc&limit=200';
   if (u.rol === 'vendedor') q += '&tipo=eq.refill'; // Vendedor solo ve Refill
   const filas = supaSelect_('peticiones', q);
-  filas.forEach(function (p) { p.estadoTexto = TRADUCCION_ESTADO[p.estado] || p.estado; });
+  const hoy = _hoyMadridIso_();
+  filas.forEach(function (p) {
+    p.estadoTexto = TRADUCCION_ESTADO[p.estado] || p.estado;
+    _marcarReserva_(p, hoy);
+  });
   if (filas.length) {
     const ids = filas.map(function (p) { return p.id; }).join(',');
     const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,codigo_lm,designacion');
@@ -372,6 +381,7 @@ function obtenerDetallePeticion(ldap, peticionId) {
   if (!cab.length) throw new Error('Petición no encontrada.');
   const peticion = cab[0];
   peticion.estadoTexto = TRADUCCION_ESTADO[peticion.estado] || peticion.estado;
+  _marcarReserva_(peticion, _hoyMadridIso_());
 
   const lineas = supaSelect_('lineas', 'peticion_id=eq.' + encodeURIComponent(peticionId) + '&order=id.asc');
 
