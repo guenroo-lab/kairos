@@ -48,7 +48,7 @@ El cálculo se hace en el servidor (autoritativo) y en el cliente solo para most
 
 ## kairos-operario
 
-Añade `visible_desde=lte.<hoy Madrid>` en las cinco consultas que muestran peticiones a operarios y jefe:
+Añade `visible_desde=lte.<hoy Madrid>` en las cuatro consultas que muestran peticiones abiertas a operarios y jefe:
 
 - `Cola.js`: `listarCola` y `contarPeticionesPorTienda`.
 - `Estado.js`: `listarEstadoPeticiones`.
@@ -69,7 +69,7 @@ El servidor de operario usa un helper `_hoyMadridIso_()` (proyectos GAS separado
 
 - Función de fechas en Node con casos: lunes, martes, sábado, domingo, mañana y hoy.
 - Migración: aplicada y verificada con consultas (columnas, CHECK, valor por defecto).
-- Simulación en Supabase: crear una reserva con `visible_desde` futuro y comprobar que las cinco consultas de operario no la devuelven; adelantar `visible_desde` y comprobar que aparece. Borrar los datos de prueba al terminar (producción arranca limpia).
+- Simulación en Supabase: crear una reserva con `visible_desde` futuro y comprobar que las cuatro consultas de operario no la devuelven; adelantar `visible_desde` y comprobar que aparece. Borrar los datos de prueba al terminar (producción arranca limpia).
 - Comprobación de sintaxis de todos los `<script>` de `Portal.html` y del resto de archivos antes de cada despliegue.
 
 ## Fuera de alcance
