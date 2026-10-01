@@ -8,10 +8,17 @@ function _candidatosStock_(tienda, codigoLm) {
     'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(codigoLm));
 }
 
-function _ultimoSyncStockFisico_(tienda) {
-  const filas = supaSelect_('stock_fisico',
-    'tienda=eq.' + encodeURIComponent(tienda) + '&select=sincronizado_en&order=sincronizado_en.desc&limit=1');
-  return filas.length ? filas[0].sincronizado_en : null;
+/** Marca del snapshot de stock_fisico con el que se leyeron `filas` (la
+ *  `sincronizado_en` más reciente de ellas). Se saca de las MISMAS filas que
+ *  se usan para calcular, no de una consulta aparte: si entre medias entra una
+ *  carga nueva de stock, cantidades y marca seguirían siendo de snapshots
+ *  distintos y el consumo ya reflejado se restaría dos veces o ninguna. */
+function _marcaDeSnapshot_(filas) {
+  var max = null;
+  filas.forEach(function (f) {
+    if (f.sincronizado_en && (!max || Date.parse(f.sincronizado_en) > Date.parse(max))) max = f.sincronizado_en;
+  });
+  return max;
 }
 
 /** Espejo de _parseCeldaSsccMulti_ (sistema viejo): "sscc1 (Xud) + sscc2 (Yud)"
@@ -27,19 +34,112 @@ function _parseSsccMulti_(valorSscc, cantidadFila) {
   });
 }
 
-/** Unidades ya comprometidas por SSCC en OTRAS líneas de esa tienda con el
- *  mismo código, asignadas desde el último sync (antes de eso, el snapshot
- *  actual ya refleja el consumo real). */
-function _usoComprometidoPorSscc_(tienda, codigoLm, lineaIdExcluir, desde) {
-  var q = 'codigo_lm=eq.' + encodeURIComponent(codigoLm) +
-    '&sscc=not.is.null&select=id,sscc,cantidad,peticiones!inner(tienda_origen)' +
+const FALTANTES_TOTALES_ASIGNACION_ = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'];
+// Cuánto hacia atrás desde la marca del snapshot se miran líneas ya preparadas
+// de pedidos que aún no se habían completado (acota la consulta).
+const VENTANA_CONSUMO_MS_ = 7 * 24 * 60 * 60 * 1000;
+
+/** ¿Sigue el consumo de esta línea ya preparada SIN reflejarse en el
+ *  snapshot de stock (marca `desde`)? Depende de cuándo se mueve el stock en
+ *  myISO (ver Index.html, dispararTransfers_/dispararMoveToAddress_):
+ *   - refill: al preparar cada línea (el palet va a XP1, fuera del snapshot);
+ *   - pedido cliente / cesión: SOLO cuando el pedido entero está preparado.
+ *     Hasta entonces el CSV sigue mostrando las unidades en su palet, aunque
+ *     la línea se preparase horas antes del snapshot.
+ *  `finPorPeticion` = última preparada_en de cada petición en 'a_ubicar'
+ *  (todas preparadas pero sin ubicación de consolidación: no tiene cerrada_en). */
+function _consumoSinReflejar_(l, desde, finPorPeticion) {
+  const p = l.peticiones || {};
+  const marca = Date.parse(desde);
+  if (p.tipo === 'refill' || p.estado === 'anulada') return Date.parse(l.preparada_en) >= marca;
+  if (p.estado === 'cerrada') return !!p.cerrada_en && Date.parse(p.cerrada_en) >= marca;
+  if (p.estado === 'a_ubicar') {
+    const fin = finPorPeticion[l.peticion_id];
+    return !fin || Date.parse(fin) >= marca;
+  }
+  return true; // pendiente / en_preparacion: el pedido aún no está completo
+}
+
+function _finPreparacionPorPeticion_(idsPeticion) {
+  const fin = {};
+  if (!idsPeticion.length) return fin;
+  supaSelect_('lineas',
+    'peticion_id=in.(' + idsPeticion.map(encodeURIComponent).join(',') + ')&select=peticion_id,preparada_en')
+    .forEach(function (x) {
+      if (x.preparada_en && (!fin[x.peticion_id] || Date.parse(x.preparada_en) > Date.parse(fin[x.peticion_id]))) fin[x.peticion_id] = x.preparada_en;
+    });
+  return fin;
+}
+
+/** Palets y unidades que ocupa una línea ya preparada, para restarlos. */
+function _partesDeLineaPreparada_(l) {
+  var partes = _parseSsccMulti_(l.sscc, l.cantidad);
+  const tipo = (l.peticiones || {}).tipo;
+  if (l.estado_negocio === 'Parcial' && tipo !== 'refill') {
+    // Solo se cogió cantidad_preparada: se reparte sobre los palets en orden.
+    // (En refill no se sabe QUÉ palets se confirmaron: se cuentan todos
+    // enteros hasta el siguiente snapshot, que es el lado seguro.)
+    var restante = Number(l.cantidad_preparada) || 0;
+    partes = partes.map(function (p) {
+      const tomado = Math.min(p.cantidad, restante);
+      restante -= tomado;
+      return { sscc: p.sscc, cantidad: tomado };
+    });
+  }
+  return partes;
+}
+
+/** Líneas de esa tienda con palet asignado cuyas unidades el snapshot de
+ *  stock_fisico (marca `desde`) TODAVÍA cuenta como disponibles:
+ *   - las aún sin preparar (el palet sigue intacto), da igual cuándo se
+ *     asignaron: una asignación no caduca con la carga de stock;
+ *   - las ya preparadas cuyo consumo el snapshot no refleja (ver
+ *     _consumoSinReflejar_), también las de peticiones anuladas después.
+ *  Se excluyen las pendientes de peticiones anuladas y las que acabaron en
+ *  faltante total (no se cogió nada). Antes solo contaban las asignadas desde
+ *  el último sync: tras cada carga de stock se "olvidaba" lo reservado y aún
+ *  sin preparar, y otro pedido podía recibir el mismo palet.
+ *  Devuelve [{ id, codigo_lm, partes: [{sscc, cantidad}] }] sin repetir líneas
+ *  (dos lecturas seguidas pueden ver la misma línea en estados distintos). */
+function _lineasComprometidas_(tienda, codigos, desde) {
+  if (!codigos.length) return [];
+  const comunes = 'codigo_lm=in.(' + codigos.map(encodeURIComponent).join(',') + ')&sscc=not.is.null' +
+    '&select=id,peticion_id,codigo_lm,sscc,cantidad,cantidad_preparada,estado_negocio,preparada_en,peticiones!inner(tipo,tienda_origen,estado,cerrada_en)' +
     '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda);
-  if (desde) q += '&sscc_asignado_en=gte.' + encodeURIComponent(desde);
-  const filas = supaSelect_('lineas', q);
+  const pendientes = supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
+  const preparadas = desde
+    ? supaSelect_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' +
+        encodeURIComponent(new Date(Date.parse(desde) - VENTANA_CONSUMO_MS_).toISOString()))
+    : [];
+  const aUbicar = [];
+  preparadas.forEach(function (l) {
+    if ((l.peticiones || {}).estado === 'a_ubicar' && aUbicar.indexOf(l.peticion_id) === -1) aUbicar.push(l.peticion_id);
+  });
+  const finPorPeticion = _finPreparacionPorPeticion_(aUbicar);
+
+  const vistas = {};
+  const resultado = [];
+  pendientes.forEach(function (l) {
+    vistas[l.id] = true;
+    resultado.push({ id: l.id, codigo_lm: l.codigo_lm, partes: _parseSsccMulti_(l.sscc, l.cantidad) });
+  });
+  preparadas.forEach(function (l) {
+    if (vistas[l.id]) return;
+    if (FALTANTES_TOTALES_ASIGNACION_.indexOf(l.estado_negocio) !== -1) return;
+    if (!_consumoSinReflejar_(l, desde, finPorPeticion)) return;
+    vistas[l.id] = true;
+    resultado.push({ id: l.id, codigo_lm: l.codigo_lm, partes: _partesDeLineaPreparada_(l) });
+  });
+  return resultado;
+}
+
+/** Unidades ya comprometidas por SSCC en OTRAS líneas de esa tienda con el
+ *  mismo código (ver _lineasComprometidas_). */
+function _usoComprometidoPorSscc_(tienda, codigoLm, lineaIdExcluir, desde) {
   const uso = {};
-  filas.forEach(function (l) {
+  _lineasComprometidas_(tienda, [codigoLm], desde).forEach(function (l) {
     if (l.id === lineaIdExcluir) return;
-    _parseSsccMulti_(l.sscc, l.cantidad).forEach(function (p) {
+    l.partes.forEach(function (p) {
       if (!p.sscc) return;
       uso[p.sscc] = (uso[p.sscc] || 0) + p.cantidad;
     });
@@ -63,8 +163,7 @@ function _ssccUsadosEnPeticion_(peticionId, lineaIdExcluir) {
 }
 
 function _repartirEntreCandidatos_(tienda, linea, candidatos) {
-  const desde = _ultimoSyncStockFisico_(tienda);
-  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, desde);
+  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, _marcaDeSnapshot_(candidatos));
   function remanente(c) { return c.cantidad - (uso[c.sscc] || 0); }
   const necesarias = Number(linea.cantidad);
 
@@ -149,8 +248,14 @@ function _asignarSsccSiFalta_(linea, peticion) {
 
   var resultado;
   if (peticion.tipo === 'refill') {
-    const c = candidatos.filter(function (x) { return x.cantidad > 0; })[0];
-    if (!c) throw new Error('Sin palet disponible para el código ' + linea.codigo_lm + '.');
+    // Y un palet entero solo sirve si NADA de él está reservado por otras
+    // líneas (otro refill lo eligió, un pedido cliente tiene unidades suyas).
+    const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, _marcaDeSnapshot_(candidatos));
+    const c = candidatos.filter(function (x) { return x.cantidad > 0 && !(uso[x.sscc] > 0); })[0];
+    if (!c) {
+      throw new Error('Sin palet disponible para el código ' + linea.codigo_lm +
+        (candidatos.some(function (x) { return x.cantidad > 0; }) ? ' (los que hay están reservados por otras peticiones).' : '.'));
+    }
     // Refill se lleva el palet ENTERO: se guarda la cantidad real en el
     // propio string del sscc (mismo formato "sscc (Xud)" que ya usa el
     // reparto normal) para que el remanente de otras líneas del mismo
@@ -190,8 +295,7 @@ function listarPaletsAlternativos(lineaId) {
   const candidatos = _candidatosStock_(tienda, linea.codigo_lm);
   if (!candidatos.length) return _json_([]);
 
-  const desde = _ultimoSyncStockFisico_(tienda);
-  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, desde);
+  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, _marcaDeSnapshot_(candidatos));
   const actuales = _parseSsccMulti_(linea.sscc, linea.cantidad).map(function (p) { return p.sscc; });
 
   const lista = candidatos.map(function (c) {

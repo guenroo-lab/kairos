@@ -81,6 +81,23 @@ function supaUpdate_(tabla, queryString, cuerpo) {
   if (code >= 300) throw new Error('Supabase update ' + code + ': ' + resp.getContentText());
 }
 
+/** Llama a una función de Postgres (RPC) del esquema preparacion y devuelve
+ *  su resultado ya parseado. Un error de la función llega como Error con su
+ *  mensaje (p.ej. el RAISE EXCEPTION de reemplazar_stock_fisico). */
+function supaRpc_(nombre, argumentos) {
+  const url = CFG.SUPABASE_URL + '/rest/v1/rpc/' + nombre;
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'post',
+    headers: _supaHeaders_('POST'),
+    payload: JSON.stringify(argumentos || {}),
+    muteHttpExceptions: true,
+  });
+  const code = resp.getResponseCode();
+  const texto = resp.getContentText();
+  if (code >= 300) throw new Error('Supabase rpc ' + nombre + ' ' + code + ': ' + texto);
+  return texto ? JSON.parse(texto) : null;
+}
+
 /** Inserta un array de objetos en `tabla` (sin resolución de conflictos). */
 function supaInsertMany_(tabla, filas) {
   if (!filas.length) return;

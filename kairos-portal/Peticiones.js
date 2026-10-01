@@ -40,10 +40,106 @@ function _unidadesDeLinea_(linea, tipo) {
   }, 0);
 }
 
+const FALTANTES_TOTALES_STOCK_ = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'];
+// Cuánto hacia atrás desde la marca del snapshot se miran líneas ya preparadas
+// de pedidos que aún no se habían completado (acota la consulta).
+const VENTANA_CONSUMO_MS_ = 7 * 24 * 60 * 60 * 1000;
+
+/** "sscc1 (Xud) + sscc2 (Yud)" o un SSCC suelto (se lleva toda la cantidad de
+ *  la línea) → [{sscc, cantidad}]. Espejo de _parseSsccMulti_ de kairos-operario. */
+function _partesSscc_(valorSscc, cantidadFila) {
+  const raw = String(valorSscc || '').trim();
+  if (!raw) return [];
+  const partes = raw.indexOf(' + ') === -1 ? [raw] : raw.split(' + ');
+  return partes.map(function (parte) {
+    const m = parte.trim().match(/^(.+?)\s*\((\d+(?:[.,]\d+)?)\s*ud\)$/);
+    if (m) return { sscc: m[1].trim(), cantidad: Number(m[2].replace(',', '.')) || 0 };
+    return { sscc: parte.trim(), cantidad: partes.length === 1 ? (Number(cantidadFila) || 0) : 0 };
+  });
+}
+
+/** ¿Sigue el consumo de esta línea ya preparada SIN reflejarse en el
+ *  snapshot de stock (marca `desde`)? Espejo de _consumoSinReflejar_ de
+ *  kairos-operario/StockAsignacion.js — ahí está explicado: en refill el stock
+ *  se mueve al preparar cada línea; en pedido cliente / cesión solo cuando el
+ *  pedido entero está preparado, así que hasta entonces el CSV sigue contando
+ *  las unidades aunque la línea se preparase antes del snapshot. */
+function _consumoSinReflejar_(l, desde, finPorPeticion) {
+  const p = l.peticiones || {};
+  const marca = Date.parse(desde);
+  if (p.tipo === 'refill' || p.estado === 'anulada') return Date.parse(l.preparada_en) >= marca;
+  if (p.estado === 'cerrada') return !!p.cerrada_en && Date.parse(p.cerrada_en) >= marca;
+  if (p.estado === 'a_ubicar') {
+    const fin = finPorPeticion[l.peticion_id];
+    return !fin || Date.parse(fin) >= marca;
+  }
+  return true; // pendiente / en_preparacion: el pedido aún no está completo
+}
+
+function _finPreparacionPorPeticion_(idsPeticion) {
+  const fin = {};
+  if (!idsPeticion.length) return fin;
+  supaSelect_('lineas',
+    'peticion_id=in.(' + idsPeticion.map(encodeURIComponent).join(',') + ')&select=peticion_id,preparada_en')
+    .forEach(function (x) {
+      if (x.preparada_en && (!fin[x.peticion_id] || Date.parse(x.preparada_en) > Date.parse(fin[x.peticion_id]))) fin[x.peticion_id] = x.preparada_en;
+    });
+  return fin;
+}
+
+/** Unidades que sigue ocupando una línea ya preparada (0 si no se cogió nada). */
+function _unidadesDeLineaPreparada_(l, tipo) {
+  if (FALTANTES_TOTALES_STOCK_.indexOf(l.estado_negocio) !== -1) return 0;
+  // Refill: se cuentan los palets elegidos enteros, también en Parcial (no se
+  // sabe cuáles se confirmaron; el siguiente snapshot lo corrige).
+  if (tipo === 'refill') return _unidadesDeLinea_(l, 'refill');
+  if (l.estado_negocio === 'Parcial') return Number(l.cantidad_preparada) || 0;
+  return Number(l.cantidad) || 0;
+}
+
+/** Líneas de esa tienda y código que el snapshot de stock_fisico (marca
+ *  `desde`) todavía cuenta como disponibles:
+ *   - las aún sin preparar de peticiones no anuladas, tengan palet o no;
+ *   - las ya preparadas cuyo consumo el snapshot no refleja (_consumoSinReflejar_),
+ *     también las de peticiones anuladas después de preparar (lo cogido ya
+ *     salió de su palet aunque se anule el resto).
+ *  Devuelve [{ id, unidades, partes: [{sscc, cantidad}] }] sin repetir líneas. */
+function _lineasComprometidasPortal_(tienda, codigo, desde) {
+  const comunes = 'codigo_lm=eq.' + encodeURIComponent(codigo) +
+    '&select=id,peticion_id,sscc,cantidad,cantidad_preparada,estado_negocio,preparada_en,peticiones!inner(tipo,estado,cerrada_en)' +
+    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda);
+  const pendientes = supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
+  const preparadas = desde
+    ? supaSelect_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' +
+        encodeURIComponent(new Date(Date.parse(desde) - VENTANA_CONSUMO_MS_).toISOString()))
+    : [];
+  const aUbicar = [];
+  preparadas.forEach(function (l) {
+    if ((l.peticiones || {}).estado === 'a_ubicar' && aUbicar.indexOf(l.peticion_id) === -1) aUbicar.push(l.peticion_id);
+  });
+  const finPorPeticion = _finPreparacionPorPeticion_(aUbicar);
+
+  const vistas = {};
+  const resultado = [];
+  pendientes.forEach(function (l) {
+    vistas[l.id] = true;
+    resultado.push({ id: l.id, unidades: _unidadesDeLinea_(l, l.peticiones && l.peticiones.tipo), partes: _partesSscc_(l.sscc, l.cantidad) });
+  });
+  preparadas.forEach(function (l) {
+    if (vistas[l.id]) return;
+    if (!_consumoSinReflejar_(l, desde, finPorPeticion)) return;
+    const unidades = _unidadesDeLineaPreparada_(l, l.peticiones && l.peticiones.tipo);
+    if (unidades <= 0) return;
+    vistas[l.id] = true;
+    resultado.push({ id: l.id, unidades: unidades, partes: _partesSscc_(l.sscc, l.cantidad) });
+  });
+  return resultado;
+}
+
 /** Stock de un código en una tienda: físico (snapshot de stock_fisico,
  *  edificio 05) y lo ya comprometido por peticiones no anuladas — las aún
- *  sin preparar, y las preparadas después del último sync (el snapshot
- *  todavía no refleja lo que consumieron). disponible = físico − comprometido. */
+ *  sin preparar, y las preparadas cuyo consumo el snapshot todavía no
+ *  refleja. disponible = físico − comprometido. */
 function _stockDetalle_(tienda, codigoLm) {
   const codigo = String(codigoLm || '').trim();
   const filas = supaSelect_('stock_fisico',
@@ -51,38 +147,23 @@ function _stockDetalle_(tienda, codigoLm) {
   var fisico = 0, desde = null;
   filas.forEach(function (f) {
     fisico += Number(f.cantidad) || 0;
-    if (!desde || f.sincronizado_en > desde) desde = f.sincronizado_en;
+    if (!desde || Date.parse(f.sincronizado_en) > Date.parse(desde)) desde = f.sincronizado_en;
   });
-
-  const base = 'codigo_lm=eq.' + encodeURIComponent(codigo) +
-    '&select=cantidad,sscc,estado_negocio,cantidad_preparada,peticiones!inner(tipo)' +
-    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) +
-    '&peticiones.estado=neq.anulada';
-  const pendientes = supaSelect_('lineas', base + '&estado_preparacion=neq.preparado');
-  const consumidas = desde
-    ? supaSelect_('lineas', base + '&estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde))
-    : [];
 
   var comprometido = 0;
-  pendientes.forEach(function (l) {
-    comprometido += _unidadesDeLinea_(l, l.peticiones && l.peticiones.tipo);
-  });
-  consumidas.forEach(function (l) {
-    if (l.peticiones && l.peticiones.tipo === 'refill') {
-      // El palet ya está en XP1 (silueta de carga), que stock_fisico excluye,
-      // pero el snapshot actual aún lo cuenta en su ubicación de origen
-      // (estas líneas se prepararon después del último sync). Mientras tanto
-      // se resta; tras el próximo sync ya no entra en `consumidas`.
-      if (!l.estado_negocio || l.estado_negocio === 'Preparado' || l.estado_negocio === 'Consolidado') {
-        comprometido += _unidadesDeLinea_(l, 'refill');
-      }
-      return;
-    }
-    if (l.estado_negocio === 'Parcial') comprometido += Number(l.cantidad_preparada) || 0;
-    else if (l.estado_negocio === 'Sin Palet' || l.estado_negocio === 'Sin Mercancía' || l.estado_negocio === 'Otras Incidencias') return;
-    else comprometido += Number(l.cantidad) || 0;
-  });
+  _lineasComprometidasPortal_(tienda, codigo, desde).forEach(function (l) { comprometido += l.unidades; });
   return { fisico: fisico, comprometido: comprometido, disponible: Math.max(0, fisico - comprometido) };
+}
+
+/** Palets (SSCC) de ese código con unidades ya reservadas por otras
+ *  peticiones — un refill se lleva el palet entero, así que no se pueden
+ *  elegir. {sscc: true}. */
+function _ssccReservados_(tienda, codigo, desde) {
+  const reservados = {};
+  _lineasComprometidasPortal_(tienda, codigo, desde).forEach(function (l) {
+    l.partes.forEach(function (p) { if (p.sscc) reservados[p.sscc] = true; });
+  });
+  return reservados;
 }
 
 function _mensajeSinStock_(etiqueta, pedidas, d) {
@@ -149,11 +230,21 @@ function buscarPaletPorSscc(ldap, sscc) {
  *  que el almacén asigne uno solo al preparar. */
 function listarSsccDisponibles(ldap, codigoLm) {
   const tienda = _tiendaDe_(ldap);
-  const filas = supaSelect_('stock_fisico',
-    'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(String(codigoLm || '').trim()) +
-    '&select=sscc,ubicacion,cantidad&order=cantidad.desc')
+  const codigo = String(codigoLm || '').trim();
+  const todas = supaSelect_('stock_fisico',
+    'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(codigo) +
+    '&select=sscc,ubicacion,cantidad,sincronizado_en&order=cantidad.desc')
     .filter(function (f) { return f.cantidad > 0; });
+  if (!todas.length) return _json_([]);
+
+  // Un refill se lleva el palet entero: no se ofrecen los que ya tienen
+  // unidades reservadas por otras peticiones (otro refill, un pedido cliente).
+  var desde = null;
+  todas.forEach(function (f) { if (!desde || Date.parse(f.sincronizado_en) > Date.parse(desde)) desde = f.sincronizado_en; });
+  const reservados = _ssccReservados_(tienda, codigo, desde);
+  const filas = todas.filter(function (f) { return !reservados[f.sscc]; });
   if (!filas.length) return _json_([]);
+  filas.forEach(function (f) { delete f.sincronizado_en; });
 
   // Contenido completo de cada palet (otras referencias que también lleva),
   // para elegir el que más convenga pedir.
@@ -206,10 +297,34 @@ function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
   });
 }
 
-/** Pedido cliente comprueba stock al enviar: se serializa con un lock para
- *  que dos peticiones simultáneas no reserven las mismas últimas unidades. */
+/** Refill con palets elegidos a mano (listarSsccDisponibles): ninguno puede
+ *  estar ya reservado por otra petición — mismo palet en dos refill, o un
+ *  palet con unidades de un pedido cliente. Se comprueba también aquí (no
+ *  solo al listar) porque pudo reservarse entre medias. */
+function _exigirPaletsLibres_(tienda, lineas) {
+  const ocupados = [];
+  lineas.forEach(function (l) {
+    if (!l.sscc) return;
+    const codigo = String(l.codigoLm || '').trim();
+    const marca = supaSelect_('stock_fisico',
+      'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(codigo) +
+      '&select=sincronizado_en&order=sincronizado_en.desc&limit=1');
+    const reservados = _ssccReservados_(tienda, codigo, marca.length ? marca[0].sincronizado_en : null);
+    _partesSscc_(l.sscc, 0).forEach(function (p) {
+      if (p.sscc && reservados[p.sscc]) ocupados.push(p.sscc + ' (' + codigo + ')');
+    });
+  });
+  if (ocupados.length) {
+    throw new Error('No se ha enviado el refill: ya hay otra petición con unidades de estos palets: ' +
+      ocupados.join(', ') + '. Elige otro palet.');
+  }
+}
+
+/** Pedido cliente comprueba stock y refill comprueba que sus palets sigan
+ *  libres al enviar: se serializa con un lock para que dos peticiones
+ *  simultáneas no reserven las mismas últimas unidades / el mismo palet. */
 function crearPeticion(ldap, tipo, datos, lineas) {
-  if (tipo !== 'pedido_cliente') return _crearPeticion_(ldap, tipo, datos, lineas);
+  if (tipo !== 'pedido_cliente' && tipo !== 'refill') return _crearPeticion_(ldap, tipo, datos, lineas);
   const lock = LockService.getScriptLock();
   try { lock.waitLock(20000); } catch (err) { throw new Error('El sistema está ocupado, inténtalo de nuevo en unos segundos.'); }
   try { return _crearPeticion_(ldap, tipo, datos, lineas); } finally { lock.releaseLock(); }
@@ -276,6 +391,7 @@ function _crearPeticion_(ldap, tipo, datos, lineas) {
   // aquí aunque ya se avisara al añadir el artículo — el stock pudo agotarse
   // entretanto). Cesión y refill solo avisan al añadir, no bloquean.
   if (tipo === 'pedido_cliente') _exigirStockPedidoCliente_(tienda, lineas);
+  if (tipo === 'refill') _exigirPaletsLibres_(tienda, lineas);
 
   const cabecera = {
     tipo: tipo,

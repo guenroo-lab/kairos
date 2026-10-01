@@ -86,15 +86,11 @@ function _ubicacionesPrevistas_(peticiones, lineas) {
 
       const stock = supaSelect_('stock_fisico',
         'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=in.(' + lista + ')');
-      const desde = _ultimoSyncStockFisico_(tienda);
-      var qUso = 'codigo_lm=in.(' + lista + ')&sscc=not.is.null&select=id,codigo_lm,sscc,cantidad,peticiones!inner(tienda_origen)' +
-        '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda);
-      if (desde) qUso += '&sscc_asignado_en=gte.' + encodeURIComponent(desde);
-      const comprometidas = supaSelect_('lineas', qUso);
+      const comprometidas = _lineasComprometidas_(tienda, codigos, _marcaDeSnapshot_(stock));
 
       const uso = {};
       comprometidas.forEach(function (l) {
-        _parseSsccMulti_(l.sscc, l.cantidad).forEach(function (parte) {
+        l.partes.forEach(function (parte) {
           if (!parte.sscc) return;
           const k = l.codigo_lm + '|' + parte.sscc;
           uso[k] = (uso[k] || 0) + parte.cantidad;
