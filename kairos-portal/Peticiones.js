@@ -41,9 +41,14 @@ function _unidadesDeLinea_(linea, tipo) {
 }
 
 const FALTANTES_TOTALES_STOCK_ = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'];
-// Cuánto hacia atrás desde la marca del snapshot se miran líneas ya preparadas
-// de pedidos que aún no se habían completado (acota la consulta).
-const VENTANA_CONSUMO_MS_ = 7 * 24 * 60 * 60 * 1000;
+// Máximo de ids (uuid / SSCC) por consulta: UrlFetchApp admite URLs de ~2 KB.
+const TROZO_IDS_ = 30;
+
+function _trozos_(lista, tamano) {
+  const trozos = [];
+  for (var i = 0; i < lista.length; i += tamano) trozos.push(lista.slice(i, i + tamano));
+  return trozos;
+}
 
 /** "sscc1 (Xud) + sscc2 (Yud)" o un SSCC suelto (se lleva toda la cantidad de
  *  la línea) → [{sscc, cantidad}]. Espejo de _parseSsccMulti_ de kairos-operario. */
@@ -58,33 +63,24 @@ function _partesSscc_(valorSscc, cantidadFila) {
   });
 }
 
-/** ¿Sigue el consumo de esta línea ya preparada SIN reflejarse en el
- *  snapshot de stock (marca `desde`)? Espejo de _consumoSinReflejar_ de
- *  kairos-operario/StockAsignacion.js — ahí está explicado: en refill el stock
- *  se mueve al preparar cada línea; en pedido cliente / cesión solo cuando el
- *  pedido entero está preparado, así que hasta entonces el CSV sigue contando
- *  las unidades aunque la línea se preparase antes del snapshot. */
-function _consumoSinReflejar_(l, desde, finPorPeticion) {
-  const p = l.peticiones || {};
-  const marca = Date.parse(desde);
-  if (p.tipo === 'refill' || p.estado === 'anulada') return Date.parse(l.preparada_en) >= marca;
-  if (p.estado === 'cerrada') return !!p.cerrada_en && Date.parse(p.cerrada_en) >= marca;
-  if (p.estado === 'a_ubicar') {
-    const fin = finPorPeticion[l.peticion_id];
-    return !fin || Date.parse(fin) >= marca;
-  }
-  return true; // pendiente / en_preparacion: el pedido aún no está completo
-}
-
-function _finPreparacionPorPeticion_(idsPeticion) {
-  const fin = {};
-  if (!idsPeticion.length) return fin;
+/** Peticiones de pedido cliente / cesión cuya ÚLTIMA línea se preparó después
+ *  de la marca del snapshot. Espejo de kairos-operario/StockAsignacion.js —
+ *  allí está explicado: la transferencia de stock en myISO se dispara al
+ *  preparar la última línea del pedido, no al preparar cada una. Memoizado
+ *  por ejecución. */
+var COMPLETADAS_MEMO_ = {};
+function _peticionesCompletadasDesde_(tienda, desde) {
+  const clave = tienda + '|' + desde;
+  if (COMPLETADAS_MEMO_[clave]) return COMPLETADAS_MEMO_[clave];
+  const ids = [];
   supaSelect_('lineas',
-    'peticion_id=in.(' + idsPeticion.map(encodeURIComponent).join(',') + ')&select=peticion_id,preparada_en')
-    .forEach(function (x) {
-      if (x.preparada_en && (!fin[x.peticion_id] || Date.parse(x.preparada_en) > Date.parse(fin[x.peticion_id]))) fin[x.peticion_id] = x.preparada_en;
-    });
-  return fin;
+    'estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde) +
+    '&select=peticion_id,peticiones!inner(tipo,estado)' +
+    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) +
+    '&peticiones.tipo=neq.refill&peticiones.estado=in.(a_ubicar,cerrada)')
+    .forEach(function (l) { if (ids.indexOf(l.peticion_id) === -1) ids.push(l.peticion_id); });
+  COMPLETADAS_MEMO_[clave] = ids;
+  return ids;
 }
 
 /** Unidades que sigue ocupando una línea ya preparada (0 si no se cogió nada). */
@@ -97,43 +93,91 @@ function _unidadesDeLineaPreparada_(l, tipo) {
   return Number(l.cantidad) || 0;
 }
 
-/** Líneas de esa tienda y código que el snapshot de stock_fisico (marca
+/** Palets que ocupa una línea ya preparada (igual que en kairos-operario:
+ *  un parcial no-refill solo ocupa lo cogido, repartido en orden). */
+function _partesDeLineaPreparada_(l, tipo) {
+  var partes = _partesSscc_(l.sscc, l.cantidad);
+  if (l.estado_negocio === 'Parcial' && tipo !== 'refill') {
+    var restante = Number(l.cantidad_preparada) || 0;
+    partes = partes.map(function (p) {
+      const tomado = Math.min(p.cantidad, restante);
+      restante -= tomado;
+      return { sscc: p.sscc, cantidad: tomado };
+    }).filter(function (p) { return p.cantidad > 0; });
+  }
+  return partes;
+}
+
+/** Líneas de esa tienda y esos códigos que el snapshot de stock_fisico (marca
  *  `desde`) todavía cuenta como disponibles:
  *   - las aún sin preparar de peticiones no anuladas, tengan palet o no;
- *   - las ya preparadas cuyo consumo el snapshot no refleja (_consumoSinReflejar_),
- *     también las de peticiones anuladas después de preparar (lo cogido ya
- *     salió de su palet aunque se anule el resto).
+ *   - las ya preparadas cuyo consumo el snapshot no refleja: preparadas
+ *     después de la marca (también si la petición se anuló luego: lo cogido ya
+ *     salió de su palet), preparadas en un pedido todavía incompleto, y las de
+ *     un pedido que se completó después de la marca. En refill el stock se
+ *     mueve al preparar cada línea; en pedido cliente / cesión, al preparar la
+ *     última del pedido (ver kairos-operario/StockAsignacion.js).
  *  Devuelve [{ id, unidades, partes: [{sscc, cantidad}] }] sin repetir líneas. */
-function _lineasComprometidasPortal_(tienda, codigo, desde) {
-  const comunes = 'codigo_lm=eq.' + encodeURIComponent(codigo) +
-    '&select=id,peticion_id,sscc,cantidad,cantidad_preparada,estado_negocio,preparada_en,peticiones!inner(tipo,estado,cerrada_en)' +
-    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda);
-  const pendientes = supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
-  const preparadas = desde
-    ? supaSelect_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' +
-        encodeURIComponent(new Date(Date.parse(desde) - VENTANA_CONSUMO_MS_).toISOString()))
-    : [];
-  const aUbicar = [];
-  preparadas.forEach(function (l) {
-    if ((l.peticiones || {}).estado === 'a_ubicar' && aUbicar.indexOf(l.peticion_id) === -1) aUbicar.push(l.peticion_id);
+function _lineasComprometidasPortal_(tienda, codigos, desde) {
+  const todas = [];
+  _trozos_(codigos, 40).forEach(function (trozo) {
+    _lineasComprometidasDe_(tienda, trozo, desde).forEach(function (l) { todas.push(l); });
   });
-  const finPorPeticion = _finPreparacionPorPeticion_(aUbicar);
+  return todas;
+}
 
+function _lineasComprometidasDe_(tienda, codigos, desde) {
+  const comunes = 'codigo_lm=in.(' + codigos.map(encodeURIComponent).join(',') + ')' +
+    '&select=id,peticion_id,codigo_lm,sscc,cantidad,cantidad_preparada,estado_negocio,preparada_en,peticiones!inner(tipo,estado)' +
+    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda);
   const vistas = {};
   const resultado = [];
-  pendientes.forEach(function (l) {
+  function anadir(l, unidades, partes) {
     vistas[l.id] = true;
-    resultado.push({ id: l.id, unidades: _unidadesDeLinea_(l, l.peticiones && l.peticiones.tipo), partes: _partesSscc_(l.sscc, l.cantidad) });
+    resultado.push({ id: l.id, unidades: unidades, partes: partes });
+  }
+
+  supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado')
+    .forEach(function (l) {
+      anadir(l, _unidadesDeLinea_(l, (l.peticiones || {}).tipo), _partesSscc_(l.sscc, l.cantidad));
+    });
+  if (!desde) return resultado;
+
+  const preparadas = comunes + '&estado_preparacion=eq.preparado';
+  const candidatas = supaSelect_('lineas', preparadas + '&preparada_en=gte.' + encodeURIComponent(desde));
+  supaSelect_('lineas', preparadas + '&peticiones.estado=in.(pendiente,en_preparacion)').forEach(function (l) {
+    if ((l.peticiones || {}).tipo !== 'refill') candidatas.push(l);
   });
-  preparadas.forEach(function (l) {
+  _trozos_(_peticionesCompletadasDesde_(tienda, desde), 15).forEach(function (ids) {
+    supaSelect_('lineas', preparadas + '&peticion_id=in.(' + ids.map(encodeURIComponent).join(',') + ')')
+      .forEach(function (l) { candidatas.push(l); });
+  });
+  candidatas.forEach(function (l) {
     if (vistas[l.id]) return;
-    if (!_consumoSinReflejar_(l, desde, finPorPeticion)) return;
-    const unidades = _unidadesDeLineaPreparada_(l, l.peticiones && l.peticiones.tipo);
+    const tipo = (l.peticiones || {}).tipo;
+    const unidades = _unidadesDeLineaPreparada_(l, tipo);
     if (unidades <= 0) return;
-    vistas[l.id] = true;
-    resultado.push({ id: l.id, unidades: unidades, partes: _partesSscc_(l.sscc, l.cantidad) });
+    anadir(l, unidades, _partesDeLineaPreparada_(l, tipo));
   });
   return resultado;
+}
+
+/** Palets que un refill se lleva ENTEROS (con todo lo que lleven dentro, de
+ *  cualquier código): los de refills abiertos y los de refills preparados
+ *  después de la marca. Espejo de _paletsDeRefill_ de kairos-operario. {sscc: true}. */
+function _paletsDeRefill_(tienda, desde) {
+  const comunes = 'sscc=not.is.null&select=id,sscc,cantidad,estado_negocio,preparada_en,peticiones!inner(tipo,estado)' +
+    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) + '&peticiones.tipo=eq.refill';
+  const lineas = supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
+  if (desde) {
+    supaSelect_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde))
+      .forEach(function (l) { if (FALTANTES_TOTALES_STOCK_.indexOf(l.estado_negocio) === -1) lineas.push(l); });
+  }
+  const set = {};
+  lineas.forEach(function (l) {
+    _partesSscc_(l.sscc, l.cantidad).forEach(function (p) { if (p.sscc) set[p.sscc] = true; });
+  });
+  return set;
 }
 
 /** Stock de un código en una tienda: físico (snapshot de stock_fisico,
@@ -151,19 +195,41 @@ function _stockDetalle_(tienda, codigoLm) {
   });
 
   var comprometido = 0;
-  _lineasComprometidasPortal_(tienda, codigo, desde).forEach(function (l) { comprometido += l.unidades; });
+  _lineasComprometidasPortal_(tienda, [codigo], desde).forEach(function (l) { comprometido += l.unidades; });
   return { fisico: fisico, comprometido: comprometido, disponible: Math.max(0, fisico - comprometido) };
 }
 
-/** Palets (SSCC) de ese código con unidades ya reservadas por otras
- *  peticiones — un refill se lleva el palet entero, así que no se pueden
- *  elegir. {sscc: true}. */
-function _ssccReservados_(tienda, codigo, desde) {
-  const reservados = {};
-  _lineasComprometidasPortal_(tienda, codigo, desde).forEach(function (l) {
-    l.partes.forEach(function (p) { if (p.sscc) reservados[p.sscc] = true; });
+/** De esos palets (SSCC), cuáles NO se pueden dar a un refill porque algo de
+ *  ellos está ya reservado: por otro refill, o por unidades de CUALQUIER código
+ *  que lleve el palet (un refill se lleva el palet entero, no solo el código
+ *  pedido). {sscc: true}. `contenido` = filas de stock_fisico de esos palets
+ *  (sscc, codigo_lm, cantidad, sincronizado_en). */
+function _paletsOcupados_(tienda, contenido, desde) {
+  const ocupados = _paletsDeRefill_(tienda, desde);
+  const codigos = [];
+  contenido.forEach(function (f) { if (codigos.indexOf(f.codigo_lm) === -1) codigos.push(f.codigo_lm); });
+  _lineasComprometidasPortal_(tienda, codigos, desde).forEach(function (l) {
+    l.partes.forEach(function (p) { if (p.sscc) ocupados[p.sscc] = true; });
   });
-  return reservados;
+  return ocupados;
+}
+
+/** Contenido completo (todas las referencias) de esos palets en el snapshot. */
+function _contenidoDePalets_(tienda, ssccs) {
+  const filas = [];
+  _trozos_(ssccs, TROZO_IDS_).forEach(function (trozo) {
+    supaSelect_('stock_fisico',
+      'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=in.(' + trozo.map(encodeURIComponent).join(',') + ')' +
+      '&select=sscc,codigo_lm,cantidad,sincronizado_en')
+      .forEach(function (f) { filas.push(f); });
+  });
+  return filas;
+}
+
+function _marcaDe_(filas) {
+  var max = null;
+  filas.forEach(function (f) { if (f.sincronizado_en && (!max || Date.parse(f.sincronizado_en) > Date.parse(max))) max = f.sincronizado_en; });
+  return max;
 }
 
 function _mensajeSinStock_(etiqueta, pedidas, d) {
@@ -237,21 +303,17 @@ function listarSsccDisponibles(ldap, codigoLm) {
     .filter(function (f) { return f.cantidad > 0; });
   if (!todas.length) return _json_([]);
 
-  // Un refill se lleva el palet entero: no se ofrecen los que ya tienen
-  // unidades reservadas por otras peticiones (otro refill, un pedido cliente).
-  var desde = null;
-  todas.forEach(function (f) { if (!desde || Date.parse(f.sincronizado_en) > Date.parse(desde)) desde = f.sincronizado_en; });
-  const reservados = _ssccReservados_(tienda, codigo, desde);
-  const filas = todas.filter(function (f) { return !reservados[f.sscc]; });
-  if (!filas.length) return _json_([]);
-  filas.forEach(function (f) { delete f.sincronizado_en; });
-
   // Contenido completo de cada palet (otras referencias que también lleva),
   // para elegir el que más convenga pedir.
-  const sscc = filas.map(function (f) { return f.sscc; });
-  const otrasFilas = supaSelect_('stock_fisico',
-    'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=in.(' + sscc.map(encodeURIComponent).join(',') + ')' +
-    '&select=sscc,codigo_lm,cantidad');
+  const otrasFilas = _contenidoDePalets_(tienda, todas.map(function (f) { return f.sscc; }));
+
+  // Un refill se lleva el palet entero: no se ofrecen los que ya tienen algo
+  // reservado por otras peticiones (otro refill, o unidades de cualquier
+  // referencia del palet en un pedido cliente).
+  const ocupados = _paletsOcupados_(tienda, otrasFilas, _marcaDe_(todas));
+  const filas = todas.filter(function (f) { return !ocupados[f.sscc]; });
+  if (!filas.length) return _json_([]);
+  filas.forEach(function (f) { delete f.sincronizado_en; });
 
   const codigos = [];
   otrasFilas.forEach(function (f) { if (codigos.indexOf(f.codigo_lm) === -1) codigos.push(f.codigo_lm); });
@@ -302,21 +364,44 @@ function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
  *  palet con unidades de un pedido cliente. Se comprueba también aquí (no
  *  solo al listar) porque pudo reservarse entre medias. */
 function _exigirPaletsLibres_(tienda, lineas) {
-  const ocupados = [];
+  const elegidos = [];
   lineas.forEach(function (l) {
-    if (!l.sscc) return;
-    const codigo = String(l.codigoLm || '').trim();
-    const marca = supaSelect_('stock_fisico',
-      'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(codigo) +
-      '&select=sincronizado_en&order=sincronizado_en.desc&limit=1');
-    const reservados = _ssccReservados_(tienda, codigo, marca.length ? marca[0].sincronizado_en : null);
-    _partesSscc_(l.sscc, 0).forEach(function (p) {
-      if (p.sscc && reservados[p.sscc]) ocupados.push(p.sscc + ' (' + codigo + ')');
-    });
+    _partesSscc_(l.sscc, 0).forEach(function (p) { if (p.sscc && elegidos.indexOf(p.sscc) === -1) elegidos.push(p.sscc); });
   });
-  if (ocupados.length) {
+  if (!elegidos.length) return;
+
+  const contenido = _contenidoDePalets_(tienda, elegidos);
+  const marca = _marcaDe_(contenido);
+  const faltan = elegidos.filter(function (s) { return !contenido.some(function (f) { return f.sscc === s; }); });
+  if (faltan.length) {
+    throw new Error('No se ha enviado el refill: el palet ' + faltan.join(', ') + ' ya no está en el almacén. Elige otro palet.');
+  }
+
+  // 1) Que ningún palet tenga ya algo reservado (otro refill, o unidades de
+  //    cualquier referencia suya en un pedido cliente con palet asignado).
+  const ocupados = _paletsOcupados_(tienda, contenido, marca);
+  const reservados = elegidos.filter(function (s) { return ocupados[s]; });
+  if (reservados.length) {
     throw new Error('No se ha enviado el refill: ya hay otra petición con unidades de estos palets: ' +
-      ocupados.join(', ') + '. Elige otro palet.');
+      reservados.join(', ') + '. Elige otro palet.');
+  }
+
+  // 2) Que llevárselos no deje sin stock a pedidos ya aceptados que aún no
+  //    tienen palet asignado: por cada referencia, lo que hay disponible tiene
+  //    que cubrir lo que se llevan los palets elegidos (se asigna al abrir el
+  //    pedido en almacén, así que el paso 1 no lo ve).
+  const seLlevan = {};
+  contenido.forEach(function (f) { seLlevan[f.codigo_lm] = (seLlevan[f.codigo_lm] || 0) + (Number(f.cantidad) || 0); });
+  const sinCubrir = [];
+  Object.keys(seLlevan).forEach(function (codigo) {
+    const d = _stockDetalle_(tienda, codigo);
+    if (d.disponible < seLlevan[codigo]) {
+      sinCubrir.push(codigo + ' (los palets llevan ' + seLlevan[codigo] + ' y solo hay ' + d.disponible + ' sin comprometer)');
+    }
+  });
+  if (sinCubrir.length) {
+    throw new Error('No se ha enviado el refill: llevarse esos palets dejaría sin stock a otros pedidos ya aceptados: ' +
+      sinCubrir.join('; ') + '.');
   }
 }
 

@@ -35,40 +35,34 @@ function _parseSsccMulti_(valorSscc, cantidadFila) {
 }
 
 const FALTANTES_TOTALES_ASIGNACION_ = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'];
-// Cuánto hacia atrás desde la marca del snapshot se miran líneas ya preparadas
-// de pedidos que aún no se habían completado (acota la consulta).
-const VENTANA_CONSUMO_MS_ = 7 * 24 * 60 * 60 * 1000;
+// Máximo de ids (uuid / SSCC) por consulta: UrlFetchApp admite URLs de ~2 KB.
+const TROZO_IDS_ = 30;
 
-/** ¿Sigue el consumo de esta línea ya preparada SIN reflejarse en el
- *  snapshot de stock (marca `desde`)? Depende de cuándo se mueve el stock en
- *  myISO (ver Index.html, dispararTransfers_/dispararMoveToAddress_):
- *   - refill: al preparar cada línea (el palet va a XP1, fuera del snapshot);
- *   - pedido cliente / cesión: SOLO cuando el pedido entero está preparado.
- *     Hasta entonces el CSV sigue mostrando las unidades en su palet, aunque
- *     la línea se preparase horas antes del snapshot.
- *  `finPorPeticion` = última preparada_en de cada petición en 'a_ubicar'
- *  (todas preparadas pero sin ubicación de consolidación: no tiene cerrada_en). */
-function _consumoSinReflejar_(l, desde, finPorPeticion) {
-  const p = l.peticiones || {};
-  const marca = Date.parse(desde);
-  if (p.tipo === 'refill' || p.estado === 'anulada') return Date.parse(l.preparada_en) >= marca;
-  if (p.estado === 'cerrada') return !!p.cerrada_en && Date.parse(p.cerrada_en) >= marca;
-  if (p.estado === 'a_ubicar') {
-    const fin = finPorPeticion[l.peticion_id];
-    return !fin || Date.parse(fin) >= marca;
-  }
-  return true; // pendiente / en_preparacion: el pedido aún no está completo
+function _trozos_(lista, tamano) {
+  const trozos = [];
+  for (var i = 0; i < lista.length; i += tamano) trozos.push(lista.slice(i, i + tamano));
+  return trozos;
 }
 
-function _finPreparacionPorPeticion_(idsPeticion) {
-  const fin = {};
-  if (!idsPeticion.length) return fin;
+/** Peticiones de pedido cliente / cesión cuya ÚLTIMA línea se preparó después
+ *  de la marca del snapshot: la transferencia de stock en myISO se dispara al
+ *  preparar la última línea (Index.html, dispararTransfers_), así que su
+ *  consumo todavía no está en el CSV aunque sus primeras líneas se
+ *  prepararan mucho antes. (No se usa cerrada_en: es la hora de la
+ *  consolidación, no de la transferencia.) Memoizado por ejecución. */
+var COMPLETADAS_MEMO_ = {};
+function _peticionesCompletadasDesde_(tienda, desde) {
+  const clave = tienda + '|' + desde;
+  if (COMPLETADAS_MEMO_[clave]) return COMPLETADAS_MEMO_[clave];
+  const ids = [];
   supaSelect_('lineas',
-    'peticion_id=in.(' + idsPeticion.map(encodeURIComponent).join(',') + ')&select=peticion_id,preparada_en')
-    .forEach(function (x) {
-      if (x.preparada_en && (!fin[x.peticion_id] || Date.parse(x.preparada_en) > Date.parse(fin[x.peticion_id]))) fin[x.peticion_id] = x.preparada_en;
-    });
-  return fin;
+    'estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde) +
+    '&select=peticion_id,peticiones!inner(tipo,estado)' +
+    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) +
+    '&peticiones.tipo=neq.refill&peticiones.estado=in.(a_ubicar,cerrada)')
+    .forEach(function (l) { if (ids.indexOf(l.peticion_id) === -1) ids.push(l.peticion_id); });
+  COMPLETADAS_MEMO_[clave] = ids;
+  return ids;
 }
 
 /** Palets y unidades que ocupa una línea ya preparada, para restarlos. */
@@ -84,7 +78,7 @@ function _partesDeLineaPreparada_(l) {
       const tomado = Math.min(p.cantidad, restante);
       restante -= tomado;
       return { sscc: p.sscc, cantidad: tomado };
-    });
+    }).filter(function (p) { return p.cantidad > 0; });
   }
   return partes;
 }
@@ -93,44 +87,104 @@ function _partesDeLineaPreparada_(l) {
  *  stock_fisico (marca `desde`) TODAVÍA cuenta como disponibles:
  *   - las aún sin preparar (el palet sigue intacto), da igual cuándo se
  *     asignaron: una asignación no caduca con la carga de stock;
- *   - las ya preparadas cuyo consumo el snapshot no refleja (ver
- *     _consumoSinReflejar_), también las de peticiones anuladas después.
+ *   - las ya preparadas cuyo consumo el snapshot no refleja. Depende de cuándo
+ *     se mueve el stock en myISO (Index.html, dispararTransfers_ y
+ *     dispararMoveToAddress_): en refill, al preparar cada línea (el palet va a
+ *     XP1, fuera del snapshot); en pedido cliente / cesión, solo cuando el
+ *     pedido entero está preparado. Por eso cuentan: lo preparado después de
+ *     la marca, lo preparado en pedidos todavía incompletos (da igual hace
+ *     cuánto) y lo de pedidos que se completaron después de la marca.
  *  Se excluyen las pendientes de peticiones anuladas y las que acabaron en
  *  faltante total (no se cogió nada). Antes solo contaban las asignadas desde
  *  el último sync: tras cada carga de stock se "olvidaba" lo reservado y aún
  *  sin preparar, y otro pedido podía recibir el mismo palet.
  *  Devuelve [{ id, codigo_lm, partes: [{sscc, cantidad}] }] sin repetir líneas
- *  (dos lecturas seguidas pueden ver la misma línea en estados distintos). */
+ *  (varias lecturas seguidas pueden ver la misma línea en estados distintos). */
 function _lineasComprometidas_(tienda, codigos, desde) {
-  if (!codigos.length) return [];
-  const comunes = 'codigo_lm=in.(' + codigos.map(encodeURIComponent).join(',') + ')&sscc=not.is.null' +
-    '&select=id,peticion_id,codigo_lm,sscc,cantidad,cantidad_preparada,estado_negocio,preparada_en,peticiones!inner(tipo,tienda_origen,estado,cerrada_en)' +
-    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda);
-  const pendientes = supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
-  const preparadas = desde
-    ? supaSelect_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' +
-        encodeURIComponent(new Date(Date.parse(desde) - VENTANA_CONSUMO_MS_).toISOString()))
-    : [];
-  const aUbicar = [];
-  preparadas.forEach(function (l) {
-    if ((l.peticiones || {}).estado === 'a_ubicar' && aUbicar.indexOf(l.peticion_id) === -1) aUbicar.push(l.peticion_id);
+  // Trozos de códigos para que la URL no pase de ~2 KB (límite de UrlFetchApp).
+  const todas = [];
+  _trozos_(codigos, 40).forEach(function (trozo) {
+    _lineasComprometidasDe_(tienda, trozo, desde).forEach(function (l) { todas.push(l); });
   });
-  const finPorPeticion = _finPreparacionPorPeticion_(aUbicar);
+  return todas;
+}
 
+function _lineasComprometidasDe_(tienda, codigos, desde) {
+  const comunes = 'codigo_lm=in.(' + codigos.map(encodeURIComponent).join(',') + ')&sscc=not.is.null' +
+    '&select=id,peticion_id,codigo_lm,sscc,cantidad,cantidad_preparada,estado_negocio,preparada_en,peticiones!inner(tipo,estado)' +
+    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda);
   const vistas = {};
   const resultado = [];
-  pendientes.forEach(function (l) {
+  function anadir(l, partes) {
     vistas[l.id] = true;
-    resultado.push({ id: l.id, codigo_lm: l.codigo_lm, partes: _parseSsccMulti_(l.sscc, l.cantidad) });
+    resultado.push({ id: l.id, codigo_lm: l.codigo_lm, partes: partes });
+  }
+
+  supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado')
+    .forEach(function (l) { anadir(l, _parseSsccMulti_(l.sscc, l.cantidad)); });
+  if (!desde) return resultado;
+
+  const preparadas = comunes + '&estado_preparacion=eq.preparado';
+  // Preparadas después de la marca (cualquier estado de la petición, también anuladas después).
+  const candidatas = supaSelect_('lineas', preparadas + '&preparada_en=gte.' + encodeURIComponent(desde));
+  // Preparadas en un pedido que aún no está completo (su transferencia no se ha hecho).
+  supaSelect_('lineas', preparadas + '&peticiones.estado=in.(pendiente,en_preparacion)').forEach(function (l) {
+    if ((l.peticiones || {}).tipo !== 'refill') candidatas.push(l);
   });
-  preparadas.forEach(function (l) {
+  // Preparadas antes de la marca en un pedido que se completó después de ella.
+  // (trozos pequeños: la URL ya lleva la lista de códigos y los filtros)
+  _trozos_(_peticionesCompletadasDesde_(tienda, desde), 15).forEach(function (ids) {
+    supaSelect_('lineas', preparadas + '&peticion_id=in.(' + ids.map(encodeURIComponent).join(',') + ')')
+      .forEach(function (l) { candidatas.push(l); });
+  });
+  candidatas.forEach(function (l) {
     if (vistas[l.id]) return;
     if (FALTANTES_TOTALES_ASIGNACION_.indexOf(l.estado_negocio) !== -1) return;
-    if (!_consumoSinReflejar_(l, desde, finPorPeticion)) return;
-    vistas[l.id] = true;
-    resultado.push({ id: l.id, codigo_lm: l.codigo_lm, partes: _partesDeLineaPreparada_(l) });
+    anadir(l, _partesDeLineaPreparada_(l));
   });
   return resultado;
+}
+
+/** Palets que un refill se lleva ENTEROS (con todo lo que lleven dentro, de
+ *  cualquier código): los de refills abiertos y los de refills preparados
+ *  después de la marca (ya en XP1 pero el snapshot aún los cuenta). Ni un
+ *  pedido cliente ni otro refill pueden usar nada de ellos. {sscc: true}. */
+function _paletsDeRefill_(tienda, desde) {
+  const comunes = 'sscc=not.is.null&select=id,sscc,cantidad,estado_negocio,preparada_en,peticiones!inner(tipo,estado)' +
+    '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) + '&peticiones.tipo=eq.refill';
+  const lineas = supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
+  if (desde) {
+    supaSelect_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde))
+      .forEach(function (l) { if (FALTANTES_TOTALES_ASIGNACION_.indexOf(l.estado_negocio) === -1) lineas.push(l); });
+  }
+  const set = {};
+  lineas.forEach(function (l) {
+    _parseSsccMulti_(l.sscc, l.cantidad).forEach(function (p) { if (p.sscc) set[p.sscc] = true; });
+  });
+  return set;
+}
+
+/** Palets (de los `candidatos`) que NO se pueden dar a un refill porque algo
+ *  de ellos está ya reservado: por otro refill, o por unidades de CUALQUIER
+ *  código que lleve el palet (un refill se lleva el palet entero, no solo el
+ *  código pedido). La propia línea (`lineaId`) no cuenta. {sscc: true}. */
+function _paletsOcupados_(tienda, candidatos, desde, lineaId) {
+  const ocupados = _paletsDeRefill_(tienda, desde);
+  const ssccs = [];
+  candidatos.forEach(function (c) { if (ssccs.indexOf(c.sscc) === -1) ssccs.push(c.sscc); });
+  const codigos = [];
+  _trozos_(ssccs, TROZO_IDS_).forEach(function (trozo) {
+    supaSelect_('stock_fisico',
+      'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=in.(' + trozo.map(encodeURIComponent).join(',') + ')&select=codigo_lm')
+      .forEach(function (f) { if (codigos.indexOf(f.codigo_lm) === -1) codigos.push(f.codigo_lm); });
+  });
+  _trozos_(codigos, TROZO_IDS_).forEach(function (trozo) {
+    _lineasComprometidas_(tienda, trozo, desde).forEach(function (l) {
+      if (l.id === lineaId) return;
+      l.partes.forEach(function (p) { if (p.sscc) ocupados[p.sscc] = true; });
+    });
+  });
+  return ocupados;
 }
 
 /** Unidades ya comprometidas por SSCC en OTRAS líneas de esa tienda con el
@@ -163,8 +217,11 @@ function _ssccUsadosEnPeticion_(peticionId, lineaIdExcluir) {
 }
 
 function _repartirEntreCandidatos_(tienda, linea, candidatos) {
-  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, _marcaDeSnapshot_(candidatos));
-  function remanente(c) { return c.cantidad - (uso[c.sscc] || 0); }
+  const marca = _marcaDeSnapshot_(candidatos);
+  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, marca);
+  // Un palet que se lleva un refill se va entero: nada de él está disponible.
+  const enRefill = _paletsDeRefill_(tienda, marca);
+  function remanente(c) { return enRefill[c.sscc] ? 0 : c.cantidad - (uso[c.sscc] || 0); }
   const necesarias = Number(linea.cantidad);
 
   const usadosEnPeticion = _ssccUsadosEnPeticion_(linea.peticion_id, linea.id);
@@ -249,9 +306,9 @@ function _asignarSsccSiFalta_(linea, peticion) {
   var resultado;
   if (peticion.tipo === 'refill') {
     // Y un palet entero solo sirve si NADA de él está reservado por otras
-    // líneas (otro refill lo eligió, un pedido cliente tiene unidades suyas).
-    const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, _marcaDeSnapshot_(candidatos));
-    const c = candidatos.filter(function (x) { return x.cantidad > 0 && !(uso[x.sscc] > 0); })[0];
+    // líneas: otro refill, o unidades de cualquier código que lleve el palet.
+    const ocupados = _paletsOcupados_(tienda, candidatos, _marcaDeSnapshot_(candidatos), linea.id);
+    const c = candidatos.filter(function (x) { return x.cantidad > 0 && !ocupados[x.sscc]; })[0];
     if (!c) {
       throw new Error('Sin palet disponible para el código ' + linea.codigo_lm +
         (candidatos.some(function (x) { return x.cantidad > 0; }) ? ' (los que hay están reservados por otras peticiones).' : '.'));
@@ -295,14 +352,16 @@ function listarPaletsAlternativos(lineaId) {
   const candidatos = _candidatosStock_(tienda, linea.codigo_lm);
   if (!candidatos.length) return _json_([]);
 
-  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, _marcaDeSnapshot_(candidatos));
+  const marca = _marcaDeSnapshot_(candidatos);
+  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, marca);
+  const enRefill = _paletsDeRefill_(tienda, marca);
   const actuales = _parseSsccMulti_(linea.sscc, linea.cantidad).map(function (p) { return p.sscc; });
 
   const lista = candidatos.map(function (c) {
     return {
       sscc: c.sscc,
       ubicacion: c.ubicacion,
-      remanente: c.cantidad - (uso[c.sscc] || 0),
+      remanente: enRefill[c.sscc] && actuales.indexOf(c.sscc) === -1 ? 0 : c.cantidad - (uso[c.sscc] || 0),
       esActual: actuales.indexOf(c.sscc) !== -1,
     };
   });

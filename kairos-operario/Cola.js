@@ -86,7 +86,9 @@ function _ubicacionesPrevistas_(peticiones, lineas) {
 
       const stock = supaSelect_('stock_fisico',
         'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=in.(' + lista + ')');
-      const comprometidas = _lineasComprometidas_(tienda, codigos, _marcaDeSnapshot_(stock));
+      const marca = _marcaDeSnapshot_(stock);
+      const comprometidas = _lineasComprometidas_(tienda, codigos, marca);
+      const enRefill = _paletsDeRefill_(tienda, marca); // palets que un refill se lleva enteros
 
       const uso = {};
       comprometidas.forEach(function (l) {
@@ -107,7 +109,7 @@ function _ubicacionesPrevistas_(peticiones, lineas) {
 
       deTienda.forEach(function (l) {
         const candidatos = stock.filter(function (c) { return c.codigo_lm === l.codigo_lm; });
-        function remanente(c) { return Number(c.cantidad) - (uso[l.codigo_lm + '|' + c.sscc] || 0); }
+        function remanente(c) { return enRefill[c.sscc] ? 0 : Number(c.cantidad) - (uso[l.codigo_lm + '|' + c.sscc] || 0); }
         const necesarias = Number(l.cantidad);
         const mios = usadosEnPeticion[l.peticion_id] || (usadosEnPeticion[l.peticion_id] = []);
 

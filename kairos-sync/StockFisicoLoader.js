@@ -64,7 +64,10 @@ function _leerStockTienda_(folder, nombre, tienda, forzar) {
   const file = _ficheroMasReciente_(folder, nombre);
   if (!file) {
     Logger.log('AVISO: no encontrado ' + nombre + ' — no se toca el stock de la tienda ' + tienda);
-    return { estado: 'falta' };
+    // Si la tienda tenía stock, que la ejecución falle visiblemente (el stock
+    // que hay se queda como estaba, pero el robot ha dejado de subir el CSV).
+    const habiaStock = supaSelect_('stock_fisico', 'tienda=eq.' + encodeURIComponent(tienda) + '&select=id&limit=1');
+    return { estado: 'falta', aviso: habiaStock.length ? nombre + ' no está en la carpeta de Drive (la tienda tenía stock cargado)' : null };
   }
 
   const ahora = _ahoraStock_();
