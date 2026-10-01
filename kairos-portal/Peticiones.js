@@ -68,7 +68,16 @@ function _stockDetalle_(tienda, codigoLm) {
     comprometido += _unidadesDeLinea_(l, l.peticiones && l.peticiones.tipo);
   });
   consumidas.forEach(function (l) {
-    if (l.peticiones && l.peticiones.tipo === 'refill') return; // el palet sigue en edificio 05 (XP1)
+    if (l.peticiones && l.peticiones.tipo === 'refill') {
+      // El palet ya está en XP1 (silueta de carga), que stock_fisico excluye,
+      // pero el snapshot actual aún lo cuenta en su ubicación de origen
+      // (estas líneas se prepararon después del último sync). Mientras tanto
+      // se resta; tras el próximo sync ya no entra en `consumidas`.
+      if (!l.estado_negocio || l.estado_negocio === 'Preparado' || l.estado_negocio === 'Consolidado') {
+        comprometido += _unidadesDeLinea_(l, 'refill');
+      }
+      return;
+    }
     if (l.estado_negocio === 'Parcial') comprometido += Number(l.cantidad_preparada) || 0;
     else if (l.estado_negocio === 'Sin Palet' || l.estado_negocio === 'Sin Mercancía' || l.estado_negocio === 'Otras Incidencias') return;
     else comprometido += Number(l.cantidad) || 0;
