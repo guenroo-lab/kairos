@@ -1335,10 +1335,29 @@
               (l.incidencia_motivo ? '<div style="color:var(--text-500);font-size:12px;margin-top:3px;">Motivo: ' + escHtml(l.incidencia_motivo) + '</div>' : '') +
               (l.incidencia_nota_tienda ? '<div style="font-size:13px;margin-top:5px;padding:6px 9px;border-radius:10px;background:var(--accent-dim);"><b>Plataforma:</b> ' + escHtml(l.incidencia_nota_tienda) + '</div>' : '') +
               '<div style="color:var(--text-500);font-size:12px;margin-top:4px;">' + (l.preparada_en ? new Date(l.preparada_en).toLocaleString('es-ES') : '') + '</div>' +
+              ((l.puedeAnular && (ROL === 'gestor' || ROL === 'master'))
+                ? '<button type="button" class="btn-ghost" data-anular style="width:auto;padding:6px 12px;margin-top:8px;color:var(--danger-fg);">Anular pedido</button>' : '') +
             '</div>' +
-            '<span class="estado' + (l.estadoIncidencia === 'abierta' ? ' estado-anulada' : '') + '">' + TEXTO_ESTADO_INC_[l.estadoIncidencia] + '</span>' +
+            '<span class="estado' + ((l.estadoIncidencia === 'abierta' && !l.pedidoAnulado) ? ' estado-anulada' : '') + '">' + (l.pedidoAnulado ? 'Pedido anulado' : TEXTO_ESTADO_INC_[l.estadoIncidencia]) + '</span>' +
           '</div>'
         );
+        const btnAnular = fila.querySelector('[data-anular]');
+        if (btnAnular) {
+          btnAnular.onclick = function (ev) {
+            ev.stopPropagation();
+            kPedirTexto('Motivo de la anulación:').then(function (motivo) {
+              if (motivo === null) return;
+              if (!motivo.trim()) { kAlerta('Escribe el motivo.'); return; }
+              kConfirmar('¿Anular este pedido? No se puede deshacer.').then(function (ok) {
+                if (!ok) return;
+                gas('anularPedidoPorIncidencia', LDAP, l.peticion_id, motivo.trim()).then(function () {
+                  INCIDENCIAS_CACHE_ = null;
+                  renderIncidenciasPortal();
+                }).catch(function (e) { kAlerta(e.message); });
+              });
+            });
+          };
+        }
         fila.onclick = function () { renderDetalle(l.peticion_id, renderIncidenciasPortal); };
         lista.appendChild(fila);
       });
