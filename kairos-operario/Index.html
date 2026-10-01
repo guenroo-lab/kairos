@@ -104,8 +104,16 @@
     .uds-grande { display:inline-block; font-size:26px; font-weight:800; line-height:1; padding:7px 13px; border-radius:var(--radius-chip); background:var(--accent); color:var(--accent-ink); white-space:nowrap; }
     .uds-cola { font-size:17px; padding:3px 10px; margin-right:6px; }
     .linea .art-nombre { display:block; margin-top:8px; }
-    .linea .art-ids { display:block; margin-top:3px; font-size:13px; font-weight:600; color:var(--text-500); word-break:break-all; }
+    .linea .art-ids { display:block; margin-top:3px; font-size:13px; font-weight:700; color:var(--text-500); text-transform:uppercase; letter-spacing:.04em; }
+    .linea .desc { flex:1 1 100%; }
+    .linea .datos-linea { flex:1 1 100%; display:flex; flex-direction:column; gap:7px; margin:4px 0 2px; padding:10px 12px; border-radius:var(--radius-btn); background:var(--ink-850); border:1px solid var(--ink-800); }
+    .datos-linea .dato { display:flex; align-items:baseline; gap:12px; }
+    .datos-linea .dato-et { flex:0 0 86px; font-size:11px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; color:var(--text-500); }
+    .datos-linea .dato-val { font-size:17px; font-weight:700; color:var(--text-100); word-break:break-all; font-variant-numeric:tabular-nums; }
+    .datos-linea .dato-val.dato-grande { font-size:20px; font-weight:800; letter-spacing:.02em; }
+    .datos-linea .dato-sep { margin-top:6px; padding-top:8px; border-top:1px dashed var(--ink-700); font-size:11.5px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; color:var(--accent); }
     .fila .prevista { font-weight:600; opacity:.8; }
+    .fila .ubicacion div { margin-top:2px; font-size:14px; }
     .meta { color:var(--text-500); font-size:12.5px; }
     .filtros { margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap; }
     .volver { margin-bottom:12px; display:inline-block; }
@@ -633,7 +641,10 @@
         const fechaTexto = fechaObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + fechaObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
         const articuloTexto = escHtmlSie_(p.articulo ? p.articulo : (p.totalLineas + ' artículo' + (p.totalLineas === 1 ? '' : 's')));
         const chips = (p.secciones || []).map(function (s) { return '<span class="chip">' + escHtmlSie_(s) + '</span>'; }).join('');
-        const ubicacionTexto = (p.ubicaciones && p.ubicaciones.length) ? escHtmlSie_(p.ubicaciones.join(' · ')) : '';
+        const ubicacionesHtml = (p.ubicaciones && p.ubicaciones.length)
+          ? '<div class="ubicacion">' + p.ubicaciones.map(function (d) { return '<div>📍 ' + escHtmlSie_(d) + '</div>'; }).join('') +
+            (p.ubicacionPrevista ? '<div class="prevista">(prevista)</div>' : '') + '</div>'
+          : '';
         const pct = p.totalLineas ? Math.round(100 * p.lineasPreparadas / p.totalLineas) : 0;
         const enCurso = (p.en_curso_por && p.en_curso_por !== OPERARIO)
           ? '<div class="meta" style="color:var(--warn-fg);">👤 En curso: ' + escHtmlSie_(p.en_curso_por) + ' (' + tiempoDesde_(p.en_curso_desde) + ')</div>' : '';
@@ -642,8 +653,7 @@
           '<div class="meta">' + escHtmlSie_(p.tiendaNombre) + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · pide: ' + escHtmlSie_(p.solicitante_ldap || '—') + '</div>' +
           '<div class="articulo"><span class="uds-grande uds-cola">' + p.totalUnidades + ' ' + escHtmlSie_(p.unidadTexto) + '</span>' + articuloTexto + '</div>' +
           (p.articuloLm ? '<div class="meta">LM ' + escHtmlSie_(p.articuloLm) + (p.articuloEan ? ' · EAN ' + escHtmlSie_(p.articuloEan) : '') + '</div>' : '') +
-          (ubicacionTexto ? '<div class="ubicacion">📍 ' + ubicacionTexto + (p.ubicacionPrevista ? ' <span class="prevista">(prevista)</span>' : '') + '</div>'
-            : (p.sinStockPrevisto ? '<div class="ubicacion" style="color:var(--warn-fg);">⚠ Sin stock en edificio 05</div>' : '')) +
+          (ubicacionesHtml || (p.sinStockPrevisto ? '<div class="ubicacion" style="color:var(--warn-fg);">⚠ Sin stock en edificio 05</div>' : '')) +
           enCurso +
           (chips ? '<div class="chips">' + chips + '</div>' : '') +
           '<div class="progreso"><div style="width:' + pct + '%;"></div></div>' +
@@ -729,13 +739,29 @@
       const udsTexto = l.cantidad + ' ' + (l.unidad_medida === 'palet' ? (Number(l.cantidad) === 1 ? 'palet' : 'palets') : 'ud');
       const cabecera = '<span class="uds-grande">' + escHtmlSie_(udsTexto) + '</span>' +
         '<span class="art-nombre">' + escHtmlSie_(l.designacion || '') + '</span>' +
-        '<span class="art-ids">LM ' + escHtmlSie_(l.codigo_lm) + (l.ean ? ' · EAN ' + escHtmlSie_(l.ean) : '') + (l.seccion ? ' · ' + escHtmlSie_(l.seccion) : '') + '</span>';
-      var extraInfo = '';
-      if (l.avisoStock) extraInfo = '<div class="meta" style="color:var(--danger-fg);">⚠️ ' + escHtmlSie_(l.avisoStock) + '</div>';
-      else if (l.ubicacion) extraInfo = '<div class="meta">📍 ' + escHtmlSie_(l.ubicacion) + '</div>';
-      if (l.sscc) {
-        extraInfo += '<div class="meta">SSCC <b>' + escHtmlSie_(parsearSsccMulti(l.sscc, l.cantidad).map(function (x) { return x.sscc; }).join(' · ')) + '</b></div>';
+        (l.seccion ? '<span class="art-ids">' + escHtmlSie_(l.seccion) + '</span>' : '');
+
+      // Datos de la línea en columna: LM, EAN, SSCC y ubicación (SSCC encima de
+      // la dirección). Una línea repartida en varios palets repite SSCC +
+      // ubicación por cada palet.
+      function datoHtml_(etiqueta, valor, grande) {
+        return '<div class="dato"><span class="dato-et">' + etiqueta + '</span><span class="dato-val' + (grande ? ' dato-grande' : '') + '">' + escHtmlSie_(valor) + '</span></div>';
       }
+      var datos = datoHtml_('LM', l.codigo_lm) + datoHtml_('EAN', l.ean || '—');
+      if (l.sscc) {
+        const partesDatos = parsearSsccMulti(l.sscc, l.cantidad);
+        const dirsDatos = String(l.ubicacion || '').split(' + ').map(function (s) { return s.trim(); });
+        partesDatos.forEach(function (parte, i) {
+          if (partesDatos.length > 1) {
+            datos += '<div class="dato-sep">Palet ' + (i + 1) + ' de ' + partesDatos.length + (parte.cantidad ? ' · ' + parte.cantidad + ' ud' : '') + '</div>';
+          }
+          datos += datoHtml_('SSCC', parte.sscc, true) + datoHtml_('Ubicación', dirsDatos[i] || l.ubicacion || '—', true);
+        });
+      } else if (l.ubicacion) {
+        datos += datoHtml_('Ubicación', l.ubicacion, true);
+      }
+      var extraInfo = (l.avisoStock ? '<div class="meta" style="flex:1 1 100%;color:var(--danger-fg);">⚠️ ' + escHtmlSie_(l.avisoStock) + '</div>' : '') +
+        '<div class="datos-linea">' + datos + '</div>';
 
       const preparada = l.estado_preparacion === 'preparado';
       if (preparada) {

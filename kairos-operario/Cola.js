@@ -35,7 +35,10 @@ function listarCola(filtroTienda, filtroTipo) {
       const dir = l.ubicacion || previstas[l.id];
       if (!dir) return;
       if (!l.ubicacion) p.ubicacionPrevista = true;
-      if (ubicaciones.indexOf(dir) === -1) ubicaciones.push(dir);
+      String(dir).split(' + ').forEach(function (d) {
+        d = d.trim();
+        if (d && ubicaciones.indexOf(d) === -1) ubicaciones.push(d);
+      });
     });
     p.ubicaciones = ubicaciones;
     p.sinStockPrevisto = propias.some(function (l) { return !l.sscc && previstas[l.id] === null; });
