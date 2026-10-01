@@ -46,15 +46,20 @@ const TROZO_IDS_ = 30;
 
 /** Lee TODAS las filas de una consulta aunque pasen del tope de filas de la API
  *  (1000): sin esto una consulta que devolviese más se cortaría en silencio y
- *  se "perderían" reservas. Ordena por id para paginar de forma estable. */
+ *  se "perderían" reservas. Pagina por clave (id mayor que el último leído):
+ *  estable aunque entre página y página cambien filas. La consulta debe
+ *  incluir `id` en su select. Si no cabe, falla en vez de devolver de menos. */
 function _selectTodo_(tabla, consulta) {
   const todas = [];
-  for (var pagina = 0; pagina < 30; pagina++) {
-    const filas = supaSelect_(tabla, consulta + '&order=id.asc&limit=1000&offset=' + (pagina * 1000));
+  var ultimo = null;
+  for (var pagina = 0; pagina < 200; pagina++) {
+    const filas = supaSelect_(tabla, consulta + '&order=id.asc&limit=1000' + (ultimo ? '&id=gt.' + encodeURIComponent(ultimo) : ''));
     filas.forEach(function (f) { todas.push(f); });
-    if (filas.length < 1000) break;
+    if (filas.length < 1000) return todas;
+    ultimo = filas[filas.length - 1].id;
+    if (!ultimo) throw new Error('_selectTodo_: la consulta debe incluir id en el select.');
   }
-  return todas;
+  throw new Error('Demasiados datos para calcular el stock (más de 200.000 filas).');
 }
 
 function _trozos_(lista, tamano) {
@@ -93,7 +98,7 @@ function _peticionesCompletadasDesde_(tienda, desde) {
   const ids = [];
   _selectTodo_('lineas',
     'estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde) +
-    '&select=peticion_id,peticiones!inner(tipo,estado)' +
+    '&select=id,peticion_id,peticiones!inner(tipo,estado)' +
     '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) +
     '&peticiones.tipo=neq.refill&peticiones.estado=in.(a_ubicar,cerrada)')
     .forEach(function (l) { if (ids.indexOf(l.peticion_id) === -1) ids.push(l.peticion_id); });
@@ -198,6 +203,27 @@ function _paletsDeRefill_(tienda, desde) {
   return set;
 }
 
+/** Filas de stock_fisico de esos códigos, todas de UN MISMO snapshot: si entre
+ *  una lectura y otra entra una carga nueva de stock (cada snapshot lleva su
+ *  marca `sincronizado_en`), las cantidades de unos códigos serían de un
+ *  snapshot y las de otros de otro, y la marca no valdría para todas. Se
+ *  vuelve a leer; si sigue cambiando, se pide reintentar. */
+function _leerStockCoherente_(tienda, codigos) {
+  for (var intento = 0; intento < 3; intento++) {
+    const filas = [];
+    _trozos_(codigos, 40).forEach(function (trozo) {
+      _selectTodo_('stock_fisico',
+        'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=in.(' + trozo.map(encodeURIComponent).join(',') + ')' +
+        '&select=id,codigo_lm,sscc,cantidad,sincronizado_en')
+        .forEach(function (f) { filas.push(f); });
+    });
+    const marcas = {};
+    filas.forEach(function (f) { marcas[Date.parse(f.sincronizado_en)] = true; });
+    if (Object.keys(marcas).length <= 1) return filas;
+  }
+  throw new Error('El stock se está actualizando en este momento, inténtalo de nuevo en unos segundos.');
+}
+
 /** Stock de varios códigos en una tienda, calculado de una vez (pocas
  *  consultas aunque sean muchos códigos): físico (snapshot de stock_fisico,
  *  edificio 05) y lo ya comprometido. Devuelve { codigo: {fisico, comprometido,
@@ -217,18 +243,18 @@ function _stockDetalleVarios_(tienda, codigos) {
   lista.forEach(function (k) { resultado[k] = { fisico: 0, comprometido: 0, disponible: 0 }; });
   if (!lista.length) return resultado;
 
-  const filas = [];
-  _trozos_(lista, 40).forEach(function (trozo) {
-    _selectTodo_('stock_fisico',
-      'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=in.(' + trozo.map(encodeURIComponent).join(',') + ')' +
-      '&select=codigo_lm,sscc,cantidad,sincronizado_en')
-      .forEach(function (f) { filas.push(f); });
-  });
+  const filas = _leerStockCoherente_(tienda, lista);
   const desde = _marcaDe_(filas);
-  filas.forEach(function (f) { resultado[f.codigo_lm].fisico += Number(f.cantidad) || 0; });
+  filas.forEach(function (f) {
+    const r = resultado[String(f.codigo_lm).trim()];
+    if (r) r.fisico += Number(f.cantidad) || 0;
+  });
 
   const enRefill = _paletsDeRefill_(tienda, desde);
-  filas.forEach(function (f) { if (enRefill[f.sscc]) resultado[f.codigo_lm].comprometido += Number(f.cantidad) || 0; });
+  filas.forEach(function (f) {
+    const r = resultado[String(f.codigo_lm).trim()];
+    if (r && enRefill[f.sscc]) r.comprometido += Number(f.cantidad) || 0;
+  });
   _lineasComprometidasPortal_(tienda, lista, desde).forEach(function (l) {
     // Las líneas de refill ya cuentan arriba por palet entero.
     if (l.tipo !== 'refill' && resultado[l.codigo_lm]) resultado[l.codigo_lm].comprometido += l.unidades;
@@ -267,7 +293,7 @@ function _contenidoDePalets_(tienda, ssccs) {
   _trozos_(ssccs, TROZO_IDS_).forEach(function (trozo) {
     _selectTodo_('stock_fisico',
       'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=in.(' + trozo.map(encodeURIComponent).join(',') + ')' +
-      '&select=sscc,codigo_lm,cantidad,sincronizado_en')
+      '&select=id,sscc,codigo_lm,cantidad,sincronizado_en')
       .forEach(function (f) { filas.push(f); });
   });
   return filas;
@@ -444,11 +470,14 @@ function _exigirPaletsLibres_(tienda, lineas) {
   //    que cubrir lo que se llevan los palets elegidos (se asigna al abrir el
   //    pedido en almacén, así que el paso 1 no lo ve).
   const seLlevan = {};
-  contenido.forEach(function (f) { seLlevan[f.codigo_lm] = (seLlevan[f.codigo_lm] || 0) + (Number(f.cantidad) || 0); });
+  contenido.forEach(function (f) {
+    const k = String(f.codigo_lm).trim();
+    seLlevan[k] = (seLlevan[k] || 0) + (Number(f.cantidad) || 0);
+  });
   const sinCubrir = [];
   const detalle = _stockDetalleVarios_(tienda, Object.keys(seLlevan));
   Object.keys(seLlevan).forEach(function (codigo) {
-    const d = detalle[codigo];
+    const d = detalle[codigo] || { disponible: 0 };
     if (d.disponible < seLlevan[codigo]) {
       sinCubrir.push(codigo + ' (los palets llevan ' + seLlevan[codigo] + ' y solo hay ' + d.disponible + ' sin comprometer)');
     }

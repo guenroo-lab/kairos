@@ -46,15 +46,20 @@ function _trozos_(lista, tamano) {
 
 /** Lee TODAS las filas de una consulta aunque pasen del tope de filas de la API
  *  (1000): sin esto una consulta que devolviese más se cortaría en silencio y
- *  se "perderían" reservas. Ordena por id para paginar de forma estable. */
+ *  se "perderían" reservas. Pagina por clave (id mayor que el último leído):
+ *  estable aunque entre página y página cambien filas. La consulta debe
+ *  incluir `id` en su select. Si no cabe, falla en vez de devolver de menos. */
 function _selectTodo_(tabla, consulta) {
   const todas = [];
-  for (var pagina = 0; pagina < 30; pagina++) {
-    const filas = supaSelect_(tabla, consulta + '&order=id.asc&limit=1000&offset=' + (pagina * 1000));
+  var ultimo = null;
+  for (var pagina = 0; pagina < 200; pagina++) {
+    const filas = supaSelect_(tabla, consulta + '&order=id.asc&limit=1000' + (ultimo ? '&id=gt.' + encodeURIComponent(ultimo) : ''));
     filas.forEach(function (f) { todas.push(f); });
-    if (filas.length < 1000) break;
+    if (filas.length < 1000) return todas;
+    ultimo = filas[filas.length - 1].id;
+    if (!ultimo) throw new Error('_selectTodo_: la consulta debe incluir id en el select.');
   }
-  return todas;
+  throw new Error('Demasiados datos para calcular el stock (más de 200.000 filas).');
 }
 
 
@@ -76,7 +81,7 @@ function _peticionesCompletadasDesde_(tienda, desde) {
   const ids = [];
   _selectTodo_('lineas',
     'estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde) +
-    '&select=peticion_id,peticiones!inner(tipo,estado)' +
+    '&select=id,peticion_id,peticiones!inner(tipo,estado)' +
     '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) +
     '&peticiones.tipo=neq.refill&peticiones.estado=in.(a_ubicar,cerrada)')
     .forEach(function (l) { if (ids.indexOf(l.peticion_id) === -1) ids.push(l.peticion_id); });
