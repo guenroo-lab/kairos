@@ -1,6 +1,6 @@
 # Despliegue 2026-10-01 · stock atómico, frecuencia 10 min y reservas
 
-Cambios ya en el repositorio (commits 408da68 y 3355798) y **sin desplegar**.
+Cambios ya en el repositorio (commits 408da68, 3355798, 19ea709 y 2a17e90; revisados 4 veces con Codex) y **sin desplegar**.
 Orden obligatorio: el cargador de stock (kairos-sync) llama a una función SQL
 nueva, así que la base de datos va primero.
 
