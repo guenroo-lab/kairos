@@ -19,13 +19,13 @@ function listarMisIncidencias(ldap) {
     '&select=id,peticion_id,codigo_lm,designacion,cantidad,cantidad_preparada,unidad_medida,estado_negocio,incidencia_motivo,preparada_en,incidencia_gestion_en,incidencia_revisada_en,incidencia_nota_tienda,' +
     'peticiones!inner(tipo,tienda_origen,estado,num_pedido,num_cesion,solicitante_ldap)' +
     '&peticiones.tienda_origen=eq.' + encodeURIComponent(u.tienda) +
-    (u.rol === 'vendedor' ? '&peticiones.tipo=eq.refill' : '') + // Vendedor solo ve Refill
-    '&order=preparada_en.desc';
-  // Las sin resolver, todas (una abierta antigua no puede quedar fuera por el
-  // límite), y las resueltas solo de los últimos días.
+    (u.rol === 'vendedor' ? '&peticiones.tipo=eq.refill' : ''); // Vendedor solo ve Refill
+  // Las sin resolver, todas (una abierta antigua no puede quedar fuera por un
+  // límite: _selectTodo_ las lee todas, página a página), y las resueltas solo
+  // de los últimos días. Se ordenan abajo.
   const desde = new Date(Date.now() - DIAS_RESUELTAS_VISIBLES_ * 24 * 60 * 60 * 1000).toISOString();
-  const filas = supaSelect_('lineas', base + '&incidencia_revisada_en=is.null&limit=500')
-    .concat(supaSelect_('lineas', base + '&incidencia_revisada_en=gte.' + encodeURIComponent(desde) + '&limit=200'));
+  const filas = _selectTodo_('lineas', base + '&incidencia_revisada_en=is.null')
+    .concat(_selectTodo_('lineas', base + '&incidencia_revisada_en=gte.' + encodeURIComponent(desde)));
 
   // ¿En qué pedidos no se ha podido preparar NADA? (solo esos se pueden anular)
   const idsPeticion = [];

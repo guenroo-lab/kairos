@@ -46,10 +46,20 @@ function supaSelect_(tabla, queryString, schema) {
  *  limit globales: se aplican por lote. Devuelve todas las filas juntas. */
 function supaSelectIn_(tabla, campo, valores, resto, schema) {
   const filas = [];
-  for (var i = 0; i < valores.length; i += 30) {
-    const lote = valores.slice(i, i + 30).map(function (v) { return encodeURIComponent(v); }).join(',');
-    supaSelect_(tabla, campo + '=in.(' + lote + ')' + (resto ? '&' + resto : ''), schema).forEach(function (f) { filas.push(f); });
+  function lote_(vals) {
+    const q = campo + '=in.(' + vals.map(function (v) { return encodeURIComponent(v); }).join(',') + ')' + (resto ? '&' + resto : '');
+    const r = supaSelect_(tabla, q, schema);
+    // La API corta en silencio en 1000 filas: si un lote llega justo al tope se
+    // parte por la mitad y se repite, para no perder filas.
+    if (r.length >= 1000 && vals.length > 1) {
+      const mitad = Math.ceil(vals.length / 2);
+      lote_(vals.slice(0, mitad));
+      lote_(vals.slice(mitad));
+      return;
+    }
+    r.forEach(function (f) { filas.push(f); });
   }
+  for (var i = 0; i < valores.length; i += 30) lote_(valores.slice(i, i + 30));
   return filas;
 }
 function supaInsert_(tabla, fila, schema) {

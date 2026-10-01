@@ -65,8 +65,13 @@ function _dispararEtiquetaSiProcede_(peticionId) {
       }),
     });
 
-    const idsLimpias = limpias.map(function (l) { return l.id; }).join(',');
-    supaUpdate_('lineas', 'id=in.(' + idsLimpias + ')', { hodos_id: idUnico });
+    // En lotes de 30 ids: una URL de más de ~2 KB (unos 55 uuids) la rechaza
+    // UrlFetchApp, y con la etiqueta ya creada eso dejaba hodos_id vacío y
+    // permitía crear una segunda etiqueta al reintentar.
+    const idsLimpias = limpias.map(function (l) { return l.id; });
+    for (var i = 0; i < idsLimpias.length; i += 30) {
+      supaUpdate_('lineas', 'id=in.(' + idsLimpias.slice(i, i + 30).join(',') + ')', { hodos_id: idUnico });
+    }
   } catch (err) {
     // No debe romper el marcado de línea (ya guardado) — solo se pierde la
     // etiqueta HODOS; reintentable (hodos_id queda vacío, sin bloqueo).

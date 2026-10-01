@@ -364,7 +364,7 @@ function buscarPaletPorSscc(ldap, sscc) {
   if (!filas.length) return _json_([]);
 
   const codigos = filas.map(function (f) { return f.codigo_lm; });
-  const catalogo = supaSelect_('catalogo', 'codigo_lm=in.(' + codigos.map(encodeURIComponent).join(',') + ')&select=codigo_lm,ean,designacion,seccion');
+  const catalogo = supaSelectIn_('catalogo', 'codigo_lm', codigos, 'select=codigo_lm,ean,designacion,seccion');
   const porCodigo = {};
   catalogo.forEach(function (c) { porCodigo[c.codigo_lm] = c; });
 
@@ -548,8 +548,7 @@ function _bloquearSiDuplicadoReciente_(tienda, ldap, tipo, cabecera, lineasPaylo
   }
   if (tipo === 'refill') {
     const codigosNuevos = lineasPayload.map(function (l) { return l.codigo_lm; }).sort().join(',');
-    const lineasRecientes = supaSelect_('lineas',
-      'peticion_id=in.(' + recientes.map(function (p) { return p.id; }).map(encodeURIComponent).join(',') + ')&select=peticion_id,codigo_lm');
+    const lineasRecientes = supaSelectIn_('lineas', 'peticion_id', recientes.map(function (p) { return p.id; }), 'select=peticion_id,codigo_lm');
     const porPeticion = {};
     lineasRecientes.forEach(function (l) { (porPeticion[l.peticion_id] = porPeticion[l.peticion_id] || []).push(l.codigo_lm); });
     const hayDuplicado = Object.keys(porPeticion).some(function (id) { return porPeticion[id].sort().join(',') === codigosNuevos; });

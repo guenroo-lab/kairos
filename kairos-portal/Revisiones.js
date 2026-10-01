@@ -35,7 +35,7 @@ function _contenidoDePalet_(tienda, sscc) {
     'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=eq.' + encodeURIComponent(sscc) + '&select=codigo_lm,ubicacion,cantidad&order=cantidad.desc');
   if (!stock.length) return { encontrado: false, ubicacion: null, contenido: [] };
   const codigos = stock.map(function (f) { return f.codigo_lm; });
-  const catalogo = supaSelect_('catalogo', 'codigo_lm=in.(' + codigos.map(encodeURIComponent).join(',') + ')&select=codigo_lm,designacion');
+  const catalogo = supaSelectIn_('catalogo', 'codigo_lm', codigos, 'select=codigo_lm,designacion');
   const designacion = {};
   catalogo.forEach(function (c) { designacion[c.codigo_lm] = c.designacion; });
   return {
