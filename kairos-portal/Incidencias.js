@@ -8,23 +8,31 @@
 const ESTADOS_INCIDENCIA_PORTAL_ = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias', 'Parcial'];
 const FALTANTES_TOTALES_PORTAL_ = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'];
 
+// Días que una incidencia ya resuelta sigue apareciendo en la pestaña
+// (como "Resuelta"); pasado ese tiempo sale de la lista, aunque el pedido sigue
+// en Trazabilidad / Histórico.
+const DIAS_RESUELTAS_VISIBLES_ = 7;
+
 function listarMisIncidencias(ldap) {
   const u = _usuarioDe_(ldap);
-  var q = 'estado_negocio=in.(' + ESTADOS_INCIDENCIA_PORTAL_.map(encodeURIComponent).join(',') + ')' +
+  const base = 'estado_negocio=in.(' + ESTADOS_INCIDENCIA_PORTAL_.map(encodeURIComponent).join(',') + ')' +
     '&select=id,peticion_id,codigo_lm,designacion,cantidad,cantidad_preparada,unidad_medida,estado_negocio,incidencia_motivo,preparada_en,incidencia_gestion_en,incidencia_revisada_en,incidencia_nota_tienda,' +
     'peticiones!inner(tipo,tienda_origen,estado,num_pedido,num_cesion,solicitante_ldap)' +
     '&peticiones.tienda_origen=eq.' + encodeURIComponent(u.tienda) +
-    '&order=preparada_en.desc&limit=200';
-  if (u.rol === 'vendedor') q += '&peticiones.tipo=eq.refill'; // Vendedor solo ve Refill
-  const filas = supaSelect_('lineas', q);
+    (u.rol === 'vendedor' ? '&peticiones.tipo=eq.refill' : '') + // Vendedor solo ve Refill
+    '&order=preparada_en.desc';
+  // Las sin resolver, todas (una abierta antigua no puede quedar fuera por el
+  // límite), y las resueltas solo de los últimos días.
+  const desde = new Date(Date.now() - DIAS_RESUELTAS_VISIBLES_ * 24 * 60 * 60 * 1000).toISOString();
+  const filas = supaSelect_('lineas', base + '&incidencia_revisada_en=is.null&limit=500')
+    .concat(supaSelect_('lineas', base + '&incidencia_revisada_en=gte.' + encodeURIComponent(desde) + '&limit=200'));
 
   // ¿En qué pedidos no se ha podido preparar NADA? (solo esos se pueden anular)
   const idsPeticion = [];
   filas.forEach(function (l) { if (idsPeticion.indexOf(l.peticion_id) === -1) idsPeticion.push(l.peticion_id); });
   const todoIncidencia = {};
   if (idsPeticion.length) {
-    const todasLasLineas = supaSelect_('lineas',
-      'peticion_id=in.(' + idsPeticion.map(encodeURIComponent).join(',') + ')&select=peticion_id,estado_negocio');
+    const todasLasLineas = supaSelectIn_('lineas', 'peticion_id', idsPeticion, 'select=peticion_id,estado_negocio');
     idsPeticion.forEach(function (id) {
       const propias = todasLasLineas.filter(function (x) { return x.peticion_id === id; });
       todoIncidencia[id] = propias.length > 0 && propias.every(function (x) { return FALTANTES_TOTALES_PORTAL_.indexOf(x.estado_negocio) !== -1; });
@@ -42,6 +50,7 @@ function listarMisIncidencias(ldap) {
     delete l.peticiones;
     l.estadoIncidencia = l.incidencia_revisada_en ? 'resuelta' : (l.incidencia_gestion_en ? 'en_gestion' : 'abierta');
   });
+  filas.sort(function (a, b) { return String(b.preparada_en || '').localeCompare(String(a.preparada_en || '')); });
   return _json_(filas);
 }
 

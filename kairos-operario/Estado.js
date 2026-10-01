@@ -13,6 +13,25 @@
  *    cargas) + fecha + hora de entrega.
  */
 
+/** Pedidos ya preparados que esperan ubicación de consolidación (transporte,
+ *  estado a_ubicar y sin ubicacion_consolidacion): aviso para que no se queden
+ *  olvidados. filtroTienda opcional. Con cuándo se preparó la última línea. */
+function listarPendientesDeUbicar(filtroTienda) {
+  var q = 'estado=eq.a_ubicar&ubicacion_consolidacion=is.null' +
+    '&select=id,tipo,tienda_origen,num_pedido,creada_en&order=creada_en.asc&limit=100';
+  if (filtroTienda) q += '&tienda_origen=eq.' + encodeURIComponent(filtroTienda);
+  const peticiones = supaSelect_('peticiones', q);
+  if (!peticiones.length) return _json_([]);
+
+  const lineas = supaSelectIn_('lineas', 'peticion_id', peticiones.map(function (p) { return p.id; }), 'select=peticion_id,preparada_en');
+  peticiones.forEach(function (p) {
+    const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
+    p.totalLineas = propias.length;
+    p.preparadaEn = propias.reduce(function (max, l) { return (l.preparada_en && (!max || l.preparada_en > max)) ? l.preparada_en : max; }, null);
+  });
+  return _json_(peticiones);
+}
+
 function listarEstadoPeticiones() {
   var q = 'estado=in.(pendiente,en_preparacion,a_ubicar,cerrada)' +
     '&visible_desde=lte.' + _hoyMadridIso_() +
@@ -33,19 +52,14 @@ function listarEstadoPeticiones() {
   // Camino "hodos": cesión + pedido_cliente sin transporte.
   const peticionesHodos = peticiones.filter(function (p) { return p.camino === 'hodos'; });
   if (peticionesHodos.length) {
-    const ids = peticionesHodos.map(function (p) { return p.id; }).join(',');
-    const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,hodos_id,estado_preparacion');
+    const lineas = supaSelectIn_('lineas', 'peticion_id', peticionesHodos.map(function (p) { return p.id; }), 'select=peticion_id,hodos_id,estado_preparacion');
 
     const idsUnicos = [];
     lineas.forEach(function (l) { if (l.hodos_id && idsUnicos.indexOf(l.hodos_id) === -1) idsUnicos.push(l.hodos_id); });
-    const etiquetas = idsUnicos.length
-      ? supaSelect_('etiquetas', 'id_unico=in.(' + idsUnicos.map(encodeURIComponent).join(',') + ')&select=id_unico,batea_id', 'public')
-      : [];
+    const etiquetas = supaSelectIn_('etiquetas', 'id_unico', idsUnicos, 'select=id_unico,batea_id', 'public');
     const idsCargas = [];
     etiquetas.forEach(function (e) { if (e.batea_id && idsCargas.indexOf(e.batea_id) === -1) idsCargas.push(e.batea_id); });
-    const cargas = idsCargas.length
-      ? supaSelect_('cargas', 'id_carga=in.(' + idsCargas.map(encodeURIComponent).join(',') + ')&select=id_carga,fecha_entrega,horario', 'public')
-      : [];
+    const cargas = supaSelectIn_('cargas', 'id_carga', idsCargas, 'select=id_carga,fecha_entrega,horario', 'public');
 
     peticionesHodos.forEach(function (p) {
       const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
@@ -76,8 +90,7 @@ function listarEstadoPeticiones() {
   // encontrado=true, fecha + hora real en public.cargas).
   const peticionesRefill = peticiones.filter(function (p) { return p.camino === 'refill'; });
   if (peticionesRefill.length) {
-    const ids = peticionesRefill.map(function (p) { return p.id; }).join(',');
-    const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,sscc,estado_preparacion');
+    const lineas = supaSelectIn_('lineas', 'peticion_id', peticionesRefill.map(function (p) { return p.id; }), 'select=peticion_id,sscc,estado_preparacion');
 
     // Bug real (revisión con Codex CLI, 2026-09-22): lineas.sscc puede venir
     // decorado "SSCC (Nud)" o "SSCC1 (Nud) + SSCC2 (Mud)" cuando se eligió
@@ -91,14 +104,10 @@ function listarEstadoPeticiones() {
         if (parte.sscc && todosSscc.indexOf(parte.sscc) === -1) todosSscc.push(parte.sscc);
       });
     });
-    const palets = todosSscc.length
-      ? supaSelect_('palets', 'sscc=in.(' + todosSscc.map(encodeURIComponent).join(',') + ')&select=sscc,encontrado,batea_id', 'public')
-      : [];
+    const palets = supaSelectIn_('palets', 'sscc', todosSscc, 'select=sscc,encontrado,batea_id', 'public');
     const idsCargas = [];
     palets.forEach(function (pa) { if (pa.batea_id && idsCargas.indexOf(pa.batea_id) === -1) idsCargas.push(pa.batea_id); });
-    const cargas = idsCargas.length
-      ? supaSelect_('cargas', 'id_carga=in.(' + idsCargas.map(encodeURIComponent).join(',') + ')&select=id_carga,fecha_entrega,horario', 'public')
-      : [];
+    const cargas = supaSelectIn_('cargas', 'id_carga', idsCargas, 'select=id_carga,fecha_entrega,horario', 'public');
 
     peticionesRefill.forEach(function (p) {
       const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });

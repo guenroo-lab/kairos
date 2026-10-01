@@ -50,8 +50,8 @@ function listarTrazabilidad(ldap, historico) {
     _marcarReserva_(p, hoyReservas);
   });
 
-  const idsTodas = peticiones.map(function (p) { return p.id; }).join(',');
-  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc,seccion,cantidad,estado_negocio');
+  const lineasTodas = supaSelectIn_('lineas', 'peticion_id', peticiones.map(function (p) { return p.id; }),
+    'select=peticion_id,codigo_lm,designacion,ubicacion,sscc,seccion,cantidad,estado_negocio');
   peticiones.forEach(function (p) {
     const propias = lineasTodas.filter(function (l) { return l.peticion_id === p.id; });
     p.articulo = propias.length === 1 ? (propias[0].codigo_lm + ' — ' + (propias[0].designacion || '')) : (propias.length + ' artículos');
@@ -78,19 +78,14 @@ function listarTrazabilidad(ldap, historico) {
   // Camino "hodos": cesión + pedido_cliente sin transporte.
   const peticionesHodos = peticiones.filter(function (p) { return p.camino === 'hodos'; });
   if (peticionesHodos.length) {
-    const ids = peticionesHodos.map(function (p) { return p.id; }).join(',');
-    const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,hodos_id,estado_preparacion');
+    const lineas = supaSelectIn_('lineas', 'peticion_id', peticionesHodos.map(function (p) { return p.id; }), 'select=peticion_id,hodos_id,estado_preparacion');
 
     const idsUnicos = [];
     lineas.forEach(function (l) { if (l.hodos_id && idsUnicos.indexOf(l.hodos_id) === -1) idsUnicos.push(l.hodos_id); });
-    const etiquetas = idsUnicos.length
-      ? supaSelect_('etiquetas', 'id_unico=in.(' + idsUnicos.map(encodeURIComponent).join(',') + ')&select=id_unico,batea_id', CFG.SCHEMA_HODOS)
-      : [];
+    const etiquetas = supaSelectIn_('etiquetas', 'id_unico', idsUnicos, 'select=id_unico,batea_id', CFG.SCHEMA_HODOS);
     const idsCargas = [];
     etiquetas.forEach(function (e) { if (e.batea_id && idsCargas.indexOf(e.batea_id) === -1) idsCargas.push(e.batea_id); });
-    const cargas = idsCargas.length
-      ? supaSelect_('cargas', 'id_carga=in.(' + idsCargas.map(encodeURIComponent).join(',') + ')&select=id_carga,fecha_entrega,horario', CFG.SCHEMA_HODOS)
-      : [];
+    const cargas = supaSelectIn_('cargas', 'id_carga', idsCargas, 'select=id_carga,fecha_entrega,horario', CFG.SCHEMA_HODOS);
 
     peticionesHodos.forEach(function (p) {
       const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
@@ -119,8 +114,7 @@ function listarTrazabilidad(ldap, historico) {
   // Camino "refill": enviada / en silueta esperando carga / cargada (fecha + hora real).
   const peticionesRefill = peticiones.filter(function (p) { return p.camino === 'refill'; });
   if (peticionesRefill.length) {
-    const ids = peticionesRefill.map(function (p) { return p.id; }).join(',');
-    const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,sscc,estado_preparacion');
+    const lineas = supaSelectIn_('lineas', 'peticion_id', peticionesRefill.map(function (p) { return p.id; }), 'select=peticion_id,sscc,estado_preparacion');
 
     // Bug real (revisión con Codex CLI, 2026-09-22): lineas.sscc puede venir
     // decorado "SSCC (Nud)" o "SSCC1 (Nud) + SSCC2 (Mud)" cuando se eligió
@@ -134,14 +128,10 @@ function listarTrazabilidad(ldap, historico) {
         if (parte.sscc && todosSscc.indexOf(parte.sscc) === -1) todosSscc.push(parte.sscc);
       });
     });
-    const palets = todosSscc.length
-      ? supaSelect_('palets', 'sscc=in.(' + todosSscc.map(encodeURIComponent).join(',') + ')&select=sscc,encontrado,batea_id', CFG.SCHEMA_HODOS)
-      : [];
+    const palets = supaSelectIn_('palets', 'sscc', todosSscc, 'select=sscc,encontrado,batea_id', CFG.SCHEMA_HODOS);
     const idsCargas = [];
     palets.forEach(function (pa) { if (pa.batea_id && idsCargas.indexOf(pa.batea_id) === -1) idsCargas.push(pa.batea_id); });
-    const cargas = idsCargas.length
-      ? supaSelect_('cargas', 'id_carga=in.(' + idsCargas.map(encodeURIComponent).join(',') + ')&select=id_carga,fecha_entrega,horario', CFG.SCHEMA_HODOS)
-      : [];
+    const cargas = supaSelectIn_('cargas', 'id_carga', idsCargas, 'select=id_carga,fecha_entrega,horario', CFG.SCHEMA_HODOS);
 
     peticionesRefill.forEach(function (p) {
       if (p.reservaFutura) { p.refillTexto = 'Reservada'; return; }

@@ -523,6 +523,7 @@
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
         '<h1>Kairos · Operario</h1>' +
         '<p class="meta">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) + ' — ¿qué vas a hacer?</p>' +
+        '<div id="avisoUbicarMenu"></div>' +
         '<div class="grid-flujos">' +
           boton('pedidos', '📦', 'Pedidos', 'flujoPedidos') +
           boton('refill', '🔄', 'Refill', 'flujoRefill') +
@@ -535,6 +536,7 @@
         '</div></div>';
       sincronizarPickers_();
 
+      pintarAvisoUbicar_('avisoUbicarMenu', TIENDA_ACTIVA);
       document.getElementById('flujoPedidos').onclick = function () { entrarFlujo_('pedidos'); };
       document.getElementById('flujoRefill').onclick = function () { entrarFlujo_('refill'); };
       document.getElementById('flujoRevision').onclick = function () { entrarFlujo_('revision'); };
@@ -581,6 +583,7 @@
           '</div>' +
         '</div>' +
         '<div id="avisoOtroModo"></div>' +
+        '<div id="avisoUbicar"></div>' +
         '<div class="filtros">' +
         (FLUJO_ACTUAL_ === 'refill' ? '' :
           '<select id="filtroTipo"><option value="">Pedido cliente y cesión</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option></select>') +
@@ -618,6 +621,7 @@
       if (selTransporte) { selTransporte.value = FILTROS_COLA_.transporte; selTransporte.onchange = cambioFiltroCola_; }
       document.getElementById('filtroSeccion').onchange = cambioFiltroCola_;
       cargarCola();
+      if (FLUJO_ACTUAL_ !== 'refill') pintarAvisoUbicar_('avisoUbicar', TIENDA_ACTIVA);
     }
 
     function tiposDelFlujo_() { return FLUJO_ACTUAL_ === 'refill' ? ['refill'] : ['pedido_cliente', 'cesion']; }
@@ -798,7 +802,9 @@
       }
 
       if (p.estado === 'a_ubicar') {
-        html += '<h3>A ubicar</h3><input type="text" id="ubicacion" placeholder="Ubicación de consolidación" onkeydown="if(event.key===\'Enter\')guardarUbicacion(\'' + p.id + '\')"> <button onclick="guardarUbicacion(\'' + p.id + '\')">Guardar</button>';
+        html += '<h3>A ubicar</h3><input type="text" id="ubicacion" placeholder="Ubicación de consolidación" onkeydown="if(event.key===\'Enter\')guardarUbicacion(\'' + p.id + '\')"> <button onclick="guardarUbicacion(\'' + p.id + '\')">Guardar</button> ' +
+          '<button class="secundario" onclick="posponerUbicacion()">Posponer ubicación</button>' +
+          '<p class="meta">Si no puedes ubicarlo ahora, pospónlo: el pedido queda en "Pendientes de ubicar" con aviso hasta que le des ubicación.</p>';
       } else if (p.estado === 'cerrada') {
         html += '<p><strong>Petición completada.</strong></p>';
       }
@@ -815,6 +821,35 @@
         }).listarEstadoPeticiones();
       }
     }
+
+    /** Botón "Cambiar palet" y, abierto, la lista de palets del mismo código
+     *  con lo que queda libre de cada uno. También sirve para una línea sin
+     *  palet asignado (el sistema no encontró stock): elegir uno a mano. */
+    function bloqueSelectorHtml_(l) {
+      const sel = selectorPalet[l.id];
+      if (sel === 'cargando') {
+        return '<div class="meta" style="margin-top:6px;">Buscando palets…</div>';
+      }
+      if (Array.isArray(sel)) {
+        if (!sel.length) {
+          return '<div class="meta" style="margin-top:6px;">No se han encontrado ' + (l.sscc ? 'otros ' : '') + 'palets con este código en el edificio 05.</div>' +
+            '<button class="secundario" style="margin-top:6px;" onclick="cerrarSelectorPalet(\'' + l.id + '\')">Cerrar</button>';
+        }
+        return '<p class="meta" style="margin:8px 0 4px;font-weight:700;">Elige el palet:</p>' +
+          sel.map(function (c) {
+            const suficiente = c.remanente >= Number(l.cantidad || 0);
+            const clase = c.esActual ? 'neutro' : (suficiente ? 'ok' : 'aviso');
+            const etiqueta = 'SSCC ' + c.sscc + ' · ' + c.ubicacion + ' · ' + c.remanente + ' ud' + (c.esActual ? ' (actual)' : (suficiente ? '' : ' ⚠ insuficiente'));
+            return c.esActual
+              ? '<button class="' + clase + '" disabled style="width:100%;margin-bottom:6px;">' + etiqueta + '</button>'
+              : '<button class="' + clase + '" style="width:100%;margin-bottom:6px;" onclick="elegirPalet(\'' + l.id + '\', \'' + c.sscc + '\', \'' + c.ubicacion + '\')">' + etiqueta + '</button>';
+          }).join('') +
+          '<button class="secundario" onclick="cerrarSelectorPalet(\'' + l.id + '\')">Cancelar</button>';
+      }
+      return '<button class="secundario" style="margin-top:8px;" onclick="abrirSelectorPalet(\'' + l.id + '\')">🔄 ' + (l.sscc ? 'Cambiar palet' : 'Buscar palet') + '</button>';
+    }
+
+    function cerrarVistaLinea(lineaId) { delete vistaLinea[lineaId]; renderDetalleBody_(); }
 
     function renderLineaHtml_(p, l) {
       const udsTexto = l.cantidad + ' ' + (l.unidad_medida === 'palet' ? (Number(l.cantidad) === 1 ? 'palet' : 'palets') : 'ud');
@@ -857,10 +892,31 @@
           '<div class="meta">✓ Preparada' + (resumen ? ' · ' + resumen : '') + '</div>' + botonDeshacer + '</div>';
       }
 
+      // Sin palet asignado (no hay stock del artículo en el edificio 05): antes
+      // el botón quedaba desactivado y la línea —y con ella el pedido entero—
+      // no se podía cerrar nunca. Ahora se puede registrar la incidencia
+      // (Sin Palet / Sin Mercancía / Otras Incidencias, igual que con palet) o
+      // buscar a mano un palet con "Cambiar palet".
       const bloqueada = !l.sscc;
       if (bloqueada) {
+        const vistaB = vistaLinea[l.id];
+        if (vistaB === 'motivo') {
+          return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
+            '<input type="text" id="motivo-' + l.id + '" placeholder="Motivo de la incidencia" onkeydown="if(event.key===\'Enter\')confirmarOtrasIncidencias(\'' + l.id + '\')"> ' +
+            '<button class="ok" onclick="confirmarOtrasIncidencias(\'' + l.id + '\')">Confirmar</button> ' +
+            '<button class="secundario" onclick="verIncidenciaTipos(\'' + l.id + '\')">‹ Volver</button></div>';
+        }
+        if (vistaB === 'tipos') {
+          return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
+            '<p class="meta" style="margin:8px 0 4px;font-weight:700;">¿Qué ha pasado con este artículo?</p>' +
+            '<button class="aviso" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Palet\', \'\')">Sin Palet</button> ' +
+            '<button class="peligro" onclick="cerrarLinea(\'' + l.id + '\', \'Sin Mercancía\', \'\')">Sin Mercancía</button> ' +
+            '<button class="neutro" onclick="verIncidenciaMotivo(\'' + l.id + '\')">Otras Incidencias</button> ' +
+            '<button class="secundario" onclick="cerrarVistaLinea(\'' + l.id + '\')">‹ Volver</button></div>';
+        }
         return '<div class="linea"><div class="desc">' + cabecera + '</div>' + extraInfo +
-          '<button class="secundario" disabled title="Esperando ubicación de palet">Marcar preparada</button></div>';
+          '<button class="aviso" onclick="verIncidenciaTipos(\'' + l.id + '\')">⚠ Sin stock — registrar incidencia</button>' +
+          bloqueSelectorHtml_(l) + '</div>';
       }
 
       // Línea repartida en varios palets (ver parsearSsccMulti): checklist que
@@ -907,30 +963,7 @@
         }
       }
 
-      const sel = selectorPalet[l.id];
-      var bloqueSelector;
-      if (sel === 'cargando') {
-        bloqueSelector = '<div class="meta" style="margin-top:6px;">Buscando palets…</div>';
-      } else if (Array.isArray(sel)) {
-        if (!sel.length) {
-          bloqueSelector = '<div class="meta" style="margin-top:6px;">No se han encontrado otros palets con este código en el edificio 05.</div>' +
-            '<button class="secundario" style="margin-top:6px;" onclick="cerrarSelectorPalet(\'' + l.id + '\')">Cerrar</button>';
-        } else {
-          bloqueSelector = '<p class="meta" style="margin:8px 0 4px;font-weight:700;">Elige el palet:</p>' +
-            sel.map(function (c) {
-              const suficiente = c.remanente >= Number(l.cantidad || 0);
-              const clase = c.esActual ? 'neutro' : (suficiente ? 'ok' : 'aviso');
-              const etiqueta = 'SSCC ' + c.sscc + ' · ' + c.ubicacion + ' · ' + c.remanente + ' ud' + (c.esActual ? ' (actual)' : (suficiente ? '' : ' ⚠ insuficiente'));
-              return c.esActual
-                ? '<button class="' + clase + '" disabled style="width:100%;margin-bottom:6px;">' + etiqueta + '</button>'
-                : '<button class="' + clase + '" style="width:100%;margin-bottom:6px;" onclick="elegirPalet(\'' + l.id + '\', \'' + c.sscc + '\', \'' + c.ubicacion + '\')">' + etiqueta + '</button>';
-            }).join('') +
-            '<button class="secundario" onclick="cerrarSelectorPalet(\'' + l.id + '\')">Cancelar</button>';
-        }
-      } else {
-        bloqueSelector = '<button class="secundario" style="margin-top:8px;" onclick="abrirSelectorPalet(\'' + l.id + '\')">🔄 Cambiar palet</button>';
-      }
-      const cola = bloquePalet + bloqueSelector;
+      const cola = bloquePalet + bloqueSelectorHtml_(l);
 
       // refill y pedido_cliente/cesión comparten el mismo flujo de incidencia
       // (Sin Palet / Sin Mercancía / Otras) — en refill, si hay más de un
@@ -1229,6 +1262,35 @@
         .withSuccessHandler(function () { renderDetalle(); })
         .withFailureHandler(function (err) { kAlerta(err.message); })
         .guardarUbicacionConsolidacion(peticionId, ubicacion);
+    }
+
+    // Posponer la ubicación de consolidación: no se guarda nada, el pedido sigue
+    // "a_ubicar" y aparece en el aviso "Pendientes de ubicar" (menú, cola y
+    // control de pedidos) hasta que alguien le dé ubicación.
+    function posponerUbicacion() {
+      VISTA = { nombre: MODO_JEFE ? 'panel' : 'cola', peticionId: null };
+      render();
+      kAlerta('Queda pendiente de ubicar. Lo verás en el aviso "Pendientes de ubicar" hasta que le des ubicación.');
+    }
+
+    /** Aviso de pedidos ya preparados que esperan ubicación de consolidación.
+     *  Pinta en el contenedor `idContenedor` (se vacía si no hay ninguno). */
+    function pintarAvisoUbicar_(idContenedor, tienda) {
+      google.script.run.withSuccessHandler(function (json) {
+        const cont = document.getElementById(idContenedor);
+        if (!cont) return;
+        const lista = JSON.parse(json);
+        if (!lista.length) { cont.innerHTML = ''; return; }
+        cont.innerHTML = '<div style="color:var(--warn-fg);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--radius-btn);padding:8px 10px;margin-bottom:10px;">' +
+          '<b>⚠ ' + lista.length + ' pedido' + (lista.length === 1 ? '' : 's') + ' preparado' + (lista.length === 1 ? '' : 's') + ' pendiente' + (lista.length === 1 ? '' : 's') + ' de ubicar</b>' +
+          lista.map(function (p) {
+            return '<div class="fila" style="margin:6px 0 0;cursor:pointer;" onclick="abrirDetalle(\'' + p.id + '\')">' +
+              '<div class="tipo">Pedido cliente ' + escHtmlSie_(p.num_pedido || '') + '</div>' +
+              '<div class="meta">' + escHtmlSie_(CFG_TIENDA_NOMBRE[p.tienda_origen] || p.tienda_origen) + ' · ' +
+                p.totalLineas + ' línea' + (p.totalLineas === 1 ? '' : 's') +
+                (p.preparadaEn ? ' · preparado ' + tiempoDesde_(p.preparadaEn) : '') + ' · <b>Ubicar</b></div></div>';
+          }).join('') + '</div>';
+      }).listarPendientesDeUbicar(tienda || '');
     }
 
     function renderStock() {
@@ -1927,12 +1989,16 @@
         botonIndividual = ' <button class="' + (p.cola_individual ? 'btn-equipo' : 'btn-individual') + '" onclick="event.stopPropagation(); marcarColaIndividualUI(\'' + p.id + '\', ' + (!p.cola_individual) + ', this)">' +
           (p.cola_individual ? 'Mover a En Equipo' : 'Mover a individual') + '</button>';
       }
-      const activa = p.estado !== 'cerrada' && p.estado !== 'anulada';
-      const preparando = p.en_curso_por ? (' · preparando: ' + escHtmlSie_(p.en_curso_por) + ' (' + tiempoDesde_(p.en_curso_desde) + ')') : '';
+      // Un pedido ya preparado que solo espera ubicación no corre prisa de
+      // preparación: sin contador de urgencia y con su propio texto.
+      const aUbicar = p.estado === 'a_ubicar';
+      const activa = p.estado !== 'cerrada' && p.estado !== 'anulada' && !aUbicar;
+      const preparando = (p.en_curso_por && !aUbicar) ? (' · preparando: ' + escHtmlSie_(p.en_curso_por) + ' (' + tiempoDesde_(p.en_curso_desde) + ')') : '';
       const urgencia = activa ? urgenciaHtml_(p.creada_en) : '';
+      const textoEstado = aUbicar ? ('preparado' + (p.preparadaEn ? ' ' + tiempoDesde_(p.preparadaEn) : '') + ' · pendiente de ubicar') : p.estado;
       return '<div class="fila tipo-' + p.tipo + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
         '<div class="tipo">' + etiquetaTipo + ' ' + urgencia + '</div>' +
-        '<div class="meta">' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + p.estado + (p.cola_individual ? ' · individual' : '') + preparando + '</div>' +
+        '<div class="meta">' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + textoEstado + (p.cola_individual ? ' · individual' : '') + preparando + '</div>' +
         (articulosTexto ? '<div class="meta">' + articulosTexto + '</div>' : '') +
         '<div class="meta">' + botonReintentar + botonIndividual + '</div></div>';
     }
@@ -1954,7 +2020,7 @@
         const contCont = document.getElementById('panelContadores-' + codigoTienda);
         if (contCont) {
           const activasTienda = PANEL_CACHE_.filter(function (p) {
-            return p.tienda_origen === codigoTienda && p.estado !== 'cerrada' && p.estado !== 'anulada';
+            return p.tienda_origen === codigoTienda && p.estado !== 'cerrada' && p.estado !== 'anulada' && p.estado !== 'a_ubicar';
           });
           const contadores = { pedido_cliente: 0, refill: 0, cesion: 0 };
           activasTienda.forEach(function (p) { if (contadores[p.tipo] !== undefined) contadores[p.tipo]++; });
@@ -1967,11 +2033,20 @@
         if (!cont) return;
         const deEstaTienda = peticiones.filter(function (p) { return p.tienda_origen === codigoTienda; });
         if (!deEstaTienda.length) { cont.innerHTML = '<p class="meta">No hay peticiones.</p>'; return; }
-        const activas = deEstaTienda.filter(function (p) { return p.estado !== 'cerrada' && p.estado !== 'anulada'; });
+        const activas = deEstaTienda.filter(function (p) { return p.estado !== 'cerrada' && p.estado !== 'anulada' && p.estado !== 'a_ubicar'; });
+        // Ya preparados, esperando ubicación de consolidación: aviso aparte,
+        // no se mezclan con lo que aún hay que preparar.
+        const pendientesUbicar = deEstaTienda.filter(function (p) { return p.estado === 'a_ubicar' && !p.ubicacion_consolidacion; });
         const cerradasSinEtiqueta = deEstaTienda.filter(function (p) {
           return p.estado === 'cerrada' && p.necesitaHodos && !p.tieneHodos;
         });
-        var html = activas.length ? activas.map(_filaPeticionPanel_).join('') : '<p class="meta">Sin peticiones activas.</p>';
+        var html = '';
+        if (pendientesUbicar.length) {
+          html += '<div style="color:var(--warn-fg);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--radius-btn);padding:8px 10px;margin-bottom:10px;">' +
+            '<b>⚠ ' + pendientesUbicar.length + ' pendiente' + (pendientesUbicar.length === 1 ? '' : 's') + ' de ubicar</b>' +
+            pendientesUbicar.map(_filaPeticionPanel_).join('') + '</div>';
+        }
+        html += activas.length ? activas.map(_filaPeticionPanel_).join('') : '<p class="meta">Sin peticiones activas.</p>';
         if (cerradasSinEtiqueta.length) {
           html += '<p class="meta" style="margin-top:10px;font-weight:700;">Cerradas sin etiqueta HODOS</p>' +
             cerradasSinEtiqueta.map(_filaPeticionPanel_).join('');

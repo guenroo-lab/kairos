@@ -20,7 +20,7 @@ function listarIncidenciasPendientes() {
 
   const ids = [];
   lineas.forEach(function (l) { if (ids.indexOf(l.peticion_id) === -1) ids.push(l.peticion_id); });
-  const peticiones = supaSelect_('peticiones', 'id=in.(' + ids.join(',') + ')&select=id,tipo,tienda_origen,num_pedido,num_cesion');
+  const peticiones = supaSelectIn_('peticiones', 'id', ids, 'select=id,tipo,tienda_origen,num_pedido,num_cesion');
   const porPeticion = {};
   peticiones.forEach(function (p) { porPeticion[p.id] = p; });
 

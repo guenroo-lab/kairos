@@ -1303,15 +1303,18 @@
     app().appendChild(wrap);
     wrap.appendChild(el('<p style="color:var(--text-500);font-size:13px;margin:0 0 10px;">Mercancía que plataforma no ha podido preparar (sin stock, sin palet o parcial). Aquí ves en qué punto está y qué te dice plataforma.</p>'));
 
+    // Por defecto solo lo pendiente (abiertas + en gestión). Al resolverse —o
+    // al anular el pedido— pasa a "Resueltas", donde sigue 7 días.
     const FILTROS_INC_ = [
-      { valor: 'todas', label: 'Todas' },
+      { valor: 'pendientes', label: 'Pendientes' },
       { valor: 'abierta', label: 'Abiertas' },
       { valor: 'en_gestion', label: 'En gestión' },
-      { valor: 'resuelta', label: 'Resueltas' },
+      { valor: 'resuelta', label: 'Resueltas (7 días)' },
+      { valor: 'todas', label: 'Todas' },
     ];
-    var filtroInc = 'todas';
+    var filtroInc = 'pendientes';
     const chips = el('<div class="filtros-tipo">' + FILTROS_INC_.map(function (f) {
-      return '<button type="button" class="chip-tipo' + (f.valor === 'todas' ? ' activo' : '') + '" data-estado="' + f.valor + '">' + f.label + '</button>';
+      return '<button type="button" class="chip-tipo' + (f.valor === 'pendientes' ? ' activo' : '') + '" data-estado="' + f.valor + '">' + f.label + '</button>';
     }).join('') + '</div>');
     wrap.appendChild(chips);
     const lista = el('<div class="card" id="listaIncidenciasPortal"><p style="color:var(--text-500)">Cargando…</p></div>');
@@ -1327,7 +1330,7 @@
     var todas = [];
     function pintarInc_(filas) {
       lista.innerHTML = '';
-      if (!filas.length) { lista.appendChild(el('<p style="color:var(--text-500)">No hay incidencias con ese filtro.</p>')); return; }
+      if (!filas.length) { lista.appendChild(el('<p style="color:var(--text-500)">' + (filtroInc === 'pendientes' ? 'No tienes incidencias pendientes.' : 'No hay incidencias con ese filtro.') + '</p>')); return; }
       filas.forEach(function (l) {
         const etiquetaTipo = l.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (l.num_pedido || ''))
           : (l.tipo === 'cesion' ? 'Cesión ' + (l.num_cesion || '') : 'Refill');
@@ -1367,7 +1370,9 @@
       });
     }
     function aplicarFiltroInc_() {
-      pintarInc_(filtroInc === 'todas' ? todas : todas.filter(function (l) { return l.estadoIncidencia === filtroInc; }));
+      pintarInc_(filtroInc === 'todas' ? todas
+        : filtroInc === 'pendientes' ? todas.filter(function (l) { return l.estadoIncidencia !== 'resuelta'; })
+        : todas.filter(function (l) { return l.estadoIncidencia === filtroInc; }));
     }
     chips.querySelectorAll('.chip-tipo').forEach(function (btn) {
       btn.onclick = function () {

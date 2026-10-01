@@ -38,6 +38,20 @@ function _supaFetch_(metodo, tabla, queryString, payload, schema) {
 function supaSelect_(tabla, queryString, schema) {
   return _supaFetch_('GET', tabla, queryString, undefined, schema);
 }
+
+/** supaSelect_ con un filtro "campo=in.(valores)" partido en lotes de 30: la
+ *  URL de UrlFetchApp no admite más de ~2 KB (30 uuids ≈ 1,1 KB), y una lista
+ *  de ids que crece con el uso (peticiones activas, etc.) acabaría rompiendo
+ *  la pantalla. `resto` = el resto de la query (select, filtros) SIN order ni
+ *  limit globales: se aplican por lote. Devuelve todas las filas juntas. */
+function supaSelectIn_(tabla, campo, valores, resto, schema) {
+  const filas = [];
+  for (var i = 0; i < valores.length; i += 30) {
+    const lote = valores.slice(i, i + 30).map(function (v) { return encodeURIComponent(v); }).join(',');
+    supaSelect_(tabla, campo + '=in.(' + lote + ')' + (resto ? '&' + resto : ''), schema).forEach(function (f) { filas.push(f); });
+  }
+  return filas;
+}
 function supaInsert_(tabla, fila, schema) {
   const filas = _supaFetch_('POST', tabla, '', fila, schema);
   if (!filas || !filas.length) throw new Error('Supabase insert en "' + tabla + '" no devolvió ninguna fila.');

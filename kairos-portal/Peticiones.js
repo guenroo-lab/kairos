@@ -435,9 +435,8 @@ function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
     'tienda_origen=eq.' + encodeURIComponent(tienda) + '&estado=in.(pendiente,en_preparacion,a_ubicar)&select=id,tipo,creada_en');
   var duplicados = [];
   if (abiertas.length) {
-    const ids = abiertas.map(function (p) { return p.id; }).join(',');
-    const lineasAbiertas = supaSelect_('lineas',
-      'peticion_id=in.(' + ids + ')&codigo_lm=eq.' + encodeURIComponent(codigoLm) + '&select=peticion_id');
+    const lineasAbiertas = supaSelectIn_('lineas', 'peticion_id', abiertas.map(function (p) { return p.id; }),
+      'codigo_lm=eq.' + encodeURIComponent(codigoLm) + '&select=peticion_id');
     const idsConLinea = lineasAbiertas.map(function (l) { return l.peticion_id; });
     duplicados = abiertas.filter(function (p) { return idsConLinea.indexOf(p.id) !== -1; });
   }
@@ -665,8 +664,11 @@ function _crearPeticion_(ldap, tipo, datos, lineas) {
 
 function listarMisPeticiones(ldap) {
   const u = _usuarioDe_(ldap);
+  // Peticiones por preparar o en preparación. Una ya preparada que solo espera
+  // ubicación de consolidación en plataforma (a_ubicar) no es una petición
+  // pendiente de la tienda: se sigue en Trazabilidad.
   var q = 'tienda_origen=eq.' + encodeURIComponent(u.tienda) +
-    '&estado=not.in.(cerrada,anulada)' +
+    '&estado=not.in.(cerrada,anulada,a_ubicar)' +
     '&select=id,tipo,num_pedido,num_cesion,tienda_destino,estado,creada_en,solicitante_ldap,fecha_entrega,visible_desde' +
     '&order=creada_en.desc&limit=200';
   if (u.rol === 'vendedor') q += '&tipo=eq.refill'; // Vendedor solo ve Refill
@@ -677,8 +679,7 @@ function listarMisPeticiones(ldap) {
     _marcarReserva_(p, hoy);
   });
   if (filas.length) {
-    const ids = filas.map(function (p) { return p.id; }).join(',');
-    const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=peticion_id,codigo_lm,designacion');
+    const lineas = supaSelectIn_('lineas', 'peticion_id', filas.map(function (p) { return p.id; }), 'select=peticion_id,codigo_lm,designacion');
     filas.forEach(function (p) {
       const propias = lineas.filter(function (l) { return l.peticion_id === p.id; });
       p.articulo = propias.length === 1 ? (propias[0].codigo_lm + ' — ' + (propias[0].designacion || '')) : (propias.length + ' artículos');

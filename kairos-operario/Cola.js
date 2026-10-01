@@ -9,8 +9,8 @@ function listarCola(filtroTienda, filtroTipo) {
   const peticiones = supaSelect_('peticiones', q);
   if (!peticiones.length) return _json_([]);
 
-  const ids = peticiones.map(function (p) { return p.id; }).join(',');
-  const lineas = supaSelect_('lineas', 'peticion_id=in.(' + ids + ')&select=id,peticion_id,codigo_lm,ean,estado_preparacion,seccion,designacion,ubicacion,sscc,cantidad,unidad_medida');
+  const lineas = supaSelectIn_('lineas', 'peticion_id', peticiones.map(function (p) { return p.id; }),
+    'select=id,peticion_id,codigo_lm,ean,estado_preparacion,seccion,designacion,ubicacion,sscc,cantidad,unidad_medida');
 
   const previstas = _ubicacionesPrevistas_(peticiones, lineas);
 
@@ -84,8 +84,7 @@ function _ubicacionesPrevistas_(peticiones, lineas) {
       deTienda.forEach(function (l) { if (codigos.indexOf(l.codigo_lm) === -1) codigos.push(l.codigo_lm); });
       const lista = codigos.map(encodeURIComponent).join(',');
 
-      const stock = supaSelect_('stock_fisico',
-        'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=in.(' + lista + ')');
+      const stock = supaSelectIn_('stock_fisico', 'codigo_lm', codigos, 'tienda=eq.' + encodeURIComponent(tienda));
       const marca = _marcaDeSnapshot_(stock);
       const comprometidas = _lineasComprometidas_(tienda, codigos, marca);
       const enRefill = _paletsDeRefill_(tienda, marca); // palets que un refill se lleva enteros
