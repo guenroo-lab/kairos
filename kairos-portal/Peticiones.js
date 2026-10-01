@@ -44,6 +44,19 @@ const FALTANTES_TOTALES_STOCK_ = ['Sin Palet', 'Sin Mercancía', 'Otras Incidenc
 // Máximo de ids (uuid / SSCC) por consulta: UrlFetchApp admite URLs de ~2 KB.
 const TROZO_IDS_ = 30;
 
+/** Lee TODAS las filas de una consulta aunque pasen del tope de filas de la API
+ *  (1000): sin esto una consulta que devolviese más se cortaría en silencio y
+ *  se "perderían" reservas. Ordena por id para paginar de forma estable. */
+function _selectTodo_(tabla, consulta) {
+  const todas = [];
+  for (var pagina = 0; pagina < 30; pagina++) {
+    const filas = supaSelect_(tabla, consulta + '&order=id.asc&limit=1000&offset=' + (pagina * 1000));
+    filas.forEach(function (f) { todas.push(f); });
+    if (filas.length < 1000) break;
+  }
+  return todas;
+}
+
 function _trozos_(lista, tamano) {
   const trozos = [];
   for (var i = 0; i < lista.length; i += tamano) trozos.push(lista.slice(i, i + tamano));
@@ -69,17 +82,22 @@ function _partesSscc_(valorSscc, cantidadFila) {
  *  preparar la última línea del pedido, no al preparar cada una. Memoizado
  *  por ejecución. */
 var COMPLETADAS_MEMO_ = {};
+var COMPLETADAS_TTL_MS_ = 15000;
 function _peticionesCompletadasDesde_(tienda, desde) {
   const clave = tienda + '|' + desde;
-  if (COMPLETADAS_MEMO_[clave]) return COMPLETADAS_MEMO_[clave];
+  // Memo corto: dentro de una misma ejecución se repite la consulta por cada
+  // línea/código; con vida limitada para que un pedido que se completa mientras
+  // tanto no quede "congelado" como incompleto.
+  const memo = COMPLETADAS_MEMO_[clave];
+  if (memo && Date.now() - memo.en < COMPLETADAS_TTL_MS_) return memo.ids;
   const ids = [];
-  supaSelect_('lineas',
+  _selectTodo_('lineas',
     'estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde) +
     '&select=peticion_id,peticiones!inner(tipo,estado)' +
     '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) +
     '&peticiones.tipo=neq.refill&peticiones.estado=in.(a_ubicar,cerrada)')
     .forEach(function (l) { if (ids.indexOf(l.peticion_id) === -1) ids.push(l.peticion_id); });
-  COMPLETADAS_MEMO_[clave] = ids;
+  COMPLETADAS_MEMO_[clave] = { ids: ids, en: Date.now() };
   return ids;
 }
 
@@ -134,22 +152,22 @@ function _lineasComprometidasDe_(tienda, codigos, desde) {
   const resultado = [];
   function anadir(l, unidades, partes) {
     vistas[l.id] = true;
-    resultado.push({ id: l.id, unidades: unidades, partes: partes });
+    resultado.push({ id: l.id, codigo_lm: l.codigo_lm, tipo: (l.peticiones || {}).tipo, unidades: unidades, partes: partes });
   }
 
-  supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado')
+  _selectTodo_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado')
     .forEach(function (l) {
       anadir(l, _unidadesDeLinea_(l, (l.peticiones || {}).tipo), _partesSscc_(l.sscc, l.cantidad));
     });
   if (!desde) return resultado;
 
   const preparadas = comunes + '&estado_preparacion=eq.preparado';
-  const candidatas = supaSelect_('lineas', preparadas + '&preparada_en=gte.' + encodeURIComponent(desde));
-  supaSelect_('lineas', preparadas + '&peticiones.estado=in.(pendiente,en_preparacion)').forEach(function (l) {
+  const candidatas = _selectTodo_('lineas', preparadas + '&preparada_en=gte.' + encodeURIComponent(desde));
+  _selectTodo_('lineas', preparadas + '&peticiones.estado=in.(pendiente,en_preparacion)').forEach(function (l) {
     if ((l.peticiones || {}).tipo !== 'refill') candidatas.push(l);
   });
   _trozos_(_peticionesCompletadasDesde_(tienda, desde), 15).forEach(function (ids) {
-    supaSelect_('lineas', preparadas + '&peticion_id=in.(' + ids.map(encodeURIComponent).join(',') + ')')
+    _selectTodo_('lineas', preparadas + '&peticion_id=in.(' + ids.map(encodeURIComponent).join(',') + ')')
       .forEach(function (l) { candidatas.push(l); });
   });
   candidatas.forEach(function (l) {
@@ -168,9 +186,9 @@ function _lineasComprometidasDe_(tienda, codigos, desde) {
 function _paletsDeRefill_(tienda, desde) {
   const comunes = 'sscc=not.is.null&select=id,sscc,cantidad,estado_negocio,preparada_en,peticiones!inner(tipo,estado)' +
     '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) + '&peticiones.tipo=eq.refill';
-  const lineas = supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
+  const lineas = _selectTodo_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
   if (desde) {
-    supaSelect_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde))
+    _selectTodo_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde))
       .forEach(function (l) { if (FALTANTES_TOTALES_STOCK_.indexOf(l.estado_negocio) === -1) lineas.push(l); });
   }
   const set = {};
@@ -180,23 +198,52 @@ function _paletsDeRefill_(tienda, desde) {
   return set;
 }
 
-/** Stock de un código en una tienda: físico (snapshot de stock_fisico,
- *  edificio 05) y lo ya comprometido por peticiones no anuladas — las aún
- *  sin preparar, y las preparadas cuyo consumo el snapshot todavía no
- *  refleja. disponible = físico − comprometido. */
-function _stockDetalle_(tienda, codigoLm) {
-  const codigo = String(codigoLm || '').trim();
-  const filas = supaSelect_('stock_fisico',
-    'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=eq.' + encodeURIComponent(codigo) + '&select=cantidad,sincronizado_en');
-  var fisico = 0, desde = null;
-  filas.forEach(function (f) {
-    fisico += Number(f.cantidad) || 0;
-    if (!desde || Date.parse(f.sincronizado_en) > Date.parse(desde)) desde = f.sincronizado_en;
+/** Stock de varios códigos en una tienda, calculado de una vez (pocas
+ *  consultas aunque sean muchos códigos): físico (snapshot de stock_fisico,
+ *  edificio 05) y lo ya comprometido. Devuelve { codigo: {fisico, comprometido,
+ *  disponible} }, disponible = físico − comprometido. Compromete:
+ *   - los palets que un refill se lleva ENTEROS: todo lo que lleven, de
+ *     cualquier código, deja de estar disponible (también para los códigos que
+ *     el refill no pidió);
+ *   - las unidades de pedidos y cesiones aún sin preparar (con palet asignado
+ *     o no) y las ya preparadas cuyo consumo el snapshot no refleja. */
+function _stockDetalleVarios_(tienda, codigos) {
+  const lista = [];
+  codigos.forEach(function (c) {
+    const k = String(c == null ? '' : c).trim();
+    if (k && lista.indexOf(k) === -1) lista.push(k);
   });
+  const resultado = {};
+  lista.forEach(function (k) { resultado[k] = { fisico: 0, comprometido: 0, disponible: 0 }; });
+  if (!lista.length) return resultado;
 
-  var comprometido = 0;
-  _lineasComprometidasPortal_(tienda, [codigo], desde).forEach(function (l) { comprometido += l.unidades; });
-  return { fisico: fisico, comprometido: comprometido, disponible: Math.max(0, fisico - comprometido) };
+  const filas = [];
+  _trozos_(lista, 40).forEach(function (trozo) {
+    _selectTodo_('stock_fisico',
+      'tienda=eq.' + encodeURIComponent(tienda) + '&codigo_lm=in.(' + trozo.map(encodeURIComponent).join(',') + ')' +
+      '&select=codigo_lm,sscc,cantidad,sincronizado_en')
+      .forEach(function (f) { filas.push(f); });
+  });
+  const desde = _marcaDe_(filas);
+  filas.forEach(function (f) { resultado[f.codigo_lm].fisico += Number(f.cantidad) || 0; });
+
+  const enRefill = _paletsDeRefill_(tienda, desde);
+  filas.forEach(function (f) { if (enRefill[f.sscc]) resultado[f.codigo_lm].comprometido += Number(f.cantidad) || 0; });
+  _lineasComprometidasPortal_(tienda, lista, desde).forEach(function (l) {
+    // Las líneas de refill ya cuentan arriba por palet entero.
+    if (l.tipo !== 'refill' && resultado[l.codigo_lm]) resultado[l.codigo_lm].comprometido += l.unidades;
+  });
+  lista.forEach(function (k) {
+    const d = resultado[k];
+    d.disponible = Math.max(0, d.fisico - d.comprometido);
+  });
+  return resultado;
+}
+
+/** Stock de un código (ver _stockDetalleVarios_). */
+function _stockDetalle_(tienda, codigoLm) {
+  const codigo = String(codigoLm == null ? '' : codigoLm).trim();
+  return _stockDetalleVarios_(tienda, [codigo])[codigo] || { fisico: 0, comprometido: 0, disponible: 0 };
 }
 
 /** De esos palets (SSCC), cuáles NO se pueden dar a un refill porque algo de
@@ -218,7 +265,7 @@ function _paletsOcupados_(tienda, contenido, desde) {
 function _contenidoDePalets_(tienda, ssccs) {
   const filas = [];
   _trozos_(ssccs, TROZO_IDS_).forEach(function (trozo) {
-    supaSelect_('stock_fisico',
+    _selectTodo_('stock_fisico',
       'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=in.(' + trozo.map(encodeURIComponent).join(',') + ')' +
       '&select=sscc,codigo_lm,cantidad,sincronizado_en')
       .forEach(function (f) { filas.push(f); });
@@ -253,8 +300,9 @@ function _exigirStockPedidoCliente_(tienda, lineas) {
     pedido[codigo].cantidad += Number(l.cantidad) || 0;
   });
   const faltan = [];
+  const detalle = _stockDetalleVarios_(tienda, Object.keys(pedido));
   Object.keys(pedido).forEach(function (codigo) {
-    const d = _stockDetalle_(tienda, codigo);
+    const d = detalle[codigo] || { fisico: 0, comprometido: 0, disponible: 0 };
     if (pedido[codigo].cantidad > d.disponible) {
       const etiqueta = codigo + (pedido[codigo].designacion ? ' · ' + pedido[codigo].designacion : '');
       faltan.push(_mensajeSinStock_(etiqueta, pedido[codigo].cantidad, d));
@@ -315,13 +363,18 @@ function listarSsccDisponibles(ldap, codigoLm) {
   if (!filas.length) return _json_([]);
   filas.forEach(function (f) { delete f.sincronizado_en; });
 
+  // Designaciones solo de lo que llevan los palets que se van a ofrecer
+  // (en trozos: la URL no puede pasar de ~2 KB).
   const codigos = [];
-  otrasFilas.forEach(function (f) { if (codigos.indexOf(f.codigo_lm) === -1) codigos.push(f.codigo_lm); });
-  const catalogo = codigos.length
-    ? supaSelect_('catalogo', 'codigo_lm=in.(' + codigos.map(encodeURIComponent).join(',') + ')&select=codigo_lm,designacion')
-    : [];
+  otrasFilas.forEach(function (f) {
+    const ofrecido = filas.some(function (p) { return p.sscc === f.sscc; });
+    if (ofrecido && codigos.indexOf(f.codigo_lm) === -1) codigos.push(f.codigo_lm);
+  });
   const designacionPorCodigo = {};
-  catalogo.forEach(function (c) { designacionPorCodigo[c.codigo_lm] = c.designacion; });
+  _trozos_(codigos, 40).forEach(function (trozo) {
+    supaSelect_('catalogo', 'codigo_lm=in.(' + trozo.map(encodeURIComponent).join(',') + ')&select=codigo_lm,designacion')
+      .forEach(function (c) { designacionPorCodigo[c.codigo_lm] = c.designacion; });
+  });
 
   filas.forEach(function (f) {
     f.contenido = otrasFilas
@@ -393,8 +446,9 @@ function _exigirPaletsLibres_(tienda, lineas) {
   const seLlevan = {};
   contenido.forEach(function (f) { seLlevan[f.codigo_lm] = (seLlevan[f.codigo_lm] || 0) + (Number(f.cantidad) || 0); });
   const sinCubrir = [];
+  const detalle = _stockDetalleVarios_(tienda, Object.keys(seLlevan));
   Object.keys(seLlevan).forEach(function (codigo) {
-    const d = _stockDetalle_(tienda, codigo);
+    const d = detalle[codigo];
     if (d.disponible < seLlevan[codigo]) {
       sinCubrir.push(codigo + ' (los palets llevan ' + seLlevan[codigo] + ' y solo hay ' + d.disponible + ' sin comprometer)');
     }

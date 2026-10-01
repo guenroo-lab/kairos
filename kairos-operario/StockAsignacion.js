@@ -44,6 +44,20 @@ function _trozos_(lista, tamano) {
   return trozos;
 }
 
+/** Lee TODAS las filas de una consulta aunque pasen del tope de filas de la API
+ *  (1000): sin esto una consulta que devolviese más se cortaría en silencio y
+ *  se "perderían" reservas. Ordena por id para paginar de forma estable. */
+function _selectTodo_(tabla, consulta) {
+  const todas = [];
+  for (var pagina = 0; pagina < 30; pagina++) {
+    const filas = supaSelect_(tabla, consulta + '&order=id.asc&limit=1000&offset=' + (pagina * 1000));
+    filas.forEach(function (f) { todas.push(f); });
+    if (filas.length < 1000) break;
+  }
+  return todas;
+}
+
+
 /** Peticiones de pedido cliente / cesión cuya ÚLTIMA línea se preparó después
  *  de la marca del snapshot: la transferencia de stock en myISO se dispara al
  *  preparar la última línea (Index.html, dispararTransfers_), así que su
@@ -51,17 +65,22 @@ function _trozos_(lista, tamano) {
  *  prepararan mucho antes. (No se usa cerrada_en: es la hora de la
  *  consolidación, no de la transferencia.) Memoizado por ejecución. */
 var COMPLETADAS_MEMO_ = {};
+var COMPLETADAS_TTL_MS_ = 15000;
 function _peticionesCompletadasDesde_(tienda, desde) {
   const clave = tienda + '|' + desde;
-  if (COMPLETADAS_MEMO_[clave]) return COMPLETADAS_MEMO_[clave];
+  // Memo corto: dentro de una misma ejecución se repite la consulta por cada
+  // línea/código; con vida limitada para que un pedido que se completa mientras
+  // tanto no quede "congelado" como incompleto.
+  const memo = COMPLETADAS_MEMO_[clave];
+  if (memo && Date.now() - memo.en < COMPLETADAS_TTL_MS_) return memo.ids;
   const ids = [];
-  supaSelect_('lineas',
+  _selectTodo_('lineas',
     'estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde) +
     '&select=peticion_id,peticiones!inner(tipo,estado)' +
     '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) +
     '&peticiones.tipo=neq.refill&peticiones.estado=in.(a_ubicar,cerrada)')
     .forEach(function (l) { if (ids.indexOf(l.peticion_id) === -1) ids.push(l.peticion_id); });
-  COMPLETADAS_MEMO_[clave] = ids;
+  COMPLETADAS_MEMO_[clave] = { ids: ids, en: Date.now() };
   return ids;
 }
 
@@ -120,21 +139,21 @@ function _lineasComprometidasDe_(tienda, codigos, desde) {
     resultado.push({ id: l.id, codigo_lm: l.codigo_lm, partes: partes });
   }
 
-  supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado')
+  _selectTodo_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado')
     .forEach(function (l) { anadir(l, _parseSsccMulti_(l.sscc, l.cantidad)); });
   if (!desde) return resultado;
 
   const preparadas = comunes + '&estado_preparacion=eq.preparado';
   // Preparadas después de la marca (cualquier estado de la petición, también anuladas después).
-  const candidatas = supaSelect_('lineas', preparadas + '&preparada_en=gte.' + encodeURIComponent(desde));
+  const candidatas = _selectTodo_('lineas', preparadas + '&preparada_en=gte.' + encodeURIComponent(desde));
   // Preparadas en un pedido que aún no está completo (su transferencia no se ha hecho).
-  supaSelect_('lineas', preparadas + '&peticiones.estado=in.(pendiente,en_preparacion)').forEach(function (l) {
+  _selectTodo_('lineas', preparadas + '&peticiones.estado=in.(pendiente,en_preparacion)').forEach(function (l) {
     if ((l.peticiones || {}).tipo !== 'refill') candidatas.push(l);
   });
   // Preparadas antes de la marca en un pedido que se completó después de ella.
   // (trozos pequeños: la URL ya lleva la lista de códigos y los filtros)
   _trozos_(_peticionesCompletadasDesde_(tienda, desde), 15).forEach(function (ids) {
-    supaSelect_('lineas', preparadas + '&peticion_id=in.(' + ids.map(encodeURIComponent).join(',') + ')')
+    _selectTodo_('lineas', preparadas + '&peticion_id=in.(' + ids.map(encodeURIComponent).join(',') + ')')
       .forEach(function (l) { candidatas.push(l); });
   });
   candidatas.forEach(function (l) {
@@ -152,9 +171,9 @@ function _lineasComprometidasDe_(tienda, codigos, desde) {
 function _paletsDeRefill_(tienda, desde) {
   const comunes = 'sscc=not.is.null&select=id,sscc,cantidad,estado_negocio,preparada_en,peticiones!inner(tipo,estado)' +
     '&peticiones.tienda_origen=eq.' + encodeURIComponent(tienda) + '&peticiones.tipo=eq.refill';
-  const lineas = supaSelect_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
+  const lineas = _selectTodo_('lineas', comunes + '&peticiones.estado=neq.anulada&estado_preparacion=neq.preparado');
   if (desde) {
-    supaSelect_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde))
+    _selectTodo_('lineas', comunes + '&estado_preparacion=eq.preparado&preparada_en=gte.' + encodeURIComponent(desde))
       .forEach(function (l) { if (FALTANTES_TOTALES_ASIGNACION_.indexOf(l.estado_negocio) === -1) lineas.push(l); });
   }
   const set = {};

@@ -10,9 +10,13 @@ function buscarPedidoPyxis(ldap, numPedido) {
   // dentro de esta misma búsqueda, si no dos líneas del mismo código
   // podrían salir ambas "ok" aunque juntas no quepan en el stock real.
   const disponibleRestante = {};
+  // Todo el stock del pedido de una vez (no una consulta por línea).
+  const detalle = _stockDetalleVarios_(tienda, lineas.map(function (l) { return l.ref_lm; }));
   return _json_({
     lineas: lineas.map(function (l) {
-      if (!(l.ref_lm in disponibleRestante)) disponibleRestante[l.ref_lm] = stockDisponible(tienda, l.ref_lm);
+      if (!(l.ref_lm in disponibleRestante)) {
+        disponibleRestante[l.ref_lm] = (detalle[String(l.ref_lm).trim()] || { disponible: 0 }).disponible;
+      }
       const disponibleAntes = disponibleRestante[l.ref_lm];
       const tomado = Math.min(Math.max(disponibleAntes, 0), l.cantidad);
       disponibleRestante[l.ref_lm] -= tomado;
