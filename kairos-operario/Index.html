@@ -634,7 +634,6 @@
         const articuloTexto = escHtmlSie_(p.articulo ? p.articulo : (p.totalLineas + ' artículo' + (p.totalLineas === 1 ? '' : 's')));
         const chips = (p.secciones || []).map(function (s) { return '<span class="chip">' + escHtmlSie_(s) + '</span>'; }).join('');
         const ubicacionTexto = (p.ubicaciones && p.ubicaciones.length) ? escHtmlSie_(p.ubicaciones.join(' · ')) : '';
-        const ssccTexto = (p.sscc && p.sscc.length) ? escHtmlSie_(p.sscc.join(' · ')) : '';
         const pct = p.totalLineas ? Math.round(100 * p.lineasPreparadas / p.totalLineas) : 0;
         const enCurso = (p.en_curso_por && p.en_curso_por !== OPERARIO)
           ? '<div class="meta" style="color:var(--warn-fg);">👤 En curso: ' + escHtmlSie_(p.en_curso_por) + ' (' + tiempoDesde_(p.en_curso_desde) + ')</div>' : '';
@@ -645,7 +644,6 @@
           (p.articuloLm ? '<div class="meta">LM ' + escHtmlSie_(p.articuloLm) + (p.articuloEan ? ' · EAN ' + escHtmlSie_(p.articuloEan) : '') + '</div>' : '') +
           (ubicacionTexto ? '<div class="ubicacion">📍 ' + ubicacionTexto + (p.ubicacionPrevista ? ' <span class="prevista">(prevista)</span>' : '') + '</div>'
             : (p.sinStockPrevisto ? '<div class="ubicacion" style="color:var(--warn-fg);">⚠ Sin stock en edificio 05</div>' : '')) +
-          (ssccTexto ? '<div class="meta">SSCC ' + ssccTexto + '</div>' : '') +
           enCurso +
           (chips ? '<div class="chips">' + chips + '</div>' : '') +
           '<div class="progreso"><div style="width:' + pct + '%;"></div></div>' +
