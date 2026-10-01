@@ -101,6 +101,11 @@
     .linea label { flex:1; color:var(--text-100); }
     .linea .desc { font-weight:700; font-size:15px; line-height:1.35; }
     .linea .meta { font-size:13.5px; }
+    .uds-grande { display:inline-block; font-size:26px; font-weight:800; line-height:1; padding:7px 13px; border-radius:var(--radius-chip); background:var(--accent); color:var(--accent-ink); white-space:nowrap; }
+    .uds-cola { font-size:17px; padding:3px 10px; margin-right:6px; }
+    .linea .art-nombre { display:block; margin-top:8px; }
+    .linea .art-ids { display:block; margin-top:3px; font-size:13px; font-weight:600; color:var(--text-500); word-break:break-all; }
+    .fila .prevista { font-weight:600; opacity:.8; }
     .meta { color:var(--text-500); font-size:12.5px; }
     .filtros { margin-bottom:12px; display:flex; gap:6px; flex-wrap:wrap; }
     .volver { margin-bottom:12px; display:inline-block; }
@@ -613,8 +618,10 @@
         return '<div class="fila" style="border-left-color:' + (CFG_TIENDA_COLOR[p.tienda_origen] || '#ccc') + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
           '<div class="tipo"><span>' + etiquetaTipo + '</span><span class="fecha">' + fechaTexto + '</span></div>' +
           '<div class="meta">' + escHtmlSie_(p.tiendaNombre) + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · pide: ' + escHtmlSie_(p.solicitante_ldap || '—') + '</div>' +
-          '<div class="articulo">' + articuloTexto + '</div>' +
-          (ubicacionTexto ? '<div class="ubicacion">📍 ' + ubicacionTexto + '</div>' : '') +
+          '<div class="articulo"><span class="uds-grande uds-cola">' + p.totalUnidades + ' ' + escHtmlSie_(p.unidadTexto) + '</span>' + articuloTexto + '</div>' +
+          (p.articuloLm ? '<div class="meta">LM ' + escHtmlSie_(p.articuloLm) + (p.articuloEan ? ' · EAN ' + escHtmlSie_(p.articuloEan) : '') + '</div>' : '') +
+          (ubicacionTexto ? '<div class="ubicacion">📍 ' + ubicacionTexto + (p.ubicacionPrevista ? ' <span class="prevista">(prevista)</span>' : '') + '</div>'
+            : (p.sinStockPrevisto ? '<div class="ubicacion" style="color:var(--warn-fg);">⚠ Sin stock en edificio 05</div>' : '')) +
           (ssccTexto ? '<div class="meta">SSCC ' + ssccTexto + '</div>' : '') +
           enCurso +
           (chips ? '<div class="chips">' + chips + '</div>' : '') +
@@ -698,7 +705,10 @@
     }
 
     function renderLineaHtml_(p, l) {
-      const cabecera = escHtmlSie_(l.codigo_lm) + ' — ' + escHtmlSie_(l.designacion || '') + ' (' + l.cantidad + ' ' + escHtmlSie_(l.unidad_medida) + ')';
+      const udsTexto = l.cantidad + ' ' + (l.unidad_medida === 'palet' ? (Number(l.cantidad) === 1 ? 'palet' : 'palets') : 'ud');
+      const cabecera = '<span class="uds-grande">' + escHtmlSie_(udsTexto) + '</span>' +
+        '<span class="art-nombre">' + escHtmlSie_(l.designacion || '') + '</span>' +
+        '<span class="art-ids">LM ' + escHtmlSie_(l.codigo_lm) + (l.ean ? ' · EAN ' + escHtmlSie_(l.ean) : '') + (l.seccion ? ' · ' + escHtmlSie_(l.seccion) : '') + '</span>';
       var extraInfo = '';
       if (l.avisoStock) extraInfo = '<div class="meta" style="color:var(--danger-fg);">⚠️ ' + escHtmlSie_(l.avisoStock) + '</div>';
       else if (l.ubicacion) extraInfo = '<div class="meta">📍 ' + escHtmlSie_(l.ubicacion) + '</div>';
