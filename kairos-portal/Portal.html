@@ -625,9 +625,13 @@
   /** opts.titulo cambia la pregunta; opts.max limita cuántos palets se pueden marcar. */
   function elegirPaletsModal_(candidatos, opts) {
     opts = opts || {};
+    // Un solo selector a la vez: dos aperturas seguidas (doble clic, resultados
+    // de búsqueda que llegan tarde) apilaban dos selectores y los palets
+    // parecían repetidos.
+    if (document.querySelector('.koverlay-palets')) return Promise.resolve(null);
     return new Promise(function (resolve) {
       var overlay = document.createElement('div');
-      overlay.className = 'koverlay';
+      overlay.className = 'koverlay koverlay-palets';
       var seleccion = [];
       function cerrar(valor) { document.body.removeChild(overlay); resolve(valor); }
       function pintar() {
@@ -1733,6 +1737,9 @@
         if (sel === 'BUSCAR') { pedirBusqueda(articulo); return; }
         if (!sel || !sel.length) return;
         sel.forEach(function (s) {
+          // Se vuelve a comprobar al confirmar: mientras el selector estaba
+          // abierto pudo añadirse el mismo palet o agotarse el cupo.
+          if (palets.some(function (p) { return p.sscc === s.sscc; }) || restantes() <= 0) return;
           const contenido = s.contenido || [];
           const total = contenido.reduce(function (t, x) { return t + Number(x.cantidad); }, 0);
           palets.push({ sscc: s.sscc, ubicacion: s.ubicacion, cantidad: total || s.cantidad, contenido: contenido });
@@ -1769,7 +1776,9 @@
     const resultados = c.querySelector('#resultadosBusqueda');
     var timerBuscar = null;
 
+    var seqBusquedaRev = 0; // descarta resultados de búsquedas anteriores que llegan tarde
     function seleccionarArticuloRev(a) {
+      clearTimeout(timerBuscar); seqBusquedaRev++;
       inputBuscar.value = ''; resultados.innerHTML = '';
       gas('listarSsccDisponibles', LDAP, a.codigo_lm).then(function (candidatos) {
         if (!candidatos.length) {
@@ -1801,7 +1810,8 @@
       const texto = inputBuscar.value;
       timerBuscar = setTimeout(function () {
         if (texto.trim().length < 2) { resultados.innerHTML = ''; return; }
-        gas('buscarArticulos', texto).then(pintarResultadosRev);
+        const mi = ++seqBusquedaRev;
+        gas('buscarArticulos', texto).then(function (filas) { if (mi === seqBusquedaRev) pintarResultadosRev(filas); });
       }, 300);
     };
     c.querySelector('#btnEscanear').onclick = function () { escanearArticulo_(this, seleccionarArticuloRev, pintarResultadosRev); };
@@ -1979,8 +1989,10 @@
           if (!ssccBuscado) return;
           gas('buscarPaletPorSscc', LDAP, ssccBuscado).then(function (filas) {
             if (!filas.length) { kAlerta('No se ha encontrado ese SSCC con stock en almacén.'); return; }
+            if (ssccYaElegidos_()[filas[0].sscc]) { kAlerta('Ese palet ya está en la petición.'); return; }
             elegirLmDePaletModal_(filas).then(function (elegido) {
               if (!elegido) return;
+              if (ssccYaElegidos_()[elegido.sscc]) { kAlerta('Ese palet ya está en la petición.'); return; }
               lineas.push({
                 codigoLm: elegido.codigo_lm, designacion: elegido.designacion,
                 ean: elegido.ean, seccion: elegido.seccion, cantidad: 1,
@@ -1998,7 +2010,20 @@
     const resultados = c.querySelector('#resultadosBusqueda');
     var timerBuscar = null;
 
+    var seqBusqueda = 0; // descarta resultados de búsquedas anteriores que llegan tarde
+    /** SSCC que ya están en las líneas de esta petición (refill): no se
+     *  vuelven a ofrecer ni a aceptar. {sscc: true}. */
+    function ssccYaElegidos_() {
+      const set = {};
+      lineas.forEach(function (l) {
+        if (!l.sscc) return;
+        String(l.sscc).split(' + ').forEach(function (p) { set[p.replace(/\s*\(.*\)\s*$/, '').trim()] = true; });
+      });
+      return set;
+    }
+
     function seleccionarArticulo(a) {
+      clearTimeout(timerBuscar); seqBusqueda++;
       articuloElegido = a;
       inputBuscar.value = a.codigo_lm + ' · ' + (a.designacion || '');
       resultados.innerHTML = '';
@@ -2028,7 +2053,8 @@
       const texto = inputBuscar.value;
       timerBuscar = setTimeout(function () {
         if (texto.trim().length < 2) { resultados.innerHTML = ''; return; }
-        gas('buscarArticulos', texto).then(pintarResultados);
+        const mi = ++seqBusqueda;
+        gas('buscarArticulos', texto).then(function (filas) { if (mi === seqBusqueda) pintarResultados(filas); });
       }, 300);
     };
 
@@ -2038,8 +2064,15 @@
         function continuar() {
           gas('listarSsccDisponibles', LDAP, articulo.codigo_lm).then(function (candidatos) {
             if (!candidatos.length) { kAlerta('No hay palets con stock de ' + articulo.codigo_lm + ' en almacén.'); return; }
-            elegirPaletsModal_(candidatos).then(function (seleccionados) {
-              if (!seleccionados || !seleccionados.length) return;
+            // Los palets que ya están en esta petición no se vuelven a ofrecer.
+            const yaElegidos = ssccYaElegidos_();
+            const libres = candidatos.filter(function (p) { return !yaElegidos[p.sscc]; });
+            if (!libres.length) { kAlerta('Ya has añadido en esta petición todos los palets disponibles de ' + escHtml(articulo.codigo_lm) + '.'); return; }
+            elegirPaletsModal_(libres).then(function (elegidos) {
+              // Se vuelve a comprobar al confirmar (mientras el selector estaba abierto pudo añadirse otro igual).
+              const ahoraElegidos = ssccYaElegidos_();
+              const seleccionados = (elegidos || []).filter(function (p) { return !ahoraElegidos[p.sscc]; });
+              if (!seleccionados.length) return;
               lineas.push({
                 codigoLm: articulo.codigo_lm, designacion: articulo.designacion,
                 ean: articulo.ean, seccion: articulo.seccion, cantidad: seleccionados.length,

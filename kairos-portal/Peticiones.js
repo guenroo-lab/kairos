@@ -289,14 +289,26 @@ function _paletsOcupados_(tienda, contenido, desde) {
 
 /** Contenido completo (todas las referencias) de esos palets en el snapshot. */
 function _contenidoDePalets_(tienda, ssccs) {
-  const filas = [];
-  _trozos_(ssccs, TROZO_IDS_).forEach(function (trozo) {
-    _selectTodo_('stock_fisico',
-      'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=in.(' + trozo.map(encodeURIComponent).join(',') + ')' +
-      '&select=id,sscc,codigo_lm,cantidad,sincronizado_en')
-      .forEach(function (f) { filas.push(f); });
-  });
-  return filas;
+  // SSCC únicos antes de partirlos en trozos: uno repetido en dos trozos
+  // añadiría su contenido dos veces.
+  const unicos = [];
+  ssccs.forEach(function (s) { if (unicos.indexOf(s) === -1) unicos.push(s); });
+  // Todas las filas de UN MISMO snapshot (como _leerStockCoherente_): si entre
+  // dos lecturas entra una carga de stock, los ids cambian y el mismo palet
+  // podría salir dos veces con contenido de snapshots distintos.
+  for (var intento = 0; intento < 3; intento++) {
+    const filas = [];
+    _trozos_(unicos, TROZO_IDS_).forEach(function (trozo) {
+      _selectTodo_('stock_fisico',
+        'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=in.(' + trozo.map(encodeURIComponent).join(',') + ')' +
+        '&select=id,sscc,codigo_lm,cantidad,sincronizado_en')
+        .forEach(function (f) { filas.push(f); });
+    });
+    const marcas = {};
+    filas.forEach(function (f) { marcas[Date.parse(f.sincronizado_en)] = true; });
+    if (Object.keys(marcas).length <= 1) return filas;
+  }
+  throw new Error('El stock se está actualizando en este momento, inténtalo de nuevo en unos segundos.');
 }
 
 function _marcaDe_(filas) {
@@ -444,9 +456,17 @@ function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
  *  solo al listar) porque pudo reservarse entre medias. */
 function _exigirPaletsLibres_(tienda, lineas) {
   const elegidos = [];
+  const repetidos = [];
   lineas.forEach(function (l) {
-    _partesSscc_(l.sscc, 0).forEach(function (p) { if (p.sscc && elegidos.indexOf(p.sscc) === -1) elegidos.push(p.sscc); });
+    _partesSscc_(l.sscc, 0).forEach(function (p) {
+      if (!p.sscc) return;
+      if (elegidos.indexOf(p.sscc) === -1) elegidos.push(p.sscc);
+      else if (repetidos.indexOf(p.sscc) === -1) repetidos.push(p.sscc);
+    });
   });
+  if (repetidos.length) {
+    throw new Error('No se ha enviado el refill: el palet ' + repetidos.join(', ') + ' está repetido en la petición. Quita la línea duplicada.');
+  }
   if (!elegidos.length) return;
 
   const contenido = _contenidoDePalets_(tienda, elegidos);
