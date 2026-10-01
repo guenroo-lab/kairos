@@ -37,6 +37,7 @@ function _leerStockFisicoDeExcels_() {
       const row = csv.filas[i];
       const direccion = String(row[colDireccion] || '').trim();
       if (direccion.slice(0, 2) !== CFG.PREFIJO_EDIFICIO_STOCK) continue;
+      if (CFG.ZONAS_STOCK_NO_DISPONIBLE.indexOf(direccion.split('-')[1]) !== -1) continue;
 
       const sscc = _limpiarCampoCsvSync_(row[colSscc]);
       const codigoLm = String(row[colProducto] || '').trim();

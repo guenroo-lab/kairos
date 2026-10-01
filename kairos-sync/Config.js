@@ -15,6 +15,11 @@ const CFG = {
 
   // Stock físico por ubicación — mismo CSV, solo edificio 05
   PREFIJO_EDIFICIO_STOCK: '05',
+  // Zonas del edificio 05 cuyo stock NO se puede usar para preparar: RC1 es
+  // donde HODOS deja los palets ya cargados para la tienda (en tránsito). Se
+  // excluyen al cargar stock_fisico, así ninguna pantalla los cuenta como
+  // disponibles (ni el portal al pedir, ni la asignación de palet).
+  ZONAS_STOCK_NO_DISPONIBLE: ['RC1'],
   COL_STOCK: { direccion: 'Ubicacion', sscc: 'SSCC', producto: 'Ref_LM', cantidad: 'Cantidad_Total' },
 
   LOTE_UPSERT: 500,
