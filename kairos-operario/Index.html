@@ -1368,7 +1368,7 @@
     function renderIncidencias() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
         '<h1>Incidencias</h1>' +
-        '<p class="meta">Faltantes totales o parciales ya cerrados, pendientes de verificar cantidad y rectificar en MyISO si hace falta.</p>' +
+        '<p class="meta">Faltantes totales o parciales ya cerrados. La tienda las ve en su portal: usa "En gestión" y "Marcar resuelta" con un mensaje para que sepa qué ha pasado.</p>' +
         '<div class="panel-tiendas-grid">' +
           '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-marbella);"></span>Marbella</h3><div id="listaIncidencias-014">Cargando…</div></div>' +
           '<div><h3 class="tienda-header"><span class="punto" style="background:var(--tienda-mijas);"></span>Mijas</h3><div id="listaIncidencias-279">Cargando…</div></div>' +
@@ -1401,18 +1401,36 @@
               (l.incidencia_motivo ? '<div class="meta">Motivo: ' + escHtmlSie_(l.incidencia_motivo) + '</div>' : '') +
               (ubicacionTexto ? '<div class="meta">' + ubicacionTexto + '</div>' : '') +
               '<div class="meta">Preparó: ' + escHtmlSie_(l.operario || '—') + (l.preparada_en ? ' · ' + tiempoDesde_(l.preparada_en) : '') + '</div>' +
-              '<button class="btn-ob" style="margin-top:8px;" data-linea="' + l.id + '">Marcar revisada</button>' +
+              (l.incidencia_gestion_en ? '<div class="meta" style="color:var(--warn-fg);">⏳ En gestión desde ' + tiempoDesde_(l.incidencia_gestion_en) + '</div>' : '') +
+              (l.incidencia_nota_tienda ? '<div class="meta">Mensaje a tienda: ' + escHtmlSie_(l.incidencia_nota_tienda) + '</div>' : '') +
+              '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">' +
+                (l.incidencia_gestion_en ? '' : '<button class="btn-ob btn-ob-tienda" data-gestion="' + l.id + '">En gestión</button>') +
+                '<button class="btn-ob" data-linea="' + l.id + '">Marcar resuelta</button>' +
+              '</div>' +
               '</div>';
           }).join('');
           cont.querySelectorAll('[data-linea]').forEach(function (btn) {
             btn.onclick = function () { revisarIncidencia_(btn.getAttribute('data-linea')); };
           });
+          cont.querySelectorAll('[data-gestion]').forEach(function (btn) {
+            btn.onclick = function () { gestionarIncidencia_(btn.getAttribute('data-gestion')); };
+          });
         });
       }).listarIncidenciasPendientes();
     }
 
+    function gestionarIncidencia_(lineaId) {
+      kPedirTexto('Mensaje para la tienda (opcional) — qué se está haciendo:').then(function (nota) {
+        if (nota === null) return; // cancelado
+        google.script.run.withSuccessHandler(function () {
+          cargarIncidencias_();
+        }).withFailureHandler(function (err) { kAlerta(err.message); })
+          .marcarIncidenciaEnGestion(lineaId, nota);
+      });
+    }
+
     function revisarIncidencia_(lineaId) {
-      kPedirTexto('Nota (opcional) — qué se verificó o corrigió en MyISO:').then(function (nota) {
+      kPedirTexto('Mensaje para la tienda (opcional) — cómo ha quedado resuelta:').then(function (nota) {
         if (nota === null) return; // cancelado
         google.script.run.withSuccessHandler(function () {
           cargarIncidencias_();

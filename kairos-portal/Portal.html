@@ -127,6 +127,9 @@
   }
   .tabs a { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:10px 2px; border-radius:16px; text-decoration:none; color:var(--text-500); font-size:12px; font-weight:700; min-height:56px; transition: background .15s ease, color .15s ease; }
   .tabs a svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+  .tabs a { position:relative; }
+  .tabs a span { text-align:center; line-height:1.1; }
+  .badge-tab { position:absolute; top:3px; left:calc(50% + 6px); min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#dc1a23; color:#fff; font-size:11px; font-weight:800; line-height:18px; text-align:center; }
   .tabs a.activa {
     background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 65%, #000) 100%);
     color: var(--accent-ink);
@@ -724,13 +727,51 @@
   var ICONO_TRAZA = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>';
   var ICONO_HISTORICO = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>';
   var ICONO_REVISIONES = '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>';
+  var ICONO_INCIDENCIAS = '<svg viewBox="0 0 24 24"><path d="M12 3l10 18H2L12 3z"/><path d="M12 10v5M12 18h.01"/></svg>';
   function renderTabsPortal_(activa) {
     return '<div class="tabs">' +
       '<a href="#" id="tabPeticiones" class="' + (activa === 'cola' ? 'activa' : '') + '">' + ICONO_PETICIONES + '<span>Peticiones</span></a>' +
       '<a href="#" id="tabTrazabilidad" class="' + (activa === 'traza' ? 'activa' : '') + '">' + ICONO_TRAZA + '<span>Trazabilidad</span></a>' +
       '<a href="#" id="tabRevisiones" class="' + (activa === 'revisiones' ? 'activa' : '') + '">' + ICONO_REVISIONES + '<span>Revisión de stock</span></a>' +
+      '<a href="#" id="tabIncidencias" class="' + (activa === 'incidencias' ? 'activa' : '') + '">' + ICONO_INCIDENCIAS + '<span>Incidencias</span></a>' +
       '<a href="#" id="tabHistorico" class="' + (activa === 'historico' ? 'activa' : '') + '">' + ICONO_HISTORICO + '<span>Histórico</span></a>' +
       '</div>';
+  }
+
+  /** Cablea las pestañas y pinta en "Incidencias" cuántas hay abiertas (y el
+   *  aviso de la pantalla de inicio, si existe). Una sola función para todas
+   *  las pantallas con pestañas. */
+  var INCIDENCIAS_CACHE_ = null;
+  function cablearTabsPortal_(tabs) {
+    tabs.querySelector('#tabPeticiones').onclick = function (e) { e.preventDefault(); renderCola(); };
+    tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
+    tabs.querySelector('#tabRevisiones').onclick = function (e) { e.preventDefault(); renderRevisiones(); };
+    tabs.querySelector('#tabIncidencias').onclick = function (e) { e.preventDefault(); renderIncidenciasPortal(); };
+    tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
+
+    function pintar(lista) {
+      const abiertas = lista.filter(function (l) { return l.estadoIncidencia !== 'resuelta'; }).length;
+      const a = tabs.querySelector('#tabIncidencias');
+      if (a) {
+        const viejo = a.querySelector('.badge-tab');
+        if (viejo) viejo.remove();
+        if (abiertas) a.appendChild(el('<b class="badge-tab">' + abiertas + '</b>'));
+      }
+      const aviso = document.getElementById('avisoIncidencias');
+      if (aviso) {
+        aviso.innerHTML = '';
+        if (abiertas) {
+          const b = el('<button class="btn btn-ghost" style="margin-bottom:10px;border-color:var(--danger-line);color:var(--danger-fg);">⚠ Tienes ' + abiertas + ' incidencia' + (abiertas === 1 ? '' : 's') + ' de preparación sin resolver — ver</button>');
+          b.onclick = renderIncidenciasPortal;
+          aviso.appendChild(b);
+        }
+      }
+    }
+    if (INCIDENCIAS_CACHE_) pintar(INCIDENCIAS_CACHE_);
+    gas('listarMisIncidencias', LDAP).then(function (lista) {
+      INCIDENCIAS_CACHE_ = lista;
+      pintar(lista);
+    }).catch(function () { /* el aviso es secundario: sin él la app sigue igual */ });
   }
 
   function pintarCabecera_() {
@@ -1120,13 +1161,12 @@
     pintarBotonAjustes_(top.querySelector('#topAcciones'));
     const tabs = el(renderTabsPortal_('cola'));
     app().appendChild(tabs);
-    tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
-    tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
-    tabs.querySelector('#tabRevisiones').onclick = function (e) { e.preventDefault(); renderRevisiones(); };
 
     const wrap = el('<div class="wrap"></div>');
     app().appendChild(wrap);
+    wrap.appendChild(el('<div id="avisoIncidencias"></div>'));
     wrap.appendChild(el('<button class="btn btn-primary" id="btnNueva">+ Nueva petición</button>'));
+    cablearTabsPortal_(tabs);
     const lista = el('<div class="card" id="lista"><p style="color:var(--text-500)">Cargando…</p></div>');
     wrap.appendChild(lista);
     wrap.querySelector('#btnNueva').onclick = renderNueva;
@@ -1176,9 +1216,7 @@
     pintarBotonAjustes_(top.querySelector('#topAcciones'));
     const tabs = el(renderTabsPortal_('revisiones'));
     app().appendChild(tabs);
-    tabs.querySelector('#tabPeticiones').onclick = function (e) { e.preventDefault(); renderCola(); };
-    tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
-    tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
+    cablearTabsPortal_(tabs);
 
     const wrap = el('<div class="wrap"></div>');
     app().appendChild(wrap);
@@ -1230,6 +1268,96 @@
     gas('listarMisRevisiones', LDAP).then(function (revs) {
       todasRev = revs;
       aplicarFiltroRev_();
+    }).catch(function (e) {
+      lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
+    });
+  }
+
+  /** Incidencias de preparación de la tienda (faltantes totales y parciales)
+   *  con el estado y el mensaje que les da plataforma. Solo lectura. */
+  function renderIncidenciasPortal() {
+    app().innerHTML = '';
+    pintarCabecera_();
+    const top = el(
+      '<div class="top">' +
+        '<div><b>' + escHtml(TIENDA_NOMBRE) + '</b> <span style="color:var(--text-500)">· ' + escHtml(LDAP) + ' · ' + escHtml(ETIQUETA_ROL[ROL] || ROL) + '</span></div>' +
+        '<div style="display:flex;gap:6px;align-items:center;" id="topAcciones">' +
+          '<button class="btn-ghost" style="width:auto;padding:6px 10px;" id="btnSalir">Salir</button>' +
+        '</div>' +
+      '</div>'
+    );
+    app().appendChild(top);
+    top.querySelector('#btnSalir').onclick = salir;
+    pintarSelectorTienda_(top.querySelector('#topAcciones'));
+    pintarBotonUsuarios_(top.querySelector('#topAcciones'));
+    pintarBotonAjustes_(top.querySelector('#topAcciones'));
+    const tabs = el(renderTabsPortal_('incidencias'));
+    app().appendChild(tabs);
+    cablearTabsPortal_(tabs);
+
+    const wrap = el('<div class="wrap"></div>');
+    app().appendChild(wrap);
+    wrap.appendChild(el('<p style="color:var(--text-500);font-size:13px;margin:0 0 10px;">Mercancía que plataforma no ha podido preparar (sin stock, sin palet o parcial). Aquí ves en qué punto está y qué te dice plataforma.</p>'));
+
+    const FILTROS_INC_ = [
+      { valor: 'todas', label: 'Todas' },
+      { valor: 'abierta', label: 'Abiertas' },
+      { valor: 'en_gestion', label: 'En gestión' },
+      { valor: 'resuelta', label: 'Resueltas' },
+    ];
+    var filtroInc = 'todas';
+    const chips = el('<div class="filtros-tipo">' + FILTROS_INC_.map(function (f) {
+      return '<button type="button" class="chip-tipo' + (f.valor === 'todas' ? ' activo' : '') + '" data-estado="' + f.valor + '">' + f.label + '</button>';
+    }).join('') + '</div>');
+    wrap.appendChild(chips);
+    const lista = el('<div class="card" id="listaIncidenciasPortal"><p style="color:var(--text-500)">Cargando…</p></div>');
+    wrap.appendChild(lista);
+
+    const TEXTO_ESTADO_INC_ = { abierta: 'Abierta', en_gestion: 'En gestión', resuelta: 'Resuelta' };
+    function textoTipoInc_(l) {
+      if (l.estado_negocio === 'Parcial') return 'Parcial: preparado ' + l.cantidad_preparada + ' de ' + l.cantidad + ' ' + l.unidad_medida;
+      if (l.estado_negocio === 'Sin Mercancía') return 'Sin mercancía — nada preparado de ' + l.cantidad + ' ' + l.unidad_medida;
+      if (l.estado_negocio === 'Sin Palet') return 'Sin palet — nada preparado de ' + l.cantidad + ' ' + l.unidad_medida;
+      return 'Otra incidencia — nada preparado de ' + l.cantidad + ' ' + l.unidad_medida;
+    }
+    var todas = [];
+    function pintarInc_(filas) {
+      lista.innerHTML = '';
+      if (!filas.length) { lista.appendChild(el('<p style="color:var(--text-500)">No hay incidencias con ese filtro.</p>')); return; }
+      filas.forEach(function (l) {
+        const etiquetaTipo = l.tipo === 'pedido_cliente' ? ('Pedido cliente ' + (l.num_pedido || ''))
+          : (l.tipo === 'cesion' ? 'Cesión ' + (l.num_cesion || '') : 'Refill');
+        const fila = el(
+          '<div class="fila tipo-' + l.tipo + '">' +
+            '<div><b>' + escHtml(etiquetaTipo) + '</b>' +
+              '<div style="font-size:13px;margin-top:3px;">' + escHtml(l.codigo_lm) + ' · ' + escHtml(l.designacion || '—') + '</div>' +
+              '<div style="font-size:13px;font-weight:700;margin-top:3px;">' + escHtml(textoTipoInc_(l)) + '</div>' +
+              (l.incidencia_motivo ? '<div style="color:var(--text-500);font-size:12px;margin-top:3px;">Motivo: ' + escHtml(l.incidencia_motivo) + '</div>' : '') +
+              (l.incidencia_nota_tienda ? '<div style="font-size:13px;margin-top:5px;padding:6px 9px;border-radius:10px;background:var(--accent-dim);"><b>Plataforma:</b> ' + escHtml(l.incidencia_nota_tienda) + '</div>' : '') +
+              '<div style="color:var(--text-500);font-size:12px;margin-top:4px;">' + (l.preparada_en ? new Date(l.preparada_en).toLocaleString('es-ES') : '') + '</div>' +
+            '</div>' +
+            '<span class="estado' + (l.estadoIncidencia === 'abierta' ? ' estado-anulada' : '') + '">' + TEXTO_ESTADO_INC_[l.estadoIncidencia] + '</span>' +
+          '</div>'
+        );
+        fila.onclick = function () { renderDetalle(l.peticion_id, renderIncidenciasPortal); };
+        lista.appendChild(fila);
+      });
+    }
+    function aplicarFiltroInc_() {
+      pintarInc_(filtroInc === 'todas' ? todas : todas.filter(function (l) { return l.estadoIncidencia === filtroInc; }));
+    }
+    chips.querySelectorAll('.chip-tipo').forEach(function (btn) {
+      btn.onclick = function () {
+        filtroInc = btn.getAttribute('data-estado');
+        chips.querySelectorAll('.chip-tipo').forEach(function (b) { b.classList.toggle('activo', b === btn); });
+        aplicarFiltroInc_();
+      };
+    });
+
+    gas('listarMisIncidencias', LDAP).then(function (filas) {
+      todas = filas;
+      INCIDENCIAS_CACHE_ = filas;
+      aplicarFiltroInc_();
     }).catch(function (e) {
       lista.innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });
@@ -1294,10 +1422,7 @@
     pintarBotonAjustes_(top.querySelector('#topAcciones'));
     const tabs = el(renderTabsPortal_(historico ? 'historico' : 'traza'));
     app().appendChild(tabs);
-    tabs.querySelector('#tabPeticiones').onclick = function (e) { e.preventDefault(); renderCola(); };
-    tabs.querySelector('#tabTrazabilidad').onclick = function (e) { e.preventDefault(); renderTrazabilidad(); };
-    tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
-    tabs.querySelector('#tabRevisiones').onclick = function (e) { e.preventDefault(); renderRevisiones(); };
+    cablearTabsPortal_(tabs);
 
     const wrap = el('<div class="wrap' + (historico ? ' wrap-ancho' : '') + '"></div>');
     app().appendChild(wrap);
@@ -1338,6 +1463,8 @@
           else if (p.camino === 'a_ubicar') detalle = p.aUbicarTexto || p.estadoTexto;
           else if (p.camino === 'hodos') detalle = 'HODOS: ' + p.hodosTexto;
           else detalle = 'Refill: ' + p.refillTexto;
+          if (p.todoIncidencia) detalle = 'Con incidencia';
+          else if (p.conIncidencia) detalle += ' · con incidencia';
           const fila = el(
             '<div class="fila ' + g.clase + '">' +
               '<div><b>' + escHtml(ETIQUETA_TIPO[p.tipo] || p.tipo) + '</b>' +
@@ -1382,6 +1509,8 @@
         else if (p.camino === 'a_ubicar') detalle = p.aUbicarTexto || p.estadoTexto;
         else if (p.camino === 'hodos') detalle = p.hodosTexto;
         else detalle = p.refillTexto;
+        if (p.todoIncidencia) detalle = 'Con incidencia';
+        else if (p.conIncidencia) detalle += ' · con incidencia';
         const destino = p.tipo === 'cesion' ? (NOMBRE_TIENDA_DESTINO_[p.tienda_destino] || p.tienda_destino || '—') : '—';
         const motivo = p.estado === 'anulada' ? (p.motivo_anulacion || '—') : (p.motivo || '—');
         const celdas = [
@@ -2025,12 +2154,19 @@
       }
       const filasLineas = r.lineas.map(function (l) {
         const esParcial = l.estado_negocio === 'Parcial';
-        const estadoTexto = esParcial ? ('Parcial: ' + l.cantidad_preparada + '/' + l.cantidad) : l.estado_preparacion;
+        const esFaltante = ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'].indexOf(l.estado_negocio) !== -1;
+        const estadoTexto = esParcial ? ('Parcial: ' + l.cantidad_preparada + '/' + l.cantidad) : (esFaltante ? l.estado_negocio : l.estado_preparacion);
+        const avisoIncidencia = ((esParcial || esFaltante) && (l.incidencia_motivo || l.incidencia_nota_tienda))
+          ? '<div style="color:var(--text-500);font-size:12px;margin:-2px 0 8px;">' +
+            (l.incidencia_motivo ? 'Motivo: ' + escHtml(l.incidencia_motivo) : '') +
+            (l.incidencia_motivo && l.incidencia_nota_tienda ? ' · ' : '') +
+            (l.incidencia_nota_tienda ? 'Plataforma: ' + escHtml(l.incidencia_nota_tienda) : '') + '</div>'
+          : '';
         return '<div class="linea-chip"><span>' + escHtml(l.codigo_lm) + ' · ' + escHtml(l.designacion || '—') +
           ' · ' + l.cantidad + ' ' + escHtml(l.unidad_medida) +
           (l.sscc ? ' · SSCC ' + escHtml(l.sscc) : '') +
           '</span>' +
-          '<span class="estado' + (esParcial ? ' estado-anulada' : '') + '">' + escHtml(estadoTexto) + '</span></div>';
+          '<span class="estado' + ((esParcial || esFaltante) ? ' estado-anulada' : '') + '">' + escHtml(estadoTexto) + '</span></div>' + avisoIncidencia;
       }).join('');
       const etiquetaEstadoEnvio = (p.tipo === 'pedido_cliente' && p.transporte) ? 'Envío' : 'HODOS';
       const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>' + etiquetaEstadoEnvio + '</b> ' + escHtml(r.hodosTexto) + '</div>' : '';

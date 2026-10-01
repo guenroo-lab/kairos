@@ -51,7 +51,7 @@ function listarTrazabilidad(ldap, historico) {
   });
 
   const idsTodas = peticiones.map(function (p) { return p.id; }).join(',');
-  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc,seccion,cantidad');
+  const lineasTodas = supaSelect_('lineas', 'peticion_id=in.(' + idsTodas + ')&select=peticion_id,codigo_lm,designacion,ubicacion,sscc,seccion,cantidad,estado_negocio');
   peticiones.forEach(function (p) {
     const propias = lineasTodas.filter(function (l) { return l.peticion_id === p.id; });
     p.articulo = propias.length === 1 ? (propias[0].codigo_lm + ' — ' + (propias[0].designacion || '')) : (propias.length + ' artículos');
@@ -67,6 +67,12 @@ function listarTrazabilidad(ldap, historico) {
       _parseSsccMulti_(l.sscc, 0).forEach(function (parte) { if (parte.sscc && sscc.indexOf(parte.sscc) === -1) sscc.push(parte.sscc); });
     });
     p.sscc = sscc;
+    p.conIncidencia = propias.some(function (l) { return ESTADOS_INCIDENCIA_PORTAL_.indexOf(l.estado_negocio) !== -1; });
+    // Todo el pedido en incidencia (nada que enviar): no queda esperando una
+    // entrega que nunca llegará, pasa a histórico marcado "Con incidencia".
+    p.todoIncidencia = propias.length > 0 && propias.every(function (l) {
+      return ['Sin Palet', 'Sin Mercancía', 'Otras Incidencias'].indexOf(l.estado_negocio) !== -1;
+    });
   });
 
   // Camino "hodos": cesión + pedido_cliente sin transporte.
@@ -175,7 +181,7 @@ function listarTrazabilidad(ldap, historico) {
   // ningún camino.
   const ahora = new Date();
   peticiones.forEach(function (p) {
-    if (p.estado === 'anulada') {
+    if (p.estado === 'anulada' || p.todoIncidencia) {
       p.preparada = true;
     } else if (p.camino === 'a_ubicar') {
       p.preparada = !!p.ubicacion_consolidacion;

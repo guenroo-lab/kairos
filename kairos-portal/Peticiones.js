@@ -394,6 +394,10 @@ function obtenerDetallePeticion(ldap, peticionId) {
 
   const lineas = supaSelect_('lineas', 'peticion_id=eq.' + encodeURIComponent(peticionId) + '&order=id.asc');
 
+  // Una petición cerrada con incidencias no es una "Completada" a secas.
+  const conIncidencia = lineas.some(function (l) { return ESTADOS_INCIDENCIA_PORTAL_.indexOf(l.estado_negocio) !== -1; });
+  if (conIncidencia && peticion.estado === 'cerrada') peticion.estadoTexto = 'Cerrada con incidencia';
+
   var hodosTexto = null;
   const generaEtiqueta = (peticion.tipo === 'pedido_cliente' && !peticion.transporte) || peticion.tipo === 'cesion';
   if (generaEtiqueta) {
