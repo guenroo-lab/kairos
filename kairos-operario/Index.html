@@ -242,6 +242,13 @@
     .btn-tienda .avatar { width:56px; height:56px; border-radius:50%; background:rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center; font-size:20px; font-weight:900; }
     .btn-tienda.marbella { background:linear-gradient(155deg,#d3ecff,#8fcdff); }
     .btn-tienda.mijas { background:linear-gradient(155deg,#ecdcff,#c298ff); }
+    .grid-flujos { display:grid; grid-template-columns:1fr; gap:14px; margin-bottom:14px; }
+    .btn-flujo { display:flex; align-items:center; gap:18px; min-height:112px; border-radius:20px; border:none; padding:16px 20px; font-size:20px; font-weight:900; letter-spacing:.02em; text-transform:uppercase; color:#0b1220; cursor:pointer; box-shadow:0 4px 0 rgba(0,0,0,.18); text-align:left; }
+    .btn-flujo .avatar { flex:0 0 60px; width:60px; height:60px; border-radius:50%; background:rgba(255,255,255,.55); display:flex; align-items:center; justify-content:center; font-size:28px; }
+    .btn-flujo .flujo-info { display:flex; flex-direction:column; align-items:flex-start; gap:7px; }
+    .btn-flujo.pedidos { background:linear-gradient(155deg,#d9e5ff,#9bb8ff); }
+    .btn-flujo.refill { background:linear-gradient(155deg,#daf5dd,#92dc9c); }
+    .btn-flujo.revision { background:linear-gradient(155deg,#fff0cf,#ffd37a); }
     .contador-tienda { font-size:11px; font-weight:800; text-transform:none; letter-spacing:normal; background:rgba(11,18,32,.18); padding:3px 10px; border-radius:20px; color:#0b1220; }
   </style>
 </head>
@@ -402,6 +409,7 @@
       if (!OPERARIO) return renderElegirOperarios();
       if (!TIENDA_ACTIVA) return renderElegirTienda();
       if (VISTA.nombre === 'elegirTienda') return renderElegirTienda();
+      if (VISTA.nombre === 'menu') return renderMenuFlujos();
       if (VISTA.nombre === 'cola') return renderCola();
       if (VISTA.nombre === 'revision') return renderRevisionesOperario();
       if (VISTA.nombre === 'revisionDetalle') return renderRevisionDetalle();
@@ -491,30 +499,94 @@
     function elegirTienda_(codigo) {
       TIENDA_ACTIVA = codigo;
       localStorage.setItem('kairos_tienda_activa', codigo);
+      VISTA = { nombre: 'menu', peticionId: null };
+      render();
+    }
+
+    // Flujo que se está trabajando: 'pedidos' (pedido cliente + cesión) o
+    // 'refill'. Se recuerda para que al volver de un pedido se vuelva a la
+    // cola de ese flujo.
+    var FLUJO_ACTUAL_ = localStorage.getItem('kairos_flujo_actual') === 'refill' ? 'refill' : 'pedidos';
+    function entrarFlujo_(flujo) {
+      if (flujo === 'revision') { VISTA = { nombre: 'revision', peticionId: null }; render(); return; }
+      FLUJO_ACTUAL_ = flujo;
+      try { localStorage.setItem('kairos_flujo_actual', flujo); } catch (e) {}
       VISTA = { nombre: 'cola', peticionId: null };
       render();
+    }
+
+    function renderMenuFlujos() {
+      function boton(clase, icono, titulo, id) {
+        return '<button class="btn-flujo ' + clase + '" id="' + id + '"><span class="avatar">' + icono + '</span>' +
+          '<span class="flujo-info"><span>' + titulo + '</span><span class="contador-tienda" id="cont-' + id + '">…</span></span></button>';
+      }
+      document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
+        '<h1>Kairos · Operario</h1>' +
+        '<p class="meta">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) + ' — ¿qué vas a hacer?</p>' +
+        '<div class="grid-flujos">' +
+          boton('pedidos', '📦', 'Pedidos', 'flujoPedidos') +
+          boton('refill', '🔄', 'Refill', 'flujoRefill') +
+          boton('revision', '🔍', 'Revisión de stock', 'flujoRevision') +
+        '</div>' +
+        '<div id="operarioBar"><div class="ob-acciones">' +
+          '<button class="btn-ob btn-ob-tienda" id="verHistorial" type="button">📋 Historial de hoy</button>' +
+          '<button class="btn-ob btn-ob-tienda" id="cambiarTienda" type="button">🏬 Cambiar tienda</button>' +
+          '<button class="btn-ob btn-ob-operario" id="cambiarOperario" type="button">👤 Cambiar operario</button>' +
+        '</div></div>';
+      sincronizarPickers_();
+
+      document.getElementById('flujoPedidos').onclick = function () { entrarFlujo_('pedidos'); };
+      document.getElementById('flujoRefill').onclick = function () { entrarFlujo_('refill'); };
+      document.getElementById('flujoRevision').onclick = function () { entrarFlujo_('revision'); };
+      document.getElementById('verHistorial').onclick = function () { VISTA = { nombre: 'historial', peticionId: null }; render(); };
+      document.getElementById('cambiarTienda').onclick = function () { VISTA = { nombre: 'elegirTienda', peticionId: null }; render(); };
+      document.getElementById('cambiarOperario').onclick = function () {
+        OPERARIO = ''; ROL = 'operario'; TIENDA_ACTIVA = '';
+        localStorage.removeItem('kairos_tienda_activa');
+        render();
+      };
+
+      // Contadores: lo que ve ESTE operario (individual vs equipo, igual que la cola).
+      google.script.run.withSuccessHandler(function (json) {
+        const esEquipo = esTrabajoEnEquipo_();
+        const visibles = JSON.parse(json).filter(function (p) {
+          return p.tipo === 'refill' || (!!p.cola_individual) === !esEquipo;
+        });
+        const pedidos = visibles.filter(function (p) { return p.tipo !== 'refill'; }).length;
+        const refill = visibles.length - pedidos;
+        const a = document.getElementById('cont-flujoPedidos'), b = document.getElementById('cont-flujoRefill');
+        if (a) a.textContent = pedidos + (pedidos === 1 ? ' pendiente' : ' pendientes');
+        if (b) b.textContent = refill + (refill === 1 ? ' pendiente' : ' pendientes');
+      }).listarCola(TIENDA_ACTIVA, null);
+      google.script.run.withSuccessHandler(function (json) {
+        const n = JSON.parse(json).length;
+        const c = document.getElementById('cont-flujoRevision');
+        if (c) c.textContent = n + (n === 1 ? ' pendiente' : ' pendientes');
+      }).listarRevisionesTienda(TIENDA_ACTIVA);
     }
 
     function renderCola() {
       document.getElementById('app').innerHTML =
         renderBrandHeaderHtml_() +
         renderTabsBar_() +
-        '<h1>Kairos · Operario</h1>' +
+        '<h1>' + (FLUJO_ACTUAL_ === 'refill' ? '🔄 Refill' : '📦 Pedidos') + '</h1>' +
         '<div id="operarioBar">' +
           '<div class="ob-info">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) +
             ' <span class="badge-modo ' + (esTrabajoEnEquipo_() ? 'equipo' : 'solo') + '">' + (esTrabajoEnEquipo_() ? '👥 En equipo' : '👤 En solitario') + '</span></div>' +
           '<div class="ob-acciones">' +
+            '<button class="btn-ob btn-ob-tienda" id="verMenu" type="button">🏠 Menú</button>' +
             '<button class="btn-ob btn-ob-tienda" id="verHistorial" type="button">📋 Historial de hoy</button>' +
-            '<button class="btn-ob btn-ob-tienda" id="verRevisiones" type="button">🔍 Revisión de palets</button>' +
             '<button class="btn-ob btn-ob-tienda" id="cambiarTienda" type="button">🏬 Cambiar tienda</button>' +
             '<button class="btn-ob btn-ob-operario" id="cambiarOperario" type="button">👤 Cambiar operario</button>' +
           '</div>' +
         '</div>' +
         '<div id="avisoOtroModo"></div>' +
         '<div class="filtros">' +
-        '<select id="filtroTipo"><option value="">Todos los tipos</option><option value="refill">Refill</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option></select>' +
+        (FLUJO_ACTUAL_ === 'refill' ? '' :
+          '<select id="filtroTipo"><option value="">Pedido cliente y cesión</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option></select>') +
         '<select id="filtroSeccion"><option value="">Todas las secciones</option></select>' +
-        '<select id="filtroTransporte"><option value="">Pedido cliente: con/sin transporte</option><option value="con">Con transporte</option><option value="sin">Sin transporte</option></select>' +
+        (FLUJO_ACTUAL_ === 'refill' ? '' :
+          '<select id="filtroTransporte"><option value="">Pedido cliente: con/sin transporte</option><option value="con">Con transporte</option><option value="sin">Sin transporte</option></select>') +
         '</div>' +
         '<div id="listaCola">Cargando…</div>';
       sincronizarPickers_();
@@ -535,18 +607,20 @@
         VISTA = { nombre: 'historial', peticionId: null };
         render();
       };
-      document.getElementById('verRevisiones').onclick = function (e) {
+      document.getElementById('verMenu').onclick = function (e) {
         e.preventDefault();
-        VISTA = { nombre: 'revision', peticionId: null };
+        VISTA = { nombre: 'menu', peticionId: null };
         render();
       };
-      document.getElementById('filtroTipo').value = FILTROS_COLA_.tipo;
-      document.getElementById('filtroTransporte').value = FILTROS_COLA_.transporte;
-      document.getElementById('filtroTipo').onchange = cambioFiltroCola_;
+      const selTipo = document.getElementById('filtroTipo');
+      const selTransporte = document.getElementById('filtroTransporte');
+      if (selTipo) { selTipo.value = FILTROS_COLA_.tipo; if (selTipo.selectedIndex === -1) selTipo.selectedIndex = 0; selTipo.onchange = cambioFiltroCola_; }
+      if (selTransporte) { selTransporte.value = FILTROS_COLA_.transporte; selTransporte.onchange = cambioFiltroCola_; }
       document.getElementById('filtroSeccion').onchange = cambioFiltroCola_;
-      document.getElementById('filtroTransporte').onchange = cambioFiltroCola_;
       cargarCola();
     }
+
+    function tiposDelFlujo_() { return FLUJO_ACTUAL_ === 'refill' ? ['refill'] : ['pedido_cliente', 'cesion']; }
 
     // Los filtros de la cola se recuerdan (también tras cerrar un pedido, que
     // vuelve a pintar la cola desde cero) y se guardan por dispositivo.
@@ -557,10 +631,12 @@
     } catch (e) {}
 
     function cambioFiltroCola_() {
+      const selTipo = document.getElementById('filtroTipo');
+      const selTransporte = document.getElementById('filtroTransporte');
       FILTROS_COLA_ = {
-        tipo: document.getElementById('filtroTipo').value,
+        tipo: selTipo ? selTipo.value : FILTROS_COLA_.tipo,
         seccion: document.getElementById('filtroSeccion').value,
-        transporte: document.getElementById('filtroTransporte').value,
+        transporte: selTransporte ? selTransporte.value : FILTROS_COLA_.transporte,
       };
       try { localStorage.setItem('kairos_filtros_cola', JSON.stringify(FILTROS_COLA_)); } catch (e) {}
       pintarCola_();
@@ -577,6 +653,7 @@
         PETICIONES_CACHE_ = JSON.parse(json);
         const secciones = [];
         PETICIONES_CACHE_.forEach(function (p) {
+          if (tiposDelFlujo_().indexOf(p.tipo) === -1) return;
           (p.secciones || []).forEach(function (s) { if (s && secciones.indexOf(s) === -1) secciones.push(s); });
         });
         secciones.sort();
@@ -598,7 +675,7 @@
       if (!cont) return;
       const esEquipo = esTrabajoEnEquipo_();
       const ocultos = PETICIONES_CACHE_.filter(function (p) {
-        if (p.tipo === 'refill') return false;
+        if (p.tipo === 'refill' || tiposDelFlujo_().indexOf(p.tipo) === -1) return false;
         return esEquipo ? !!p.cola_individual : !p.cola_individual;
       }).length;
       if (!ocultos) { cont.innerHTML = ''; return; }
@@ -610,11 +687,15 @@
     }
 
     function pintarCola_() {
-      const tipo = document.getElementById('filtroTipo').value;
+      const selTipo = document.getElementById('filtroTipo');
+      const selTransporte = document.getElementById('filtroTransporte');
+      const tipo = selTipo ? selTipo.value : '';
       const seccion = document.getElementById('filtroSeccion').value;
-      const transporte = document.getElementById('filtroTransporte').value;
+      const transporte = selTransporte ? selTransporte.value : '';
       const esEquipo = esTrabajoEnEquipo_();
+      const tiposFlujo = tiposDelFlujo_();
       const filtradas = PETICIONES_CACHE_.filter(function (p) {
+        if (tiposFlujo.indexOf(p.tipo) === -1) return false;
         if (tipo && p.tipo !== tipo) return false;
         if (seccion && (p.secciones || []).indexOf(seccion) === -1) return false;
         if (p.tipo === 'pedido_cliente' && transporte) {
@@ -1368,14 +1449,14 @@
 
     function renderRevisionesOperario() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
-        '<div class="volver"><a href="#" id="volverRevisiones">← Cola</a></div>' +
-        '<h1>Revisión de palets</h1>' +
+        '<div class="volver"><a href="#" id="volverRevisiones">← Menú</a></div>' +
+        '<h1>Revisión de stock</h1>' +
         '<p class="meta">' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) + ' · palets que tienda ha pedido revisar: cantidad, referencias y ubicación.</p>' +
         '<div id="listaRevisionesOp">Cargando…</div>';
       sincronizarPickers_();
       document.getElementById('volverRevisiones').onclick = function (e) {
         e.preventDefault();
-        VISTA = { nombre: 'cola', peticionId: null };
+        VISTA = { nombre: 'menu', peticionId: null };
         render();
       };
       google.script.run.withSuccessHandler(function (json) {
