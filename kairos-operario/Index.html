@@ -532,10 +532,30 @@
         VISTA = { nombre: 'revision', peticionId: null };
         render();
       };
-      document.getElementById('filtroTipo').onchange = pintarCola_;
-      document.getElementById('filtroSeccion').onchange = pintarCola_;
-      document.getElementById('filtroTransporte').onchange = pintarCola_;
+      document.getElementById('filtroTipo').value = FILTROS_COLA_.tipo;
+      document.getElementById('filtroTransporte').value = FILTROS_COLA_.transporte;
+      document.getElementById('filtroTipo').onchange = cambioFiltroCola_;
+      document.getElementById('filtroSeccion').onchange = cambioFiltroCola_;
+      document.getElementById('filtroTransporte').onchange = cambioFiltroCola_;
       cargarCola();
+    }
+
+    // Los filtros de la cola se recuerdan (también tras cerrar un pedido, que
+    // vuelve a pintar la cola desde cero) y se guardan por dispositivo.
+    var FILTROS_COLA_ = { tipo: '', seccion: '', transporte: '' };
+    try {
+      const guardados = JSON.parse(localStorage.getItem('kairos_filtros_cola') || 'null');
+      if (guardados) FILTROS_COLA_ = Object.assign(FILTROS_COLA_, guardados);
+    } catch (e) {}
+
+    function cambioFiltroCola_() {
+      FILTROS_COLA_ = {
+        tipo: document.getElementById('filtroTipo').value,
+        seccion: document.getElementById('filtroSeccion').value,
+        transporte: document.getElementById('filtroTransporte').value,
+      };
+      try { localStorage.setItem('kairos_filtros_cola', JSON.stringify(FILTROS_COLA_)); } catch (e) {}
+      pintarCola_();
     }
 
     // OPERARIO = "Nombre" (1 persona) o "Nombre1 + Nombre2" (2 personas) —
@@ -554,6 +574,9 @@
         secciones.sort();
         document.getElementById('filtroSeccion').innerHTML = '<option value="">Todas las secciones</option>' +
           secciones.map(function (s) { return '<option value="' + s + '">' + s + '</option>'; }).join('');
+        const selSeccion = document.getElementById('filtroSeccion');
+        selSeccion.value = FILTROS_COLA_.seccion;
+        if (selSeccion.selectedIndex === -1) selSeccion.selectedIndex = 0;
         pintarAvisoOtroModo_();
         pintarCola_();
       }).listarCola(TIENDA_ACTIVA, null);
@@ -712,6 +735,9 @@
       var extraInfo = '';
       if (l.avisoStock) extraInfo = '<div class="meta" style="color:var(--danger-fg);">⚠️ ' + escHtmlSie_(l.avisoStock) + '</div>';
       else if (l.ubicacion) extraInfo = '<div class="meta">📍 ' + escHtmlSie_(l.ubicacion) + '</div>';
+      if (l.sscc) {
+        extraInfo += '<div class="meta">SSCC <b>' + escHtmlSie_(parsearSsccMulti(l.sscc, l.cantidad).map(function (x) { return x.sscc; }).join(' · ')) + '</b></div>';
+      }
 
       const preparada = l.estado_preparacion === 'preparado';
       if (preparada) {
