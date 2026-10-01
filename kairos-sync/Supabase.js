@@ -66,6 +66,21 @@ function supaDelete_(tabla, queryString) {
   if (code >= 300) throw new Error('Supabase delete ' + code + ': ' + resp.getContentText());
 }
 
+/** Actualiza las filas de `tabla` que cumplan `queryString` con `cuerpo`. */
+function supaUpdate_(tabla, queryString, cuerpo) {
+  const url = CFG.SUPABASE_URL + '/rest/v1/' + tabla + '?' + queryString;
+  const headers = _supaHeaders_('PATCH');
+  headers['Prefer'] = 'return=minimal';
+  const resp = UrlFetchApp.fetch(url, {
+    method: 'patch',
+    headers: headers,
+    payload: JSON.stringify(cuerpo),
+    muteHttpExceptions: true,
+  });
+  const code = resp.getResponseCode();
+  if (code >= 300) throw new Error('Supabase update ' + code + ': ' + resp.getContentText());
+}
+
 /** Inserta un array de objetos en `tabla` (sin resolución de conflictos). */
 function supaInsertMany_(tabla, filas) {
   if (!filas.length) return;
