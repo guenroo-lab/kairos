@@ -1,6 +1,18 @@
 /** Panel jefe de equipo: todas las peticiones, etiquetas HODOS ya creadas
  *  por Kairos, y reintento del envío para las que fallaron. */
 
+/** ¿Esta petición necesita etiqueta HODOS? Cesión y pedido cliente sin
+ *  transporte, con al menos una línea, y no todas ellas incidencia sin
+ *  mercancía (Sin Palet / Sin Mercancía / Otras: no hay nada que etiquetar;
+ *  _dispararEtiquetaSiProcede_ tampoco la crea, y sin líneas el reintento
+ *  tampoco puede hacer nada). Un solo criterio para el panel y su marcador
+ *  (Avisos.js): tienen que coincidir. */
+function _necesitaHodos_(p, lineas) {
+  const generaEtiqueta = (p.tipo === 'cesion') || (p.tipo === 'pedido_cliente' && !p.transporte);
+  if (!generaEtiqueta || !lineas.length) return false;
+  return !lineas.every(function (l) { return INCIDENCIAS_.indexOf(l.estado_negocio) !== -1; });
+}
+
 /** Panel en vivo del jefe de equipo — todas las peticiones (activas Y
  *  cerradas, hasta el límite, para no perder el "Reintentar HODOS" de las
  *  cerradas sin etiqueta), con lo necesario para vigilarlas de un vistazo:
@@ -29,11 +41,7 @@ function listarTodasPeticiones() {
     p.tiendaNombre = CFG.TIENDAS[p.tienda_origen] || p.tienda_origen;
     // Cuándo se preparó la última línea (para "preparado hace X" en pendientes de ubicar).
     p.preparadaEn = propias.reduce(function (max, l) { return (l.preparada_en && (!max || l.preparada_en > max)) ? l.preparada_en : max; }, null);
-    // Un pedido cuyas líneas son TODAS incidencia sin mercancía (Sin Palet / Sin
-    // Mercancía / Otras) no tiene nada que etiquetar: HODOS no necesita etiqueta
-    // y no debe salir como "cerrada sin etiqueta" con botón de reintento.
-    const soloIncidencias = propias.length > 0 && propias.every(function (l) { return INCIDENCIAS_.indexOf(l.estado_negocio) !== -1; });
-    p.necesitaHodos = ((p.tipo === 'cesion') || (p.tipo === 'pedido_cliente' && !p.transporte)) && !soloIncidencias;
+    p.necesitaHodos = _necesitaHodos_(p, propias);
     p.tieneHodos = propias.some(function (l) { return l.hodos_id; });
     p.articulos = propias.map(function (l) {
       return { codigo_lm: l.codigo_lm, designacion: l.designacion, cantidad: l.cantidad, unidad_medida: l.unidad_medida };

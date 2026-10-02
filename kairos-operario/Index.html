@@ -134,6 +134,9 @@
     .tabs { display:flex; background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); padding:4px; margin-bottom:14px; gap:2px; }
     .tabs a { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:3px; padding:8px 2px; border-radius:calc(var(--radius-card) - 4px); text-decoration:none; color:var(--text-500); font-size:10.5px; font-weight:700; min-height:52px; }
     .tabs a svg { width:20px; height:20px; }
+    .tabs a { position:relative; }
+    .tabs a .badge-tab { position:absolute; top:3px; left:calc(50% + 6px); min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#2563eb; color:#fff; font-size:11px; font-weight:800; line-height:18px; text-align:center; }
+    .tabs a .badge-tab.alerta { background:#dc1a23; }
     .tabs a.activa { background:var(--accent-dim); color:var(--accent-ink); }
     [data-kmode="light"] .tabs a.activa { color:var(--accent); }
     .chip { font-size:11px; font-weight:700; padding:3px 9px; border-radius:var(--radius-chip); white-space:nowrap; display:inline-block; }
@@ -393,9 +396,57 @@
       }
     }
 
+    // ——— Marcadores de las pestañas del modo jefe ———
+    // Un número por pestaña con lo que hay pendiente (Avisos.js). Se pinta al
+    // momento con el último valor conocido, se refresca al abrir cada pantalla
+    // (si hace más de 20 s) y cada minuto mientras la página está abierta.
+    // Si una sección falla (null), se mantiene el valor anterior.
+    var AVISOS_JEFE_ = {};
+    var AVISOS_JEFE_ULTIMO_ = 0;
+    var AVISOS_JEFE_TIMER_ = null;
+    var NOMBRE_AVISO_POR_TAB_ = { panel: 'panel', incidencias: 'incidencias', revisiones: 'revisiones', hodos: 'hodos', sie: 'sie' };
+
+    function pintarAvisosJefe_() {
+      document.querySelectorAll('.tabs a[data-tab]').forEach(function (a) {
+        const clave = NOMBRE_AVISO_POR_TAB_[a.getAttribute('data-tab')];
+        const aviso = clave ? AVISOS_JEFE_[clave] : null;
+        var b = a.querySelector('.badge-tab');
+        if (!aviso || !aviso.n) { if (b) b.remove(); return; }
+        if (!b) { b = document.createElement('b'); b.className = 'badge-tab'; a.appendChild(b); }
+        b.textContent = aviso.n >= 1000 ? '999+' : String(aviso.n);
+        b.classList.toggle('alerta', !!aviso.alerta);
+        b.setAttribute('aria-label', aviso.n + ' pendientes');
+      });
+    }
+
+    function refrescarAvisosJefe_() {
+      AVISOS_JEFE_ULTIMO_ = Date.now();
+      google.script.run
+        .withSuccessHandler(function (json) {
+          const nuevos = JSON.parse(json);
+          Object.keys(nuevos).forEach(function (k) { if (nuevos[k]) AVISOS_JEFE_[k] = nuevos[k]; });
+          pintarAvisosJefe_();
+        })
+        .withFailureHandler(function () { /* el marcador es secundario: sin él la pantalla sigue igual */ })
+        .contarAvisosJefe();
+    }
+
+    // Tras una acción (resolver, imprimir…) el número tiene que bajar ya, no al
+    // minuto: se refresca al recargar la lista, como mucho cada 8 s.
+    function refrescarAvisosPronto_() {
+      if (Date.now() - AVISOS_JEFE_ULTIMO_ > 8000) refrescarAvisosJefe_();
+    }
+
+    function programarAvisosJefe_() {
+      setTimeout(pintarAvisosJefe_, 0); // las pestañas se construyen dentro del render que sigue
+      if (Date.now() - AVISOS_JEFE_ULTIMO_ > 20000) refrescarAvisosJefe_();
+      if (!AVISOS_JEFE_TIMER_) AVISOS_JEFE_TIMER_ = setInterval(refrescarAvisosJefe_, 60000);
+    }
+
     function render() {
       document.getElementById('app').classList.toggle('ancho', MODO_JEFE);
       if (MODO_JEFE) {
+        programarAvisosJefe_();
         if (VISTA.nombre === 'volumenes') return renderVolumenes();
         if (VISTA.nombre === 'hodos') return renderHodos();
         if (VISTA.nombre === 'operarios') return renderOperariosGestion();
@@ -433,7 +484,7 @@
           { nombre: 'volumenes', label: 'Volúmenes' },
         ];
         return '<div class="tabs">' + tabsJefe.map(function (t) {
-          return '<a href="#" class="' + (VISTA.nombre === t.nombre ? 'activa' : '') +
+          return '<a href="#" data-tab="' + t.nombre + '" class="' + (VISTA.nombre === t.nombre ? 'activa' : '') +
             '" onclick="event.preventDefault(); VISTA={nombre:\'' + t.nombre + '\',peticionId:null}; render();">' +
             ICONO_TABS[t.nombre] + '<span>' + t.label + '</span></a>';
         }).join('') + '</div>';
@@ -1375,6 +1426,7 @@
     }
 
     function cargarSiePorUbicar_() {
+      if (MODO_JEFE) refrescarAvisosPronto_();
       google.script.run.withSuccessHandler(function (json) {
         const palets = JSON.parse(json);
         ['014', '279'].forEach(function (codigoTienda) {
@@ -1440,6 +1492,7 @@
     }
 
     function cargarIncidencias_() {
+      if (MODO_JEFE) refrescarAvisosPronto_();
       google.script.run.withSuccessHandler(function (json) {
         const lineas = JSON.parse(json);
         ['014', '279'].forEach(function (codigoTienda) {
@@ -1800,6 +1853,7 @@
     }
 
     function cargarRevisionesJefe_() {
+      if (MODO_JEFE) refrescarAvisosPronto_();
       google.script.run.withSuccessHandler(function (json) {
         REV_JEFE_CACHE_ = JSON.parse(json);
         pintarRevisionesJefe_();
@@ -2007,6 +2061,7 @@
     }
 
     function cargarTodasPeticiones_() {
+      if (MODO_JEFE) refrescarAvisosPronto_();
       google.script.run.withSuccessHandler(function (json) {
         PANEL_CACHE_ = JSON.parse(json);
         pintarPanel_();
@@ -2080,6 +2135,7 @@
     }
 
     function cargarHodosCompleto_() {
+      if (MODO_JEFE) refrescarAvisosPronto_();
       google.script.run.withSuccessHandler(function (json) {
         HODOS_CACHE_ = JSON.parse(json);
         pintarHodos_(HODOS_CACHE_);

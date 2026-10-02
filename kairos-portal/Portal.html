@@ -129,6 +129,8 @@
   .tabs a svg { width:22px; height:22px; stroke:currentColor; fill:none; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
   .tabs a { position:relative; }
   .tabs a span { text-align:center; line-height:1.1; }
+  .badge-tab.normal { background:#2563eb; }
+  .badge-btn { margin-left:6px; min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#2563eb; color:#fff; font-size:11px; font-weight:800; line-height:18px; text-align:center; vertical-align:middle; }
   .badge-tab { position:absolute; top:3px; left:calc(50% + 6px); min-width:18px; height:18px; padding:0 5px; border-radius:9px; background:#dc1a23; color:#fff; font-size:11px; font-weight:800; line-height:18px; text-align:center; }
   .tabs a.activa {
     background: linear-gradient(135deg, var(--accent) 0%, color-mix(in srgb, var(--accent) 65%, #000) 100%);
@@ -753,14 +755,22 @@
     tabs.querySelector('#tabIncidencias').onclick = function (e) { e.preventDefault(); renderIncidenciasPortal(); };
     tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
 
-    function pintar(lista) {
-      const abiertas = lista.filter(function (l) { return l.estadoIncidencia !== 'resuelta' && l.estadoIncidencia !== 'gestionada'; }).length;
-      const a = tabs.querySelector('#tabIncidencias');
-      if (a) {
+    // Marcadores: con el último valor conocido al instante y, a continuación,
+    // el actualizado (una sola llamada, contarAvisosPortal). Si falla se
+    // queda lo anterior.
+    function pintar() {
+      function marca(idTab, n, alerta) {
+        const a = tabs.querySelector('#' + idTab);
+        if (!a) return;
         const viejo = a.querySelector('.badge-tab');
         if (viejo) viejo.remove();
-        if (abiertas) a.appendChild(el('<b class="badge-tab">' + abiertas + '</b>'));
+        if (n) a.appendChild(el('<b class="badge-tab' + (alerta ? '' : ' normal') + '">' + (n >= 1000 ? '999+' : n) + '</b>'));
       }
+      marca('tabPeticiones', AVISOS_PORTAL_.peticiones, false);
+      marca('tabRevisiones', AVISOS_PORTAL_.revisiones, false);
+      marca('tabIncidencias', AVISOS_PORTAL_.incidencias, true);
+      pintarMarcaUsuarios_();
+      const abiertas = AVISOS_PORTAL_.incidencias || 0;
       const aviso = document.getElementById('avisoIncidencias');
       if (aviso) {
         aviso.innerHTML = '';
@@ -771,11 +781,22 @@
         }
       }
     }
-    if (INCIDENCIAS_CACHE_) pintar(INCIDENCIAS_CACHE_);
-    gas('listarMisIncidencias', LDAP).then(function (lista) {
-      INCIDENCIAS_CACHE_ = lista;
-      pintar(lista);
-    }).catch(function () { /* el aviso es secundario: sin él la app sigue igual */ });
+    pintar();
+    gas('contarAvisosPortal', LDAP).then(function (nuevos) {
+      Object.keys(nuevos).forEach(function (k) { if (nuevos[k] !== null) AVISOS_PORTAL_[k] = nuevos[k]; });
+      pintar();
+    }).catch(function () { /* el marcador es secundario: sin él la app sigue igual */ });
+  }
+
+  // Último valor conocido de cada marcador (null/ausente = 0).
+  var AVISOS_PORTAL_ = { peticiones: 0, revisiones: 0, incidencias: 0, usuarios: 0 };
+  /** Número de usuarios pendientes de aprobar junto al botón "Usuarios". */
+  function pintarMarcaUsuarios_() {
+    const b = document.getElementById('marcaUsuarios');
+    if (!b) return;
+    const n = AVISOS_PORTAL_.usuarios || 0;
+    b.textContent = n ? String(n) : '';
+    b.style.display = n ? 'inline-block' : 'none';
   }
 
   function pintarCabecera_() {
@@ -1002,9 +1023,10 @@
    *  contraseña de admin aparte. */
   function pintarBotonUsuarios_(contenedorAcciones) {
     if (ROL !== 'gestor' && ROL !== 'master') return;
-    const btn = el('<button class="btn-ghost" style="width:auto;padding:6px 10px;">Usuarios</button>');
+    const btn = el('<button class="btn-ghost" style="width:auto;padding:6px 10px;">Usuarios<b class="badge-btn" id="marcaUsuarios" style="display:none;"></b></button>');
     contenedorAcciones.insertBefore(btn, contenedorAcciones.firstChild);
     btn.onclick = renderGestionUsuarios;
+    pintarMarcaUsuarios_();
   }
 
   /** Solo Master: apagar/encender Refill (Ajustes.js). */
