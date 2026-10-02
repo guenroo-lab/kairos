@@ -26,6 +26,7 @@ function anularPeticion(ldap, peticionId, motivo) {
     'id=eq.' + encodeURIComponent(peticionId) + '&estado=not.in.(cerrada,anulada)',
     { estado: 'anulada', motivo_anulacion: motivo });
   if (!filas.length) throw new Error('Esta petición ya no se puede anular.');
+  _incidenciasGestionadasPorAnulacion_(ldap, peticionId, motivo);
   return _json_({ ok: true });
 }
 

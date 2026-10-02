@@ -1465,6 +1465,9 @@
               '<div class="meta">Preparó: ' + escHtmlSie_(l.operario || '—') + (l.preparada_en ? ' · ' + tiempoDesde_(l.preparada_en) : '') + '</div>' +
               (l.incidencia_gestion_en ? '<div class="meta" style="color:var(--warn-fg);">⏳ En gestión desde ' + tiempoDesde_(l.incidencia_gestion_en) + '</div>' : '') +
               (l.incidencia_nota_tienda ? '<div class="meta">Mensaje a tienda: ' + escHtmlSie_(l.incidencia_nota_tienda) + '</div>' : '') +
+              (l.incidencia_tienda_gestionada_en ? '<div class="meta" style="color:var(--warn-fg);">🏬 La tienda la ha dado por gestionada ' + tiempoDesde_(l.incidencia_tienda_gestionada_en) +
+                (l.incidencia_tienda_gestionada_por ? ' (' + escHtmlSie_(l.incidencia_tienda_gestionada_por) + ')' : '') +
+                (l.incidencia_tienda_gestionada_nota ? ': ' + escHtmlSie_(l.incidencia_tienda_gestionada_nota) : '') + ' — verifica y márcala resuelta.</div>' : '') +
               '<div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px;">' +
                 (l.incidencia_gestion_en ? '' : '<button class="btn-ob btn-ob-tienda" data-gestion="' + l.id + '">En gestión</button>') +
                 '<button class="btn-ob" data-linea="' + l.id + '">Marcar resuelta</button>' +

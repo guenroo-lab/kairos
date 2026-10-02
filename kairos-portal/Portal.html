@@ -754,7 +754,7 @@
     tabs.querySelector('#tabHistorico').onclick = function (e) { e.preventDefault(); renderHistorico(); };
 
     function pintar(lista) {
-      const abiertas = lista.filter(function (l) { return l.estadoIncidencia !== 'resuelta'; }).length;
+      const abiertas = lista.filter(function (l) { return l.estadoIncidencia !== 'resuelta' && l.estadoIncidencia !== 'gestionada'; }).length;
       const a = tabs.querySelector('#tabIncidencias');
       if (a) {
         const viejo = a.querySelector('.badge-tab');
@@ -1320,7 +1320,7 @@
     const lista = el('<div class="card" id="listaIncidenciasPortal"><p style="color:var(--text-500)">Cargando…</p></div>');
     wrap.appendChild(lista);
 
-    const TEXTO_ESTADO_INC_ = { abierta: 'Abierta', en_gestion: 'En gestión', resuelta: 'Resuelta' };
+    const TEXTO_ESTADO_INC_ = { abierta: 'Abierta', en_gestion: 'En gestión', resuelta: 'Resuelta', gestionada: 'Gestionada por la tienda' };
     function textoTipoInc_(l) {
       if (l.estado_negocio === 'Parcial') return 'Parcial: preparado ' + l.cantidad_preparada + ' de ' + l.cantidad + ' ' + l.unidad_medida;
       if (l.estado_negocio === 'Sin Mercancía') return 'Sin mercancía — nada preparado de ' + l.cantidad + ' ' + l.unidad_medida;
@@ -1341,13 +1341,32 @@
               '<div style="font-size:13px;font-weight:700;margin-top:3px;">' + escHtml(textoTipoInc_(l)) + '</div>' +
               (l.incidencia_motivo ? '<div style="color:var(--text-500);font-size:12px;margin-top:3px;">Motivo: ' + escHtml(l.incidencia_motivo) + '</div>' : '') +
               (l.incidencia_nota_tienda ? '<div style="font-size:13px;margin-top:5px;padding:6px 9px;border-radius:10px;background:var(--accent-dim);"><b>Plataforma:</b> ' + escHtml(l.incidencia_nota_tienda) + '</div>' : '') +
+              (l.incidencia_tienda_gestionada_en ? '<div style="font-size:13px;margin-top:5px;color:var(--text-500);"><b>Gestionada por la tienda</b>' + (l.incidencia_tienda_gestionada_por ? ' (' + escHtml(l.incidencia_tienda_gestionada_por) + ')' : '') + (l.incidencia_tienda_gestionada_nota ? ': ' + escHtml(l.incidencia_tienda_gestionada_nota) : '') + '</div>' : '') +
               '<div style="color:var(--text-500);font-size:12px;margin-top:4px;">' + (l.preparada_en ? new Date(l.preparada_en).toLocaleString('es-ES') : '') + '</div>' +
+              '<div style="display:flex;gap:8px;flex-wrap:wrap;">' +
+              (l.puedeGestionar
+                ? '<button type="button" class="btn-ghost" data-gestionar style="width:auto;padding:6px 12px;margin-top:8px;">Dar por gestionada</button>' : '') +
               ((l.puedeAnular && (ROL === 'gestor' || ROL === 'master'))
                 ? '<button type="button" class="btn-ghost" data-anular style="width:auto;padding:6px 12px;margin-top:8px;color:var(--danger-fg);">Anular pedido</button>' : '') +
+              '</div>' +
             '</div>' +
             '<span class="estado' + ((l.estadoIncidencia === 'abierta' && !l.pedidoAnulado) ? ' estado-anulada' : '') + '">' + (l.pedidoAnulado ? 'Pedido anulado' : TEXTO_ESTADO_INC_[l.estadoIncidencia]) + '</span>' +
           '</div>'
         );
+        const btnGestionar = fila.querySelector('[data-gestionar]');
+        if (btnGestionar) {
+          btnGestionar.onclick = function (ev) {
+            ev.stopPropagation();
+            kPedirTexto('Nota (opcional): cómo la habéis gestionado, p. ej. "llegó por refill":').then(function (nota) {
+              if (nota === null) return; // cancelado
+              btnGestionar.disabled = true;
+              gas('gestionarIncidenciaTienda', LDAP, l.id, nota.trim()).then(function () {
+                INCIDENCIAS_CACHE_ = null;
+                renderIncidenciasPortal();
+              }).catch(function (e) { btnGestionar.disabled = false; kAlerta(e.message); });
+            });
+          };
+        }
         const btnAnular = fila.querySelector('[data-anular]');
         if (btnAnular) {
           btnAnular.onclick = function (ev) {
@@ -1370,8 +1389,10 @@
       });
     }
     function aplicarFiltroInc_() {
+      const cerrada = function (l) { return l.estadoIncidencia === 'resuelta' || l.estadoIncidencia === 'gestionada'; };
       pintarInc_(filtroInc === 'todas' ? todas
-        : filtroInc === 'pendientes' ? todas.filter(function (l) { return l.estadoIncidencia !== 'resuelta'; })
+        : filtroInc === 'pendientes' ? todas.filter(function (l) { return !cerrada(l); })
+        : filtroInc === 'resuelta' ? todas.filter(cerrada)
         : todas.filter(function (l) { return l.estadoIncidencia === filtroInc; }));
     }
     chips.querySelectorAll('.chip-tipo').forEach(function (btn) {

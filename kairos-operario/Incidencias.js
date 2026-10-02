@@ -14,7 +14,7 @@ function listarIncidenciasPendientes() {
   const lineas = supaSelect_('lineas',
     'estado_negocio=in.(' + ESTADOS_INCIDENCIA_.map(encodeURIComponent).join(',') + ')' +
     '&incidencia_revisada_en=is.null' +
-    '&select=id,peticion_id,codigo_lm,designacion,cantidad,cantidad_preparada,unidad_medida,estado_negocio,incidencia_motivo,operario,sscc,ubicacion,preparada_en,incidencia_gestion_en,incidencia_nota_tienda' +
+    '&select=id,peticion_id,codigo_lm,designacion,cantidad,cantidad_preparada,unidad_medida,estado_negocio,incidencia_motivo,operario,sscc,ubicacion,preparada_en,incidencia_gestion_en,incidencia_nota_tienda,incidencia_tienda_gestionada_en,incidencia_tienda_gestionada_por,incidencia_tienda_gestionada_nota' +
     '&order=preparada_en.desc&limit=300');
   if (!lineas.length) return _json_([]);
 
