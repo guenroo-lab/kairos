@@ -31,9 +31,11 @@ function _seccionAviso_(fn) {
  *  regla y mismo plazo de 3 días que listarTodasPeticiones). */
 function _contarCerradasSinEtiqueta_(hoy) {
   const desde = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString();
-  const cerradas = supaSelect_('peticiones',
+  // _selectTodo_ (paginado): con un tope de 1000 filas antes de filtrar, unas
+  // cerradas de refill podían ocultar la cesión que sí necesita etiqueta.
+  const cerradas = _selectTodo_('peticiones',
     'estado=eq.cerrada&cerrada_en=gte.' + encodeURIComponent(desde) + '&visible_desde=lte.' + hoy +
-    '&tienda_origen=in.(014,279)&select=id,tipo,transporte&limit=' + AVISOS_TOPE_FILAS_)
+    '&tienda_origen=in.(014,279)&tipo=in.(cesion,pedido_cliente)&select=id,tipo,transporte')
     .filter(function (p) { return p.tipo === 'cesion' || (p.tipo === 'pedido_cliente' && !p.transporte); });
   if (!cerradas.length) return 0;
   const lineas = supaSelectIn_('lineas', 'peticion_id', cerradas.map(function (p) { return p.id; }),
@@ -53,7 +55,27 @@ function _contarSiePorUbicarConCache_() {
   return n;
 }
 
-function contarAvisosJefe() {
+/** `forzar` = true tras una acción del jefe (el número debe bajar ya): se salta
+ *  la caché de 45 s. El resto de refrescos —de todas las pantallas abiertas—
+ *  comparten el mismo cálculo, así que el coste en peticiones a Supabase no
+ *  crece con el número de pantallas. */
+function contarAvisosJefe(forzar) {
+  const cache = CacheService.getScriptCache();
+  if (forzar !== true) {
+    const guardado = cache.get('kairos_avisos_jefe_v1');
+    if (guardado !== null) return guardado;
+  }
+  const resultado = _calcularAvisosJefe_();
+  const json = _json_(resultado);
+  // Solo se cachea si todas las secciones han ido bien (una caída puntual no
+  // debe quedarse 45 s en caché).
+  if (Object.keys(resultado).every(function (k) { return resultado[k] !== null; })) {
+    try { cache.put('kairos_avisos_jefe_v1', json, 45); } catch (err) { /* la caché es una mejora, no debe romper */ }
+  }
+  return json;
+}
+
+function _calcularAvisosJefe_() {
   const hoy = _hoyMadridIso_();
   const tiendas = '&tienda_origen=in.(014,279)';
   const resultado = {};
@@ -88,5 +110,5 @@ function contarAvisosJefe() {
     return { n: _contarSiePorUbicarConCache_(), alerta: false };
   });
 
-  return _json_(resultado);
+  return resultado;
 }

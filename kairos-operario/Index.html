@@ -415,26 +415,34 @@
         if (!b) { b = document.createElement('b'); b.className = 'badge-tab'; a.appendChild(b); }
         b.textContent = aviso.n >= 1000 ? '999+' : String(aviso.n);
         b.classList.toggle('alerta', !!aviso.alerta);
-        b.setAttribute('aria-label', aviso.n + ' pendientes');
+        b.setAttribute('aria-label', aviso.n + ' pendientes' + (aviso.alerta ? ', requieren atención' : ''));
       });
     }
 
-    function refrescarAvisosJefe_() {
+    var AVISOS_JEFE_EN_CURSO_ = false;
+    function refrescarAvisosJefe_(forzar) {
+      if (AVISOS_JEFE_EN_CURSO_) return; // ya hay una petición en vuelo: no se apilan
+      AVISOS_JEFE_EN_CURSO_ = true;
       AVISOS_JEFE_ULTIMO_ = Date.now();
+      const liberar = function () { AVISOS_JEFE_EN_CURSO_ = false; };
+      setTimeout(liberar, 30000); // por si ninguna respuesta llegara nunca
       google.script.run
         .withSuccessHandler(function (json) {
+          liberar();
           const nuevos = JSON.parse(json);
           Object.keys(nuevos).forEach(function (k) { if (nuevos[k]) AVISOS_JEFE_[k] = nuevos[k]; });
           pintarAvisosJefe_();
         })
-        .withFailureHandler(function () { /* el marcador es secundario: sin él la pantalla sigue igual */ })
-        .contarAvisosJefe();
+        .withFailureHandler(function () { liberar(); /* el marcador es secundario: sin él la pantalla sigue igual */ })
+        .contarAvisosJefe(forzar === true);
     }
 
     // Tras una acción (resolver, imprimir…) el número tiene que bajar ya, no al
-    // minuto: se refresca al recargar la lista, como mucho cada 8 s.
+    // minuto: se refresca saltándose la caché del servidor, como mucho cada 8 s.
+    // (Solo en las pantallas SIN polling propio; el panel y SIE ya recargan
+    // cada 30 s y se apoyan en el refresco de 60 s.)
     function refrescarAvisosPronto_() {
-      if (Date.now() - AVISOS_JEFE_ULTIMO_ > 8000) refrescarAvisosJefe_();
+      if (Date.now() - AVISOS_JEFE_ULTIMO_ > 8000) refrescarAvisosJefe_(true);
     }
 
     function programarAvisosJefe_() {
@@ -1426,7 +1434,6 @@
     }
 
     function cargarSiePorUbicar_() {
-      if (MODO_JEFE) refrescarAvisosPronto_();
       google.script.run.withSuccessHandler(function (json) {
         const palets = JSON.parse(json);
         ['014', '279'].forEach(function (codigoTienda) {
@@ -2061,7 +2068,6 @@
     }
 
     function cargarTodasPeticiones_() {
-      if (MODO_JEFE) refrescarAvisosPronto_();
       google.script.run.withSuccessHandler(function (json) {
         PANEL_CACHE_ = JSON.parse(json);
         pintarPanel_();

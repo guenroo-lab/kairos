@@ -781,21 +781,32 @@
         }
       }
     }
+    // Los números son de UNA tienda y UN usuario: si cambia el contexto (el
+    // master cambia de tienda, otro usuario entra en el mismo navegador) se
+    // empieza de cero y se ignoran respuestas de un contexto anterior.
+    const contexto = LDAP + '|' + TIENDA;
+    if (contexto !== AVISOS_PORTAL_CTX_) {
+      AVISOS_PORTAL_ = { peticiones: 0, revisiones: 0, incidencias: 0, usuarios: 0 };
+      AVISOS_PORTAL_CTX_ = contexto;
+    }
     pintar();
     gas('contarAvisosPortal', LDAP).then(function (nuevos) {
+      if (contexto !== LDAP + '|' + TIENDA || contexto !== AVISOS_PORTAL_CTX_) return; // respuesta de otro contexto
       Object.keys(nuevos).forEach(function (k) { if (nuevos[k] !== null) AVISOS_PORTAL_[k] = nuevos[k]; });
       pintar();
     }).catch(function () { /* el marcador es secundario: sin él la app sigue igual */ });
   }
 
-  // Último valor conocido de cada marcador (null/ausente = 0).
+  // Último valor conocido de cada marcador (null/ausente = 0), con el contexto
+  // (usuario|tienda) al que pertenece.
   var AVISOS_PORTAL_ = { peticiones: 0, revisiones: 0, incidencias: 0, usuarios: 0 };
+  var AVISOS_PORTAL_CTX_ = null;
   /** Número de usuarios pendientes de aprobar junto al botón "Usuarios". */
   function pintarMarcaUsuarios_() {
     const b = document.getElementById('marcaUsuarios');
     if (!b) return;
     const n = AVISOS_PORTAL_.usuarios || 0;
-    b.textContent = n ? String(n) : '';
+    b.textContent = n ? (n >= 1000 ? '999+' : String(n)) : '';
     b.style.display = n ? 'inline-block' : 'none';
   }
 
