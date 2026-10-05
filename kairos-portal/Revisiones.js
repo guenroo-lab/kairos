@@ -121,6 +121,18 @@ function _crearRevisionesPalet_(ldap, palets, revisar, comentario) {
 
 const TRADUCCION_REVISION_ = { pendiente: 'Solicitada', en_revision: 'En revisión', revisada: 'Revisada' };
 
+/** Cómo se le cuenta a la tienda el resultado de una revisión ya hecha. */
+function _estadoTextoRevisada_(r) {
+  if (r.conforme) return 'Revisada · conforme';
+  const res = r.resultado || {};
+  if (res.localizado === false) {
+    if (res.motivo === 'no_en_plataforma') return 'Revisada · no está en plataforma';
+    if (res.motivo === 'ya_salio') return 'Revisada · ya salió';
+    return 'Revisada · no localizado';
+  }
+  return res.ssccDistinto ? 'Revisada · localizado con otro SSCC' : 'Revisada · con diferencias';
+}
+
 function listarMisRevisiones(ldap) {
   const u = _usuarioDe_(ldap);
   if (u.rol === 'vendedor') return _json_([]);
@@ -129,10 +141,7 @@ function listarMisRevisiones(ldap) {
     '&select=id,sscc,ubicacion_esperada,contenido_esperado,revisar,comentario,estado,conforme,resultado,creada_en,revisada_en,revisada_por,solicitante_ldap' +
     '&order=creada_en.desc&limit=30');
   filas.forEach(function (r) {
-    r.estadoTexto = r.estado === 'revisada'
-      ? (r.conforme ? 'Revisada · conforme'
-        : (r.resultado && r.resultado.localizado === false ? 'Revisada · no localizado' : 'Revisada · con diferencias'))
-      : (TRADUCCION_REVISION_[r.estado] || r.estado);
+    r.estadoTexto = r.estado === 'revisada' ? _estadoTextoRevisada_(r) : (TRADUCCION_REVISION_[r.estado] || r.estado);
   });
   return _json_(filas);
 }

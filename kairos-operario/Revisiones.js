@@ -32,8 +32,19 @@ function tomarRevision(id, operario) {
   return _json_(filas[0]);
 }
 
-/** resultado = { localizado, ubicacionOk, ubicacionReal, ssccEncontrado,
+// Por qué un palet no se localizó. Solo se pide cuando el sistema no le conocía
+// dirección (palet que consta en myISO pero no está en nuestra plataforma);
+// sin motivo (o con una pantalla antigua) queda como "no localizado" a secas.
+//  - no_en_plataforma: consta en el sistema pero físicamente no está aquí.
+//  - ya_salio: figura ya enviado/cargado (solo si se pidió un SSCC concreto).
+const MOTIVOS_NO_LOCALIZADO_ = ['no_en_plataforma', 'ya_salio'];
+
+function _sinCerosIzquierda_(sscc) { return String(sscc || '').trim().replace(/^0+/, ''); }
+
+/** resultado = { localizado, motivo?, otroSscc?, ubicacionOk, ubicacionReal, ssccEncontrado,
  *  lineas:[{codigo_lm, contada}], extras:[{codigo_lm, cantidad}], nota }.
+ *  otroSscc = true: el palet se encontró, pero con un SSCC distinto al pedido
+ *  (ssccEncontrado obligatorio): el sistema tiene que rectificarse, nunca es conforme.
  *  El servidor recalcula si es conforme comparando con lo esperado — no se
  *  fía del cliente. Un palet que el sistema no conoce, o que no se encuentra,
  *  nunca es conforme: siempre queda para que el jefe lo gestione. */
@@ -42,7 +53,7 @@ function completarRevisionPalet(id, operario, resultado) {
   if (!operario) throw new Error('Selecciona tu nombre antes de revisar.');
   resultado = resultado || {};
 
-  const filas = supaSelect_('revisiones_palet', 'id=eq.' + encodeURIComponent(id) + '&select=id,estado,contenido_esperado,ubicacion_esperada,revisar');
+  const filas = supaSelect_('revisiones_palet', 'id=eq.' + encodeURIComponent(id) + '&select=id,estado,sscc,contenido_esperado,ubicacion_esperada,revisar');
   if (!filas.length) throw new Error('Revisión no encontrada.');
   if (filas[0].estado === 'revisada') throw new Error('Esta revisión ya está terminada.');
   const esperado = filas[0].contenido_esperado || [];
@@ -76,8 +87,12 @@ function completarRevisionPalet(id, operario, resultado) {
   }
 
   if (resultado.localizado === false) {
+    const motivo = MOTIVOS_NO_LOCALIZADO_.indexOf(resultado.motivo) !== -1 ? resultado.motivo : null;
+    if (motivo === 'ya_salio' && !filas[0].sscc) {
+      throw new Error('"Ya salió" solo vale para un palet con SSCC: aquí se buscaba un artículo, no un palet concreto.');
+    }
     return guardar(false, {
-      localizado: false, ubicacionOk: false, ubicacionReal: null, ssccEncontrado: null, extras: [], nota: nota,
+      localizado: false, motivo: motivo, ubicacionOk: false, ubicacionReal: null, ssccEncontrado: null, extras: [], nota: nota,
       lineas: esperado.map(function (e) {
         return { codigo_lm: e.codigo_lm, designacion: e.designacion || null, esperada: e.cantidad == null ? null : Number(e.cantidad), contada: null };
       }),
@@ -116,13 +131,24 @@ function completarRevisionPalet(id, operario, resultado) {
   const ubicacionReal = ubicacionOk ? null : String(resultado.ubicacionReal || '').trim();
   if (pideUbicacion && !ubicacionOk && !ubicacionReal) throw new Error('Indica dónde está el palet.');
 
-  const conforme = ubicacionOk &&
+  // Encontrado con otro SSCC: el palet que se pidió no existe como tal.
+  const ssccEncontrado = String(resultado.ssccEncontrado || '').trim() || null;
+  const otroSscc = resultado.otroSscc === true;
+  if (otroSscc) {
+    if (!filas[0].sscc) throw new Error('"Con otro SSCC" solo vale cuando se pidió un palet con SSCC.');
+    if (!ssccEncontrado) throw new Error('Escribe el SSCC con el que lo has encontrado.');
+    if (_sinCerosIzquierda_(ssccEncontrado) === _sinCerosIzquierda_(filas[0].sscc)) {
+      throw new Error('Ese es el mismo SSCC que se pidió: si lo has encontrado con ese SSCC, no uses "Con otro SSCC".');
+    }
+  }
+
+  const conforme = !otroSscc && ubicacionOk &&
     (!pideReferencias || (!extras.length && lineas.every(function (l) { return l.contada !== null && l.contada > 0; }))) &&
     (!pideCantidad || lineas.every(function (l) { return l.esperada !== null && l.contada === l.esperada; }));
 
   return guardar(conforme, {
-    localizado: true, ubicacionOk: ubicacionOk, ubicacionReal: ubicacionReal,
-    ssccEncontrado: String(resultado.ssccEncontrado || '').trim() || null,
+    localizado: true, ssccDistinto: otroSscc, ubicacionOk: ubicacionOk, ubicacionReal: ubicacionReal,
+    ssccEncontrado: ssccEncontrado,
     lineas: lineas, extras: extras, nota: nota,
   });
 }

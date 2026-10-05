@@ -318,6 +318,24 @@
   }
   @media (max-width: 350px) { .theme-btn-txt { display:none; } }
 
+  /* Modificar petición (Logística / Coordinación) */
+  .edit-seccion { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:var(--text-500); margin:16px 0 6px; }
+  .edit-etiqueta { display:block; color:var(--text-500); font-size:13px; margin:6px 0 2px; }
+  .edit-linea { background:var(--ink-800); border-radius:10px; padding:10px 12px; margin-top:8px; }
+  .edit-linea-nombre { font-size:13.5px; color:var(--text-100); font-weight:600; overflow-wrap:anywhere; }
+  .edit-linea-controles { display:flex; align-items:center; gap:8px; margin-top:8px; flex-wrap:wrap; }
+  .edit-linea-controles .entrada { width:96px; margin:0; }
+  .edit-linea-controles .btn { width:auto; margin:0; min-height:40px; padding:8px 14px; font-size:13px; }
+  .edit-linea-meta { color:var(--text-500); font-size:12px; }
+  .edit-linea.quitada { opacity:.55; }
+  .edit-linea.quitada .edit-linea-nombre { text-decoration:line-through; }
+  .edit-linea.bloqueada { opacity:.7; }
+  .edit-linea.nueva { border-left:3px solid var(--accent); }
+  .edit-aviso { color:var(--warn-fg); background:var(--warn-bg); border:1px solid var(--warn-line); border-radius:var(--radius-btn); padding:8px 10px; font-size:13px; margin:8px 0; }
+  .cambios-historial { margin-top:10px; padding:8px 10px; border-left:3px solid var(--accent); background:var(--ink-800); border-radius:0 8px 8px 0; font-size:12.5px; color:var(--text-300); }
+  .cambios-historial b { color:var(--text-100); }
+  .cambios-historial ul { margin:4px 0 0 18px; padding:0; }
+
 </style>
 <div id="app"></div>
 <script>
@@ -586,7 +604,7 @@
     const input = document.createElement('input');
     input.type = 'file';
     input.id = 'inputCamaraCodigo';
-    input.accept = 'image/*';
+    input.accept = 'image/' + '*'; // partido a propósito (barra + asterisco juntos en una cadena pueden cortar la página en HtmlService)
     input.setAttribute('capture', 'environment');
     input.style.display = 'none';
     document.body.appendChild(input);
@@ -1463,7 +1481,12 @@
     if (r.estado !== 'revisada') return h + '<br><br><b>' + escHtml(r.estadoTexto) + '</b>';
     const res = r.resultado || {};
     h += '<br><br><b>' + escHtml(r.estadoTexto) + '</b> · ' + escHtml(r.revisada_por || '') + ' · ' + new Date(r.revisada_en).toLocaleString('es-ES');
-    if (res.localizado === false) return h + '<br>No se ha localizado el palet.' + (res.nota ? '<br>Nota: ' + escHtml(res.nota) : '');
+    if (res.localizado === false) {
+      const texto = res.motivo === 'no_en_plataforma' ? 'No está en plataforma: consta en el sistema, pero físicamente no se ha encontrado aquí.'
+        : (res.motivo === 'ya_salio' ? 'Ya salió: figura como enviado o cargado.' : 'No se ha localizado el palet.');
+      return h + '<br>' + escHtml(texto) + (res.nota ? '<br>Nota: ' + escHtml(res.nota) : '');
+    }
+    if (res.ssccDistinto) h += '<br>Se ha localizado con otro SSCC distinto al pedido.';
     if (res.ssccEncontrado) h += '<br>SSCC encontrado: ' + escHtml(res.ssccEncontrado);
     h += '<br>Ubicación: ' + (res.ubicacionOk === false ? (r.ubicacion_esperada ? 'no estaba en su sitio — real: ' : 'localizado en: ') + escHtml(res.ubicacionReal || '—') : 'correcta');
     (res.lineas || []).forEach(function (l) {
@@ -2283,6 +2306,15 @@
       const hodosLinea = r.hodosTexto ? '<div style="margin-top:8px;"><b>' + etiquetaEstadoEnvio + '</b> ' + escHtml(r.hodosTexto) + '</div>' : '';
       const puedeAnular = (ROL === 'gestor' || ROL === 'master') && p.estado !== 'cerrada' && p.estado !== 'anulada';
       const puedeCambiarFecha = (ROL === 'gestor' || ROL === 'master') && p.reservaFutura && p.estado === 'pendiente';
+      const puedeEditar = (ROL === 'logistico' || ROL === 'gestor' || ROL === 'master') && (p.estado === 'pendiente' || p.estado === 'en_preparacion');
+      // Últimos cambios hechos sobre la petición (los ve toda la tienda; el operario los ve en almacén).
+      const historial = (Array.isArray(p.historial_cambios) ? p.historial_cambios : []).slice(-3).reverse();
+      const historialHtml = historial.length
+        ? '<div class="cambios-historial"><b>✏️ Modificada</b>' + historial.map(function (h) {
+            return '<div style="margin-top:6px;">' + escHtml(new Date(h.en).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })) +
+              ' · ' + escHtml(h.por || '—') + '<ul>' + (h.cambios || []).map(function (t) { return '<li>' + escHtml(t) + '</li>'; }).join('') + '</ul></div>';
+          }).join('') + '</div>'
+        : '';
 
       const cont = app().querySelector('#detalle');
       cont.innerHTML =
@@ -2301,6 +2333,8 @@
         (p.motivo_anulacion ? '<div style="margin-top:8px;"><b>Motivo de anulación</b> ' + escHtml(p.motivo_anulacion) + '</div>' : '') +
         hodosLinea +
         (p.comentario ? '<div style="margin-top:8px;"><b>Comentario</b> ' + escHtml(p.comentario) + '</div>' : '') +
+        historialHtml +
+        (puedeEditar ? '<button class="btn btn-ghost" id="btnEditar" style="margin-top:10px;">✏️ Modificar petición</button>' : '') +
         (puedeAnular ? '<button class="btn btn-danger" id="btnAnular" style="margin-top:10px;">Anular petición</button>' : '') +
         '<hr style="border-color:var(--ink-800);margin:12px 0;">' +
         filasLineas;
@@ -2315,6 +2349,9 @@
             .catch(function (e) { btnCambiarFecha.disabled = false; kAlerta(e.message); });
         };
         cont.querySelector('#inNuevaFecha').onkeydown = function (e) { if (e.key === 'Enter') btnCambiarFecha.click(); };
+      }
+      if (puedeEditar) {
+        cont.querySelector('#btnEditar').onclick = function () { renderEditarPeticion(r, id, origen); };
       }
       if (puedeAnular) {
         cont.querySelector('#btnAnular').onclick = function () {
@@ -2332,6 +2369,229 @@
     }).catch(function (e) {
       app().querySelector('#detalle').innerHTML = '<p class="error">' + escHtml(e.message) + '</p>';
     });
+  }
+</script>
+<script>
+  /** Modificar una petición abierta (Logística / Coordinación / Master). Esta es
+   *  solo la pantalla: el servidor (Edicion.js) vuelve a validar todo. */
+  function renderEditarPeticion(r, id, origen) {
+    const p = r.peticion;
+    app().innerHTML = '';
+    pintarCabecera_();
+    const esRefill = p.tipo === 'refill';
+    const puedeAnadir = p.tipo === 'pedido_cliente' || p.tipo === 'cesion';
+    const unidad = esRefill ? 'palets' : 'ud';
+    const hayPreparadas = r.lineas.some(function (l) { return l.estado_preparacion === 'preparado'; });
+    const sinPreparar = r.lineas.filter(function (l) { return l.estado_preparacion !== 'preparado'; });
+
+    var camposCab = '';
+    if (p.tipo === 'pedido_cliente') {
+      camposCab =
+        '<label class="edit-etiqueta" for="edNumPedido">Nº de pedido</label>' +
+        '<input class="entrada" id="edNumPedido" value="' + escHtml(p.num_pedido || '') + '">' +
+        '<label style="display:flex;align-items:center;gap:8px;margin-bottom:6px;' + (hayPreparadas ? 'opacity:.6;' : '') + '">' +
+          '<input type="checkbox" id="edTransporte"' + (p.transporte ? ' checked' : '') + (hayPreparadas ? ' disabled' : '') + '> Con transporte (se consolida en plataforma)</label>' +
+        (hayPreparadas ? '<div class="edit-linea-meta" style="margin-bottom:6px;">El transporte no se puede cambiar: ya hay líneas preparadas.</div>' : '');
+    } else if (p.tipo === 'cesion') {
+      camposCab =
+        '<label class="edit-etiqueta" for="edNumCesion">Nº de cesión</label>' +
+        '<input class="entrada" id="edNumCesion" value="' + escHtml(p.num_cesion || '') + '">' +
+        '<label class="edit-etiqueta" for="edDestino">Tienda destino</label>' +
+        '<select class="entrada" id="edDestino">' +
+          Object.keys(NOMBRE_TIENDA_DESTINO_).filter(function (cod) { return cod !== TIENDA; })
+            .map(function (cod) { return '<option value="' + cod + '"' + (cod === p.tienda_destino ? ' selected' : '') + '>' + escHtml(NOMBRE_TIENDA_DESTINO_[cod]) + '</option>'; }).join('') +
+        '</select>';
+    } else {
+      camposCab =
+        '<label class="edit-etiqueta" for="edMotivo">Motivo del refill</label>' +
+        '<input class="entrada" id="edMotivo" value="' + escHtml(p.motivo || '') + '">';
+    }
+
+    // Aviso si un operario tiene el pedido abierto: los cambios de líneas se rechazan.
+    var avisoOperario = '';
+    if (p.en_curso_por && p.en_curso_desde) {
+      const min = Math.round((Date.now() - new Date(p.en_curso_desde).getTime()) / 60000);
+      if (min < 10) {
+        avisoOperario = '<div class="edit-aviso">⚠ ' + escHtml(p.en_curso_por) + ' tiene este pedido abierto en almacén (hace ' + Math.max(1, min) + ' min). ' +
+          'Los datos de arriba se pueden cambiar, pero las cantidades y los artículos no hasta que lo cierre.</div>';
+      }
+    }
+
+    const c = el(
+      '<div class="wrap"><div class="card">' +
+        '<button class="btn btn-ghost" id="btnVolverEd">‹ Volver sin guardar</button>' +
+        '<h2 style="margin-top:12px;">Modificar · ' + escHtml(ETIQUETA_TIPO[p.tipo]) + '</h2>' +
+        avisoOperario +
+        '<div class="edit-seccion">Datos</div>' +
+        camposCab +
+        '<label class="edit-etiqueta" for="edComentario">Comentario</label>' +
+        '<input class="entrada" id="edComentario" maxlength="500" value="' + escHtml(p.comentario || '') + '" placeholder="Comentario (opcional)">' +
+        '<div class="edit-seccion">Artículos</div>' +
+        '<div id="edLineas"></div>' +
+        (puedeAnadir
+          ? '<div class="edit-seccion">Añadir artículo</div>' +
+            '<input class="entrada" id="edBuscar" placeholder="Código LM o nombre del artículo" autocomplete="off">' +
+            '<div id="edResultados"></div>'
+          : '<div class="edit-linea-meta" style="margin-top:8px;">En un refill los palets se eligen al pedirlo: aquí puedes quitar líneas, no añadirlas.</div>') +
+        '<div class="error" id="errEd" style="display:none;white-space:pre-line;"></div>' +
+        '<button class="btn btn-primary" id="btnGuardarEd">Guardar cambios</button>' +
+      '</div></div>'
+    );
+    app().appendChild(c);
+    c.querySelector('#btnVolverEd').onclick = function () { renderDetalle(id, origen); };
+
+    const cant = {};      // lineaId -> cantidad tecleada
+    const quitadas = {};  // lineaId -> true
+    const nuevas = [];    // { codigoLm, designacion, cantidad }
+    r.lineas.forEach(function (l) { cant[l.id] = Number(l.cantidad); });
+
+    function lineasQueQuedan() {
+      return sinPreparar.filter(function (l) { return !quitadas[l.id]; }).length + nuevas.length;
+    }
+
+    function pintarLineas() {
+      const cont = c.querySelector('#edLineas');
+      cont.innerHTML = '';
+      r.lineas.forEach(function (l) {
+        const nombre = escHtml(l.codigo_lm) + ' · ' + escHtml(l.designacion || '—');
+        if (l.estado_preparacion === 'preparado') {
+          cont.appendChild(el('<div class="edit-linea bloqueada"><div class="edit-linea-nombre">' + nombre + ' · ' + escHtml(l.cantidad) + ' ' + unidad + '</div>' +
+            '<div class="edit-linea-meta">✓ Ya preparada: no se puede modificar.</div></div>'));
+          return;
+        }
+        const quitada = !!quitadas[l.id];
+        const palets = esRefill && !!l.sscc;
+        const fila = el(
+          '<div class="edit-linea' + (quitada ? ' quitada' : '') + '"><div class="edit-linea-nombre">' + nombre + '</div>' +
+            '<div class="edit-linea-controles">' +
+              '<input class="entrada" type="number" min="1" step="1" inputmode="numeric" value="' + escHtml(cant[l.id]) + '"' + ((quitada || palets) ? ' disabled' : '') + '>' +
+              '<span class="edit-linea-meta">' + unidad + (Number(l.cantidad) !== Number(cant[l.id]) ? ' · antes ' + escHtml(l.cantidad) : '') + '</span>' +
+              '<button class="btn ' + (quitada ? 'btn-ghost' : 'btn-danger') + '" type="button">' + (quitada ? 'Deshacer' : 'Quitar') + '</button>' +
+            '</div>' +
+            (palets ? '<div class="edit-linea-meta" style="margin-top:6px;">Palets elegidos al pedirlo: la cantidad no se puede cambiar. Puedes quitar la línea.</div>' : '') +
+          '</div>');
+        const metaCant = fila.querySelector('.edit-linea-controles .edit-linea-meta');
+        fila.querySelector('input').oninput = function () {
+          cant[l.id] = this.value === '' ? '' : Number(this.value);
+          metaCant.textContent = unidad + (Number(l.cantidad) !== Number(cant[l.id]) ? ' · antes ' + l.cantidad : '');
+        };
+        fila.querySelector('button').onclick = function () {
+          if (!quitada && lineasQueQuedan() <= 1) {
+            kAlerta('La petición tiene que conservar al menos una línea sin preparar. Si ya no hace falta, anúlala.');
+            return;
+          }
+          if (quitada) delete quitadas[l.id]; else quitadas[l.id] = true;
+          pintarLineas();
+        };
+        cont.appendChild(fila);
+      });
+      nuevas.forEach(function (n, idx) {
+        const fila = el(
+          '<div class="edit-linea nueva"><div class="edit-linea-nombre">' + escHtml(n.codigoLm) + ' · ' + escHtml(n.designacion || '—') + '</div>' +
+          '<div class="edit-linea-controles"><span class="edit-linea-meta">Nueva · ' + n.cantidad + ' ' + unidad + '</span>' +
+          '<button class="btn btn-danger" type="button">Quitar</button></div></div>');
+        fila.querySelector('button').onclick = function () { nuevas.splice(idx, 1); pintarLineas(); };
+        cont.appendChild(fila);
+      });
+    }
+    pintarLineas();
+
+    if (puedeAnadir) {
+      const inputBuscar = c.querySelector('#edBuscar');
+      const resultados = c.querySelector('#edResultados');
+      var timerBuscar = null, seqBusqueda = 0;
+      inputBuscar.oninput = function () {
+        clearTimeout(timerBuscar);
+        const texto = inputBuscar.value;
+        timerBuscar = setTimeout(function () {
+          if (texto.trim().length < 2) { resultados.innerHTML = ''; return; }
+          const mi = ++seqBusqueda;
+          gas('buscarArticulos', texto).then(function (filas) {
+            if (mi !== seqBusqueda) return;
+            resultados.innerHTML = '';
+            filas.forEach(function (a) {
+              const fila = el('<div class="articulo">' + (a.foto_url ? '<img src="' + escHtml(a.foto_url) + '">' : '') +
+                '<div><div><b>' + escHtml(a.codigo_lm) + '</b> · ' + escHtml(a.designacion || '') + '</div>' +
+                '<div style="color:var(--text-500);font-size:12px;">' + escHtml(a.seccion || '') + '</div></div></div>');
+              fila.onclick = function () { anadirArticulo(a); };
+              resultados.appendChild(fila);
+            });
+          });
+        }, 300);
+      };
+
+      /** Pedido cliente: no deja añadir más de lo que queda sin comprometer
+       *  (contando lo ya añadido aquí y lo que sube en las líneas actuales);
+       *  cesión solo avisa. El servidor lo comprueba otra vez al guardar. */
+      function anadirArticulo(a) {
+        clearTimeout(timerBuscar); seqBusqueda++;
+        inputBuscar.value = ''; resultados.innerHTML = '';
+        gas('verificarAntesDeAnadir', LDAP, a.codigo_lm, 1).then(function (chk) {
+          const bloquea = p.tipo === 'pedido_cliente';
+          const yaNuevas = nuevas.filter(function (n) { return n.codigoLm === a.codigo_lm; })
+            .reduce(function (t, n) { return t + n.cantidad; }, 0);
+          const sube = r.lineas.filter(function (l) { return l.codigo_lm === a.codigo_lm && l.estado_preparacion !== 'preparado' && !quitadas[l.id]; })
+            .reduce(function (t, l) { return t + Math.max(0, Number(cant[l.id]) - Number(l.cantidad)); }, 0);
+          const restante = chk.disponible - yaNuevas - sube;
+          if (bloquea && restante <= 0) {
+            kAlerta('No queda stock sin comprometer de ' + escHtml(a.codigo_lm) + ' (hay ' + chk.fisico + ' en almacén y ' + chk.comprometido + ' ya comprometidas).');
+            return;
+          }
+          kPedirTexto('¿Cuántas ud de ' + escHtml(a.codigo_lm) + '? (disponibles: ' + Math.max(0, restante) + ')', { numerico: true }).then(function (texto) {
+            if (texto === null) return;
+            const n = Number(texto);
+            if (!n || n <= 0 || Math.floor(n) !== n) { kAlerta('La cantidad debe ser un número entero mayor que 0.'); return; }
+            if (bloquea && n > restante) { kAlerta('Solo quedan ' + restante + ' sin comprometer de ' + escHtml(a.codigo_lm) + '.'); return; }
+            function poner() { nuevas.push({ codigoLm: a.codigo_lm, designacion: a.designacion, cantidad: n }); pintarLineas(); }
+            if (!bloquea && n > restante) {
+              kAlerta('Solo hay ' + Math.max(0, restante) + ' ud disponibles de ' + escHtml(a.codigo_lm) + ' en almacén — se añadirá de todas formas.').then(poner);
+            } else {
+              poner();
+            }
+          });
+        }).catch(function (e) { kAlerta(e.message); });
+      }
+    }
+
+    const btnGuardar = c.querySelector('#btnGuardarEd');
+    const err = c.querySelector('#errEd');
+    function fallo(texto) { err.textContent = texto; err.style.display = 'block'; }
+    btnGuardar.onclick = function () {
+      err.style.display = 'none';
+      const cambios = { cabecera: {}, lineas: [], quitar: [], anadir: [] };
+      const cab = cambios.cabecera;
+      if (p.tipo === 'pedido_cliente') {
+        cab.numPedido = c.querySelector('#edNumPedido').value.trim();
+        cab.transporte = c.querySelector('#edTransporte').checked;
+        if (!cab.numPedido) { fallo('Falta el número de pedido.'); return; }
+      } else if (p.tipo === 'cesion') {
+        cab.numCesion = c.querySelector('#edNumCesion').value.trim();
+        cab.tiendaDestino = c.querySelector('#edDestino').value;
+        if (!cab.numCesion) { fallo('Falta el número de cesión.'); return; }
+      } else {
+        cab.motivo = c.querySelector('#edMotivo').value.trim();
+        if (!cab.motivo) { fallo('Falta el motivo del refill.'); return; }
+      }
+      cab.comentario = c.querySelector('#edComentario').value.trim();
+      for (var i = 0; i < r.lineas.length; i++) {
+        const l = r.lineas[i];
+        if (l.estado_preparacion === 'preparado') continue;
+        if (quitadas[l.id]) { cambios.quitar.push(l.id); continue; }
+        if (esRefill && l.sscc) continue;
+        const n = Number(cant[l.id]);
+        if (!n || n <= 0 || Math.floor(n) !== n) { fallo('La cantidad de ' + l.codigo_lm + ' debe ser un número entero mayor que 0.'); return; }
+        if (n !== Number(l.cantidad)) cambios.lineas.push({ id: l.id, cantidad: n });
+      }
+      nuevas.forEach(function (n) { cambios.anadir.push({ codigoLm: n.codigoLm, cantidad: n.cantidad }); });
+
+      btnGuardar.disabled = true; btnGuardar.textContent = 'Guardando…';
+      gas('modificarPeticion', LDAP, id, cambios).then(function (res) {
+        kAlerta('<b>Cambios guardados</b><br>' + (res.cambios || []).map(escHtml).join('<br>')).then(function () { renderDetalle(id, origen); });
+      }).catch(function (e) {
+        btnGuardar.disabled = false; btnGuardar.textContent = 'Guardar cambios';
+        fallo(e.message);
+      });
+    };
   }
 </script>
 <script>

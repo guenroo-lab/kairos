@@ -1,12 +1,23 @@
 function listarCola(filtroTienda, filtroTipo) {
-  var q = 'estado=in.(pendiente,en_preparacion)' +
-    '&visible_desde=lte.' + _hoyMadridIso_() +
-    '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,motivo,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap,fecha_entrega' +
-    '&order=creada_en.asc&limit=200';
-  if (filtroTienda) q += '&tienda_origen=eq.' + encodeURIComponent(filtroTienda);
-  if (filtroTipo) q += '&tipo=eq.' + encodeURIComponent(filtroTipo);
+  const camposBase = 'id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,motivo,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap,fecha_entrega';
+  function consulta(campos) {
+    var q = 'estado=in.(pendiente,en_preparacion)' +
+      '&visible_desde=lte.' + _hoyMadridIso_() +
+      '&select=' + campos +
+      '&order=creada_en.asc&limit=200';
+    if (filtroTienda) q += '&tienda_origen=eq.' + encodeURIComponent(filtroTienda);
+    if (filtroTipo) q += '&tipo=eq.' + encodeURIComponent(filtroTipo);
+    return q;
+  }
 
-  const peticiones = supaSelect_('peticiones', q);
+  // modificada_en (migración 035) marca los pedidos que la tienda ha cambiado.
+  // Si la columna aún no existe, la cola sigue funcionando sin la marca.
+  var peticiones;
+  try {
+    peticiones = supaSelect_('peticiones', consulta(camposBase + ',modificada_en'));
+  } catch (err) {
+    peticiones = supaSelect_('peticiones', consulta(camposBase));
+  }
   if (!peticiones.length) return _json_([]);
 
   const lineas = supaSelectIn_('lineas', 'peticion_id', peticiones.map(function (p) { return p.id; }),

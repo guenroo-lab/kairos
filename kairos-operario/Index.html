@@ -253,6 +253,64 @@
     .btn-flujo.refill { background:linear-gradient(155deg,#daf5dd,#92dc9c); }
     .btn-flujo.revision { background:linear-gradient(155deg,#fff0cf,#ffd37a); }
     .contador-tienda { font-size:11px; font-weight:800; text-transform:none; letter-spacing:normal; background:rgba(11,18,32,.18); padding:3px 10px; border-radius:20px; color:#0b1220; }
+
+    /* ——— Operario escrito a mano (pantalla de elegir operario) ——— */
+    .operario-libre { margin:0 0 14px; padding:12px; border:1px dashed var(--ink-600); border-radius:var(--radius-card); background:var(--ink-900); }
+    .operario-libre label { display:block; font-size:12px; font-weight:700; color:var(--text-500); margin-bottom:6px; }
+    .operario-libre .fila-libre { display:flex; gap:8px; }
+    .operario-libre input { flex:1; min-width:0; margin:0; }
+    .operario-libre button { flex:none; }
+    .operario-libre .nota-invitados { margin-top:8px; font-size:12px; color:var(--text-500); }
+    .btn-operario.invitado { border-style:dashed; }
+    .btn-operario .tag-invitado { display:block; margin-top:2px; font-size:10px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; opacity:.7; }
+
+    /* ——— Pedidos: pestañas "Pedidos" / "A ubicar" ——— */
+    .pedidos-tabs { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin:0 0 14px; }
+    .ptab { position:relative; display:flex; align-items:center; justify-content:center; gap:10px; min-height:64px; padding:8px 10px; border-radius:16px; border:2px solid var(--ink-700); background:var(--ink-900); color:var(--text-300); font-size:15px; font-weight:800; cursor:pointer; transition:transform .12s ease; }
+    .ptab:active { transform:scale(.97); }
+    .ptab.activa { background:var(--accent-dim); border-color:var(--accent); color:var(--accent-ink); }
+    [data-kmode="light"] .ptab.activa { color:var(--accent); }
+    .ptab .ptab-n { min-width:30px; height:30px; padding:0 9px; border-radius:15px; display:inline-flex; align-items:center; justify-content:center; font-size:15px; font-weight:900; background:var(--ink-800); color:var(--text-300); font-variant-numeric:tabular-nums; }
+    .ptab.activa .ptab-n { background:var(--accent); color:var(--accent-ink); }
+    .ptab.ubicar-ok .ptab-n { background:var(--ok); color:var(--ok-ink); }
+    .ptab.ubicar-alerta { border-color:#ff7a45; background:linear-gradient(145deg,#ff9a3c 0%,#e5322d 100%); color:#fff; box-shadow:0 12px 28px -12px rgba(229,50,45,.8), 0 1px 0 rgba(255,255,255,.3) inset; }
+    .ptab.ubicar-alerta .ptab-n { min-width:40px; height:40px; border-radius:20px; background:#fff; color:#d1241f; font-size:21px; animation:kpulso 1.6s ease-in-out infinite; }
+    .ptab.ubicar-alerta.activa { outline:3px solid rgba(255,138,61,.55); outline-offset:2px; }
+    @keyframes kpulso { 0%,100% { box-shadow:0 0 0 0 rgba(255,255,255,.7); } 50% { box-shadow:0 0 0 9px rgba(255,255,255,0); } }
+    @media (prefers-reduced-motion: reduce) { .ptab.ubicar-alerta .ptab-n { animation:none; } }
+
+    /* ——— A ubicar: cabecera grande + tarjetas por urgencia ——— */
+    .ubicar-hero { position:relative; overflow:hidden; border-radius:22px; padding:20px 18px; margin-bottom:14px; color:#fff;
+      background:radial-gradient(120% 140% at 100% 0%, rgba(255,214,102,.38) 0%, transparent 55%), linear-gradient(145deg,#ff8a3d 0%,#e5322d 55%,#a3151f 100%);
+      box-shadow:0 18px 40px -18px rgba(229,50,45,.85), 0 1px 0 rgba(255,255,255,.28) inset; }
+    .ubicar-hero.ok { background:radial-gradient(120% 140% at 100% 0%, rgba(255,255,255,.28) 0%, transparent 55%), linear-gradient(145deg,#36d27c 0%,#14935a 100%); box-shadow:0 18px 40px -18px rgba(20,147,90,.8), 0 1px 0 rgba(255,255,255,.28) inset; }
+    .ubicar-hero .hero-fila { position:relative; display:flex; align-items:center; gap:16px; }
+    .ubicar-hero .hero-n { font-size:72px; font-weight:900; line-height:.9; letter-spacing:-.04em; text-shadow:0 4px 0 rgba(0,0,0,.18); font-variant-numeric:tabular-nums; }
+    .ubicar-hero .hero-txt b { display:block; font-size:15px; font-weight:900; text-transform:uppercase; letter-spacing:.07em; line-height:1.25; }
+    .ubicar-hero .hero-txt span { display:block; margin-top:4px; font-size:13px; font-weight:600; opacity:.95; }
+    .ubicar-hero .hero-ico { position:absolute; right:-16px; bottom:-30px; width:140px; height:140px; opacity:.17; stroke:#fff; fill:none; stroke-width:1.6; stroke-linecap:round; stroke-linejoin:round; }
+    .ubicar-card { position:relative; display:flex; align-items:center; gap:14px; padding:14px 14px 14px 20px; margin-bottom:10px; border-radius:18px; cursor:pointer; overflow:hidden;
+      background:linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%); border:1px solid var(--ink-800); border-top:1px solid rgba(255,255,255,.07);
+      box-shadow:0 1px 0 rgba(255,255,255,.04) inset, 0 14px 30px -16px rgba(0,0,0,.6); transition:transform .12s ease; }
+    .ubicar-card:active { transform:scale(.985); }
+    .ubicar-card::before { content:""; position:absolute; left:0; top:0; bottom:0; width:7px; background:var(--urg); }
+    .ubicar-card.u-0 { --urg:linear-gradient(#ffc247,#ff9d2e); }
+    .ubicar-card.u-1 { --urg:linear-gradient(#ff9d2e,#f26a21); }
+    .ubicar-card.u-2 { --urg:linear-gradient(#ff5a4d,#d1241f); }
+    .ubicar-main { flex:1; min-width:0; }
+    .ubicar-etq { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:var(--text-500); }
+    .ubicar-num { font-size:25px; font-weight:900; letter-spacing:-.01em; line-height:1.1; color:var(--text-100); font-variant-numeric:tabular-nums; overflow-wrap:anywhere; }
+    .ubicar-meta { display:flex; flex-wrap:wrap; gap:6px; margin-top:8px; }
+    .ubicar-chip { display:inline-flex; align-items:center; gap:4px; font-size:11.5px; font-weight:700; padding:3px 9px; border-radius:var(--radius-chip); background:var(--ink-800); color:var(--text-300); }
+    .ubicar-chip.tiempo { background:var(--urg); color:#fff; }
+    .ubicar-chip.chip-marbella { background:var(--chip-marbella-bg); color:var(--chip-marbella-fg); }
+    .ubicar-chip.chip-mijas { background:var(--chip-mijas-bg); color:var(--chip-mijas-fg); }
+    .ubicar-go { flex:none; display:flex; align-items:center; gap:6px; padding:12px 15px; border-radius:14px; background:var(--accent); color:var(--accent-ink); font-size:14px; font-weight:900; box-shadow:0 8px 18px -8px color-mix(in srgb, var(--accent) 70%, transparent), 0 1px 0 rgba(255,255,255,.2) inset; }
+    .ubicar-go svg { width:16px; height:16px; stroke:currentColor; fill:none; stroke-width:2.4; stroke-linecap:round; stroke-linejoin:round; }
+    .chip-modificado { display:inline-block; vertical-align:middle; margin-left:4px; font-size:10.5px; font-weight:800; padding:2px 8px; border-radius:var(--radius-chip); background:var(--warn-bg); color:var(--warn-fg); border:1px solid var(--warn-line); white-space:nowrap; }
+    .aviso-modificado { margin:8px 0; padding:10px 12px; border-radius:var(--radius-btn); background:var(--warn-bg); color:var(--warn-fg); border:1px solid var(--warn-line); font-size:13px; line-height:1.4; }
+    .aviso-modificado b { display:block; margin-bottom:2px; }
+    .aviso-modificado ul { margin:4px 0 0 18px; padding:0; }
   </style>
 </head>
 <body>
@@ -502,47 +560,151 @@
       return '';
     }
 
+    // ——— Operario escrito a mano ———
+    // Quien no está en la lista fija escribe su nombre. Se recuerda en este
+    // dispositivo ("invitados") para no teclearlo cada vez; no toca la tabla de
+    // operarios. Solo letras, números, espacio, punto y guion: el nombre acaba
+    // en pantalla y en las columnas operario / en_curso_por de las líneas, y " + "
+    // es el separador de los dos nombres de una pareja.
+    var CLAVE_INVITADOS_ = 'kairos_operarios_invitados';
+    var MAX_INVITADOS_ = 6;
+
+    function claveNombre_(texto) {
+      return String(texto || '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+    }
+
+    /** Nombre tecleado a mano → forma limpia ("juan  perez" → "Juan Perez"), o '' si no vale. */
+    function normalizarNombreLibre_(texto) {
+      var t = String(texto || '').replace(/[^\p{L}\p{N} .-]/gu, ' ').replace(/\s+/g, ' ').trim();
+      if (t.length < 2) return '';
+      t = t.slice(0, 40).trim();
+      return t.toLowerCase().replace(/(^|[ .-])(\p{L})/gu, function (_, sep, letra) { return sep + letra.toUpperCase(); });
+    }
+
+    function leerInvitados_() {
+      try {
+        var a = JSON.parse(localStorage.getItem(CLAVE_INVITADOS_) || '[]');
+        return Array.isArray(a) ? a.map(function (n) { return normalizarNombreLibre_(n); }).filter(Boolean).slice(0, MAX_INVITADOS_) : [];
+      } catch (e) { return []; }
+    }
+
+    function guardarInvitados_(lista) {
+      try { localStorage.setItem(CLAVE_INVITADOS_, JSON.stringify(lista.slice(0, MAX_INVITADOS_))); } catch (e) {}
+    }
+
     function renderElegirOperarios() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
         '<h1>Kairos · Operario</h1><p class="meta">¿Quién va a preparar? (1 o 2)</p>' +
         '<div class="grid-operarios" id="gridOperarios">Cargando…</div>' +
+        '<div class="operario-libre">' +
+          '<label for="inOperarioLibre">¿No estás en la lista? Escribe tu nombre</label>' +
+          '<div class="fila-libre"><input type="text" id="inOperarioLibre" maxlength="40" placeholder="Nombre del operario" autocomplete="off">' +
+          '<button type="button" id="btnAnadirLibre">Añadir</button></div>' +
+          '<div class="nota-invitados" id="notaInvitados"></div>' +
+        '</div>' +
         '<button id="btnContinuarOperarios" style="display:none;width:100%;">Continuar</button>';
       sincronizarPickers_();
-      var seleccion = [];
-      google.script.run.withSuccessHandler(function (json) {
-        const operarios = JSON.parse(json);
-        const grid = document.getElementById('gridOperarios');
-        grid.innerHTML = operarios.map(function (o, i) {
-          return '<button class="btn-operario" data-i="' + i + '">' + o.nombre + '</button>';
-        }).join('');
-        const botones = grid.querySelectorAll('.btn-operario');
-        botones.forEach(function (b, i) {
-          b.onclick = function () {
-            const o = operarios[i];
-            const idx = seleccion.indexOf(o);
-            if (idx !== -1) {
-              seleccion.splice(idx, 1);
-              b.classList.remove('activo');
-            } else {
-              if (seleccion.length >= 2) { kAlerta('Máximo 2 personas por preparación.'); return; }
-              seleccion.push(o);
-              b.classList.add('activo');
-            }
-            document.getElementById('btnContinuarOperarios').style.display = seleccion.length ? 'block' : 'none';
-          };
+
+      var lista = [];       // { nombre, rol, invitado }: fijos primero, invitados después
+      var seleccion = [];   // elementos de `lista`
+      var invitados = leerInvitados_();
+      var cargado = false;
+
+      function construirLista_(fijos) {
+        var vistos = {};
+        lista = fijos.map(function (o) {
+          vistos[claveNombre_(o.nombre)] = true;
+          return { nombre: o.nombre, rol: o.rol, invitado: false };
         });
-        document.getElementById('btnContinuarOperarios').onclick = function () {
-          OPERARIO = seleccion.map(function (s) { return s.nombre; }).join(' + ');
-          ROL = seleccion.some(function (s) { return s.rol === 'jefe_equipo'; }) ? 'jefe_equipo' : 'operario';
-          VISTA = { nombre: 'elegirTienda', peticionId: null };
-          render();
+        // Un invitado que ya está en la lista fija (o repetido) sobra.
+        invitados = invitados.filter(function (n) {
+          var k = claveNombre_(n);
+          if (vistos[k]) return false;
+          vistos[k] = true;
+          return true;
+        });
+        invitados.forEach(function (n) { lista.push({ nombre: n, rol: 'operario', invitado: true }); });
+      }
+
+      function pintarGrid_() {
+        var grid = document.getElementById('gridOperarios');
+        if (!grid) return;
+        grid.innerHTML = lista.length ? lista.map(function (o, i) {
+          return '<button class="btn-operario' + (o.invitado ? ' invitado' : '') + (seleccion.indexOf(o) !== -1 ? ' activo' : '') + '" data-i="' + i + '">' +
+            escHtmlSie_(o.nombre) + (o.invitado ? '<span class="tag-invitado">invitado</span>' : '') + '</button>';
+        }).join('') : '<p class="meta">Sin operarios en la lista: escribe tu nombre abajo.</p>';
+        grid.querySelectorAll('.btn-operario').forEach(function (b) {
+          b.onclick = function () { alternar_(lista[Number(b.getAttribute('data-i'))]); };
+        });
+        document.getElementById('btnContinuarOperarios').style.display = seleccion.length ? 'block' : 'none';
+        var nota = document.getElementById('notaInvitados');
+        nota.innerHTML = invitados.length
+          ? 'Invitados recordados en este dispositivo: ' + invitados.length + ' · <a href="#" id="olvidarInvitados">olvidarlos</a>'
+          : '';
+        var olvidar = document.getElementById('olvidarInvitados');
+        if (olvidar) olvidar.onclick = function (e) {
+          e.preventDefault();
+          invitados = [];
+          guardarInvitados_([]);
+          lista = lista.filter(function (o) { return !o.invitado; });
+          seleccion = seleccion.filter(function (o) { return !o.invitado; });
+          pintarGrid_();
         };
+      }
+
+      function alternar_(o) {
+        var idx = seleccion.indexOf(o);
+        if (idx !== -1) {
+          seleccion.splice(idx, 1);
+        } else {
+          if (seleccion.length >= 2) { kAlerta('Máximo 2 personas por preparación.'); return; }
+          seleccion.push(o);
+        }
+        pintarGrid_();
+      }
+
+      function anadirLibre_() {
+        var campo = document.getElementById('inOperarioLibre');
+        var nombre = normalizarNombreLibre_(campo.value);
+        if (!nombre) { kAlerta('Escribe tu nombre (mínimo 2 letras, sin símbolos).'); return; }
+        if (!cargado) { kAlerta('Espera un segundo a que cargue la lista y vuelve a pulsar Añadir.'); return; }
+        campo.value = '';
+        var k = claveNombre_(nombre);
+        var o = lista.filter(function (x) { return claveNombre_(x.nombre) === k; })[0];
+        if (!o) { // nombre nuevo: queda en la lista y se recuerda en este dispositivo
+          o = { nombre: nombre, rol: 'operario', invitado: true };
+          lista.push(o);
+          invitados = [nombre].concat(invitados).slice(0, MAX_INVITADOS_);
+          guardarInvitados_(invitados);
+        }
+        if (seleccion.indexOf(o) === -1) alternar_(o); else pintarGrid_();
+      }
+
+      document.getElementById('btnAnadirLibre').onclick = anadirLibre_;
+      document.getElementById('inOperarioLibre').onkeydown = function (e) { if (e.key === 'Enter') anadirLibre_(); };
+      document.getElementById('btnContinuarOperarios').onclick = function () {
+        OPERARIO = seleccion.map(function (s) { return s.nombre; }).join(' + ');
+        ROL = seleccion.some(function (s) { return s.rol === 'jefe_equipo'; }) ? 'jefe_equipo' : 'operario';
+        VISTA = { nombre: 'elegirTienda', peticionId: null };
+        render();
+      };
+
+      google.script.run.withSuccessHandler(function (json) {
+        construirLista_(JSON.parse(json));
+        cargado = true;
+        pintarGrid_();
+      }).withFailureHandler(function () {
+        // Sin la lista fija se puede seguir igualmente con el nombre escrito a mano.
+        construirLista_([]);
+        cargado = true;
+        pintarGrid_();
+        kAlerta('No se ha podido cargar la lista de operarios. Escribe tu nombre en el campo de abajo.');
       }).listarOperarios();
     }
 
     function renderElegirTienda() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
-        '<h1>Kairos · Operario</h1><p class="meta">' + OPERARIO + ' — ¿qué tienda?</p>' +
+        '<h1>Kairos · Operario</h1><p class="meta">' + escHtmlSie_(OPERARIO) + ' — ¿qué tienda?</p>' +
         '<div class="grid-tiendas" id="gridTiendas">Cargando…</div>';
       sincronizarPickers_();
       google.script.run.withSuccessHandler(function (json) {
@@ -569,6 +731,7 @@
     function entrarFlujo_(flujo) {
       if (flujo === 'revision') { VISTA = { nombre: 'revision', peticionId: null }; render(); return; }
       FLUJO_ACTUAL_ = flujo;
+      PEDIDOS_PESTANA_ = 'cola';
       try { localStorage.setItem('kairos_flujo_actual', flujo); } catch (e) {}
       VISTA = { nombre: 'cola', peticionId: null };
       render();
@@ -581,8 +744,7 @@
       }
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
         '<h1>Kairos · Operario</h1>' +
-        '<p class="meta">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) + ' — ¿qué vas a hacer?</p>' +
-        '<div id="avisoUbicarMenu"></div>' +
+        '<p class="meta">' + escHtmlSie_(OPERARIO) + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) + ' — ¿qué vas a hacer?</p>' +
         '<div class="grid-flujos">' +
           boton('pedidos', '📦', 'Pedidos', 'flujoPedidos') +
           boton('refill', '🔄', 'Refill', 'flujoRefill') +
@@ -595,7 +757,6 @@
         '</div></div>';
       sincronizarPickers_();
 
-      pintarAvisoUbicar_('avisoUbicarMenu', TIENDA_ACTIVA);
       document.getElementById('flujoPedidos').onclick = function () { entrarFlujo_('pedidos'); };
       document.getElementById('flujoRefill').onclick = function () { entrarFlujo_('refill'); };
       document.getElementById('flujoRevision').onclick = function () { entrarFlujo_('revision'); };
@@ -632,7 +793,7 @@
         renderTabsBar_() +
         '<h1>' + (FLUJO_ACTUAL_ === 'refill' ? '🔄 Refill' : '📦 Pedidos') + '</h1>' +
         '<div id="operarioBar">' +
-          '<div class="ob-info">' + OPERARIO + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) +
+          '<div class="ob-info">' + escHtmlSie_(OPERARIO) + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) +
             ' <span class="badge-modo ' + (esTrabajoEnEquipo_() ? 'equipo' : 'solo') + '">' + (esTrabajoEnEquipo_() ? '👥 En equipo' : '👤 En solitario') + '</span></div>' +
           '<div class="ob-acciones">' +
             '<button class="btn-ob btn-ob-tienda" id="verMenu" type="button">🏠 Menú</button>' +
@@ -641,8 +802,9 @@
             '<button class="btn-ob btn-ob-operario" id="cambiarOperario" type="button">👤 Cambiar operario</button>' +
           '</div>' +
         '</div>' +
+        (FLUJO_ACTUAL_ === 'refill' ? '' : '<div class="pedidos-tabs" id="pedidosTabs"></div>') +
+        '<div id="vistaCola">' +
         '<div id="avisoOtroModo"></div>' +
-        '<div id="avisoUbicar"></div>' +
         '<div class="filtros">' +
         (FLUJO_ACTUAL_ === 'refill' ? '' :
           '<select id="filtroTipo"><option value="">Pedido cliente y cesión</option><option value="pedido_cliente">Pedido cliente</option><option value="cesion">Cesión</option></select>') +
@@ -650,8 +812,12 @@
         (FLUJO_ACTUAL_ === 'refill' ? '' :
           '<select id="filtroTransporte"><option value="">Pedido cliente: con/sin transporte</option><option value="con">Con transporte</option><option value="sin">Sin transporte</option></select>') +
         '</div>' +
-        '<div id="listaCola">Cargando…</div>';
+        '<div id="listaCola">Cargando…</div>' +
+        '</div>' +
+        '<div id="vistaUbicar" style="display:none;"></div>';
       sincronizarPickers_();
+      if (FLUJO_ACTUAL_ === 'refill') PEDIDOS_PESTANA_ = 'cola';
+      COLA_CARGADA_ = false;
 
       document.getElementById('cambiarOperario').onclick = function (e) {
         e.preventDefault();
@@ -680,7 +846,10 @@
       if (selTransporte) { selTransporte.value = FILTROS_COLA_.transporte; selTransporte.onchange = cambioFiltroCola_; }
       document.getElementById('filtroSeccion').onchange = cambioFiltroCola_;
       cargarCola();
-      if (FLUJO_ACTUAL_ !== 'refill') pintarAvisoUbicar_('avisoUbicar', TIENDA_ACTIVA);
+      if (FLUJO_ACTUAL_ !== 'refill') {
+        pintarPestanasPedidos_();
+        cargarPendientesUbicar_();
+      }
     }
 
     function tiposDelFlujo_() { return FLUJO_ACTUAL_ === 'refill' ? ['refill'] : ['pedido_cliente', 'cesion']; }
@@ -727,6 +896,8 @@
         if (selSeccion.selectedIndex === -1) selSeccion.selectedIndex = 0;
         pintarAvisoOtroModo_();
         pintarCola_();
+        COLA_CARGADA_ = true;
+        pintarPestanasPedidos_();
       }).listarCola(TIENDA_ACTIVA, null);
     }
 
@@ -780,6 +951,7 @@
 
       function filaHtml(p) {
         var etiquetaTipo = p.tipo === 'pedido_cliente' ? ('Pedido cliente ' + escHtmlSie_(p.num_pedido || '')) : (p.tipo === 'cesion' ? 'Cesión ' + escHtmlSie_(p.num_cesion || '') + ' → ' + escHtmlSie_(p.tiendaDestinoNombre) : ('Refill' + (p.motivo ? ': ' + escHtmlSie_(p.motivo) : '') + (p.fecha_entrega ? ' <span class="chip">📅 Entrega ' + fechaCortaEntrega_(p.fecha_entrega) + '</span>' : '')));
+        if (p.modificada_en) etiquetaTipo += ' <span class="chip-modificado">✏️ Modificado</span>';
         if (p.tipo !== 'refill') etiquetaTipo += p.cola_individual ? ' <span class="chip-modo individual">👤 Individual</span>' : ' <span class="chip-modo equipo">👥 Equipo</span>';
         const fechaObj = new Date(p.creada_en);
         const fechaTexto = fechaObj.toLocaleDateString('es-ES', { day: '2-digit', month: '2-digit' }) + ' ' + fechaObj.toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
@@ -854,6 +1026,13 @@
         html += '<p class="meta" style="color:var(--warn-fg);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--radius-btn);padding:8px 10px;margin:8px 0;">⚠ ' +
           escHtmlSie_(ultimoDetalle.otroEnCurso.operario) + ' también está en este pedido (' + tiempoDesde_(ultimoDetalle.otroEnCurso.desde) + ')</p>';
       }
+      const histCambios = Array.isArray(p.historial_cambios) ? p.historial_cambios : [];
+      if (histCambios.length) {
+        const ult = histCambios[histCambios.length - 1];
+        html += '<div class="aviso-modificado"><b>✏️ Pedido modificado por la tienda (' + tiempoDesde_(ult.en) + ')</b>' +
+          '<ul>' + (ult.cambios || []).map(function (t) { return '<li>' + escHtmlSie_(t) + '</li>'; }).join('') + '</ul>' +
+          '<div style="margin-top:4px;">Revisa las cantidades antes de preparar.</div></div>';
+      }
       html += ultimoDetalle.lineas.map(function (l) { return renderLineaHtml_(p, l); }).join('');
 
       if (p.tipo === 'cesion' || p.tipo === 'refill' || (p.tipo === 'pedido_cliente' && !p.transporte)) {
@@ -863,7 +1042,7 @@
       if (p.estado === 'a_ubicar') {
         html += '<h3>A ubicar</h3><input type="text" id="ubicacion" placeholder="Ubicación de consolidación" onkeydown="if(event.key===\'Enter\')guardarUbicacion(\'' + p.id + '\')"> <button onclick="guardarUbicacion(\'' + p.id + '\')">Guardar</button> ' +
           '<button class="secundario" onclick="posponerUbicacion()">Posponer ubicación</button>' +
-          '<p class="meta">Si no puedes ubicarlo ahora, pospónlo: el pedido queda en "Pendientes de ubicar" con aviso hasta que le des ubicación.</p>';
+          '<p class="meta">Si no puedes ubicarlo ahora, pospónlo: el pedido queda en la pestaña "A ubicar" con aviso hasta que le des ubicación.</p>';
       } else if (p.estado === 'cerrada') {
         html += '<p><strong>Petición completada.</strong></p>';
       }
@@ -1318,38 +1497,131 @@
     function guardarUbicacion(peticionId) {
       const ubicacion = document.getElementById('ubicacion').value;
       google.script.run
-        .withSuccessHandler(function () { renderDetalle(); })
+        .withSuccessHandler(function () {
+          if (PENDIENTES_UBICAR_) PENDIENTES_UBICAR_ = PENDIENTES_UBICAR_.filter(function (x) { return x.id !== peticionId; });
+          renderDetalle();
+        })
         .withFailureHandler(function (err) { kAlerta(err.message); })
         .guardarUbicacionConsolidacion(peticionId, ubicacion);
     }
 
     // Posponer la ubicación de consolidación: no se guarda nada, el pedido sigue
-    // "a_ubicar" y aparece en el aviso "Pendientes de ubicar" (menú, cola y
-    // control de pedidos) hasta que alguien le dé ubicación.
+    // "a_ubicar" y aparece en la pestaña "A ubicar" de Pedidos (y en el control
+    // de pedidos del jefe) hasta que alguien le dé ubicación.
     function posponerUbicacion() {
       VISTA = { nombre: MODO_JEFE ? 'panel' : 'cola', peticionId: null };
+      if (!MODO_JEFE) PEDIDOS_PESTANA_ = 'ubicar';
       render();
-      kAlerta('Queda pendiente de ubicar. Lo verás en el aviso "Pendientes de ubicar" hasta que le des ubicación.');
+      kAlerta('Queda pendiente de ubicar. Lo verás en la pestaña "A ubicar" hasta que le des ubicación.');
     }
 
-    /** Aviso de pedidos ya preparados que esperan ubicación de consolidación.
-     *  Pinta en el contenedor `idContenedor` (se vacía si no hay ninguno). */
-    function pintarAvisoUbicar_(idContenedor, tienda) {
+    // ——— Pedidos: pestaña "A ubicar" ———
+    // Pedidos ya preparados (pedido cliente con transporte) que esperan ubicación
+    // de consolidación. Viven en una pestaña propia dentro de Pedidos, con el
+    // número bien visible en la pestaña para que no se queden olvidados. Antes
+    // eran un aviso arriba del todo (menú de flujos y cola).
+    var PEDIDOS_PESTANA_ = 'cola';        // 'cola' | 'ubicar'
+    var PENDIENTES_UBICAR_ = null;        // null = aún sin cargar (o la carga falló)
+    var PENDIENTES_UBICAR_TIENDA_ = '';   // tienda a la que corresponde la lista
+    var PENDIENTES_UBICAR_FALLO_ = false;
+    var COLA_CARGADA_ = false;            // la cola de Pedidos ya llegó (para el número de su pestaña)
+
+    function pedidosVisiblesParaMi_() {
+      const esEquipo = esTrabajoEnEquipo_();
+      return PETICIONES_CACHE_.filter(function (p) {
+        return p.tipo !== 'refill' && (!!p.cola_individual) === !esEquipo;
+      }).length;
+    }
+
+    function duracionTexto_(min) {
+      if (min < 1) return 'menos de 1 min';
+      if (min < 60) return min + ' min';
+      const h = Math.floor(min / 60), m = min % 60;
+      return h + ' h' + (m ? ' ' + m + ' min' : '');
+    }
+
+    function pintarPestanasPedidos_() {
+      const cont = document.getElementById('pedidosTabs');
+      if (!cont) return;
+      const nCola = COLA_CARGADA_ ? pedidosVisiblesParaMi_() : '…';
+      const nUbicar = PENDIENTES_UBICAR_ === null ? (PENDIENTES_UBICAR_FALLO_ ? '!' : '…') : PENDIENTES_UBICAR_.length;
+      const claseUbicar = typeof nUbicar === 'number' ? (nUbicar > 0 ? ' ubicar-alerta' : ' ubicar-ok') : '';
+      cont.innerHTML =
+        '<button type="button" class="ptab' + (PEDIDOS_PESTANA_ === 'cola' ? ' activa' : '') + '" id="ptabCola">Pedidos <span class="ptab-n">' + nCola + '</span></button>' +
+        '<button type="button" class="ptab' + claseUbicar + (PEDIDOS_PESTANA_ === 'ubicar' ? ' activa' : '') + '" id="ptabUbicar">A ubicar <span class="ptab-n">' + nUbicar + '</span></button>';
+      document.getElementById('ptabCola').onclick = function () { cambiarPestanaPedidos_('cola'); };
+      document.getElementById('ptabUbicar').onclick = function () { cambiarPestanaPedidos_('ubicar'); };
+      const vistaCola = document.getElementById('vistaCola');
+      const vistaUbicar = document.getElementById('vistaUbicar');
+      if (vistaCola) vistaCola.style.display = PEDIDOS_PESTANA_ === 'cola' ? '' : 'none';
+      if (vistaUbicar) vistaUbicar.style.display = PEDIDOS_PESTANA_ === 'ubicar' ? '' : 'none';
+      if (PEDIDOS_PESTANA_ === 'ubicar') pintarUbicar_();
+    }
+
+    function cambiarPestanaPedidos_(cual) {
+      PEDIDOS_PESTANA_ = cual;
+      pintarPestanasPedidos_();
+    }
+
+    function cargarPendientesUbicar_() {
+      const tienda = TIENDA_ACTIVA;
+      // La lista es de una tienda: al cambiar de tienda no se enseña la anterior.
+      if (PENDIENTES_UBICAR_TIENDA_ !== tienda) { PENDIENTES_UBICAR_ = null; PENDIENTES_UBICAR_TIENDA_ = tienda; }
+      PENDIENTES_UBICAR_FALLO_ = false;
       google.script.run.withSuccessHandler(function (json) {
-        const cont = document.getElementById(idContenedor);
-        if (!cont) return;
-        const lista = JSON.parse(json);
-        if (!lista.length) { cont.innerHTML = ''; return; }
-        cont.innerHTML = '<div style="color:var(--warn-fg);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--radius-btn);padding:8px 10px;margin-bottom:10px;">' +
-          '<b>⚠ ' + lista.length + ' pedido' + (lista.length === 1 ? '' : 's') + ' preparado' + (lista.length === 1 ? '' : 's') + ' pendiente' + (lista.length === 1 ? '' : 's') + ' de ubicar</b>' +
-          lista.map(function (p) {
-            return '<div class="fila" style="margin:6px 0 0;cursor:pointer;" onclick="abrirDetalle(\'' + p.id + '\')">' +
-              '<div class="tipo">Pedido cliente ' + escHtmlSie_(p.num_pedido || '') + '</div>' +
-              '<div class="meta">' + escHtmlSie_(CFG_TIENDA_NOMBRE[p.tienda_origen] || p.tienda_origen) + ' · ' +
-                p.totalLineas + ' línea' + (p.totalLineas === 1 ? '' : 's') +
-                (p.preparadaEn ? ' · preparado ' + tiempoDesde_(p.preparadaEn) : '') + ' · <b>Ubicar</b></div></div>';
-          }).join('') + '</div>';
-      }).listarPendientesDeUbicar(tienda || '');
+        if (tienda !== TIENDA_ACTIVA) return; // respuesta tardía de otra tienda
+        PENDIENTES_UBICAR_ = JSON.parse(json);
+        pintarPestanasPedidos_();
+      }).withFailureHandler(function () {
+        if (tienda !== TIENDA_ACTIVA) return;
+        // Con una lista ya conocida se mantiene; sin ella, la pestaña avisa del fallo.
+        PENDIENTES_UBICAR_FALLO_ = PENDIENTES_UBICAR_ === null;
+        pintarPestanasPedidos_();
+      }).listarPendientesDeUbicar(tienda);
+    }
+
+    var ICONO_PIN_UBICAR_ = '<svg class="hero-ico" viewBox="0 0 24 24"><path d="M12 22s7-6.2 7-12a7 7 0 0 0-14 0c0 5.8 7 12 7 12z"/><circle cx="12" cy="10" r="2.6"/></svg>';
+
+    /** Contenido de la pestaña "A ubicar": cabecera grande con el total y una
+     *  tarjeta por pedido, el que más lleva esperando primero. El color de la
+     *  tarjeta marca la urgencia (menos de 1 h / 1-3 h / más de 3 h). */
+    function pintarUbicar_() {
+      const cont = document.getElementById('vistaUbicar');
+      if (!cont) return;
+      if (PENDIENTES_UBICAR_ === null) {
+        cont.innerHTML = PENDIENTES_UBICAR_FALLO_
+          ? '<p class="meta">No se han podido cargar los pedidos por ubicar. Pulsa "Actualizar" para reintentar.</p>'
+          : '<p class="meta">Cargando…</p>';
+        return;
+      }
+      const lista = PENDIENTES_UBICAR_.slice().sort(function (a, b) {
+        return (Date.parse(a.preparadaEn || a.creada_en) || 0) - (Date.parse(b.preparadaEn || b.creada_en) || 0);
+      });
+      if (!lista.length) {
+        cont.innerHTML = '<div class="ubicar-hero ok"><div class="hero-fila"><div class="hero-n">0</div>' +
+          '<div class="hero-txt"><b>Todo ubicado</b><span>No queda ningún pedido preparado esperando ubicación.</span></div></div>' + ICONO_PIN_UBICAR_ + '</div>';
+        return;
+      }
+      const refAntiguo = lista[0].preparadaEn || null;
+      const plural = lista.length === 1 ? '' : 's';
+      var html = '<div class="ubicar-hero"><div class="hero-fila"><div class="hero-n">' + lista.length + '</div>' +
+        '<div class="hero-txt"><b>Pedido' + plural + ' preparado' + plural + '<br>sin ubicar</b>' +
+        (refAntiguo ? '<span>El más antiguo lleva ' + duracionTexto_(Math.max(0, Math.round((Date.now() - Date.parse(refAntiguo)) / 60000))) + ' esperando</span>' : '') +
+        '</div></div>' + ICONO_PIN_UBICAR_ + '</div>';
+      lista.forEach(function (p) {
+        const min = p.preparadaEn ? Math.max(0, Math.round((Date.now() - Date.parse(p.preparadaEn)) / 60000)) : 0;
+        const urgencia = min >= 180 ? 2 : (min >= 60 ? 1 : 0);
+        html += '<div class="ubicar-card u-' + urgencia + '" onclick="abrirDetalle(\'' + p.id + '\')">' +
+          '<div class="ubicar-main"><div class="ubicar-etq">Pedido cliente</div>' +
+          '<div class="ubicar-num">' + escHtmlSie_(p.num_pedido || '—') + '</div>' +
+          '<div class="ubicar-meta">' +
+            '<span class="ubicar-chip ' + (p.tienda_origen === '279' ? 'chip-mijas' : 'chip-marbella') + '">' + escHtmlSie_(CFG_TIENDA_NOMBRE[p.tienda_origen] || p.tienda_origen) + '</span>' +
+            '<span class="ubicar-chip">' + p.totalLineas + ' línea' + (p.totalLineas === 1 ? '' : 's') + '</span>' +
+            (p.preparadaEn ? '<span class="ubicar-chip tiempo">⏱ ' + duracionTexto_(min) + '</span>' : '') +
+          '</div></div>' +
+          '<div class="ubicar-go">Ubicar <svg viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></svg></div></div>';
+      });
+      cont.innerHTML = html;
     }
 
     function renderStock() {
@@ -1646,6 +1918,9 @@
       if (!r) { VISTA = { nombre: 'revision', peticionId: null }; return render(); }
       const esperado = r.contenido_esperado || [];
       const conUbicacion = !!r.ubicacion_esperada;
+      // Palet concreto que el sistema no sitúa en la plataforma: puede haber
+      // aparecido con otro SSCC, o haber salido ya (cargado/enviado).
+      const hayOtroSscc = !!r.sscc && !conUbicacion;
       // Bug real (revisión con Codex CLI, 2026-09-22): la tienda elige qué
       // revisar al pedirlo (ver textoQueRevisar_ más abajo, ya lo mostraba
       // como texto informativo) pero el formulario pedía SIEMPRE la
@@ -1679,17 +1954,22 @@
         '<h1>' + escHtmlSie_(etiquetaRevisionOp_(r)) + '</h1>' +
         '<p class="meta">Pide: ' + escHtmlSie_(r.solicitante_ldap || '—') + ' · revisar: ' + textoQueRevisar_(r.revisar) +
           (r.comentario ? '<br>Comentario: ' + escHtmlSie_(r.comentario) : '') + '</p>' +
-        (conUbicacion ? '' : '<p class="meta" style="color:var(--warn-fg);">El sistema no tiene ubicación de este palet' +
-          (r.sscc ? ' (no lo conoce o está a 0).' : ' — hay que localizar uno.') + '</p>') +
-        '<h3>Ubicación</h3>' +
+        (conUbicacion ? '' : '<p class="meta" style="color:var(--warn-fg);">El sistema no tiene ubicación de este palet en la plataforma' +
+          (r.sscc ? ' (no figura o está a 0). Puede constar en myISO y no estar aquí: indica qué has encontrado.' : ' — hay que localizar uno.') + '</p>') +
+        '<h3>' + (conUbicacion ? 'Ubicación' : '¿Qué has encontrado?') + '</h3>' +
         (conUbicacion ? '<p class="meta">Debe estar en: <b>' + escHtmlSie_(r.ubicacion_esperada) + '</b></p>' : '') +
         '<div class="filtros-tipo">' +
           (conUbicacion ? '<button type="button" class="chip-tipo activo" id="ubiSi">✓ Está en su ubicación</button>' : '') +
-          '<button type="button" class="chip-tipo' + (conUbicacion ? '' : ' activo') + '" id="ubiNo">' + (conUbicacion ? '✗ Está en otra ubicación' : '✓ Localizado') + '</button>' +
-          '<button type="button" class="chip-tipo" id="ubiNoEsta">✗ No se encuentra</button>' +
+          '<button type="button" class="chip-tipo' + (conUbicacion ? '' : ' activo') + '" id="ubiNo">' + (conUbicacion ? '✗ Está en otra ubicación' : '✓ Localizado en plataforma') + '</button>' +
+          (hayOtroSscc ? '<button type="button" class="chip-tipo" id="ubiOtroSscc">🔀 Con otro SSCC</button>' : '') +
+          (conUbicacion
+            ? '<button type="button" class="chip-tipo" id="ubiNoEsta">✗ No se encuentra</button>'
+            : '<button type="button" class="chip-tipo" id="ubiFuera">✗ No está en plataforma</button>') +
+          (hayOtroSscc ? '<button type="button" class="chip-tipo" id="ubiSalio">🚚 Ya salió</button>' : '') +
         '</div>' +
+        '<p class="meta" id="ayudaUbi" style="margin:0 0 6px;"></p>' +
         '<input type="text" id="ubiReal" placeholder="Ubicación donde está el palet" style="' + (conUbicacion ? 'display:none;' : '') + 'width:100%;">' +
-        (r.sscc ? '' : '<input type="text" id="ssccEncontrado" placeholder="SSCC del palet encontrado (opcional)" style="width:100%;">') +
+        ((!r.sscc || hayOtroSscc) ? '<input type="text" id="ssccEncontrado" placeholder="SSCC del palet encontrado (opcional)" style="' + (r.sscc ? 'display:none;' : '') + 'width:100%;">' : '') +
         '<div id="bloqueContenido">' +
           (esperado.length ? '<h3>Referencias y cantidades contadas</h3>' + lineasHtml : '') +
           '<h3>' + (esperado.length ? 'Referencias que no figuran en el sistema' : 'Referencias encontradas en el palet') + '</h3>' +
@@ -1708,23 +1988,41 @@
         render();
       };
 
-      // Estado: 'aqui' (en su ubicación), 'otra' (localizado en otra ubicación), 'noEsta' (no se encuentra)
+      // Estado: 'aqui' (en su ubicación), 'otra' (localizado en otra ubicación / en plataforma),
+      // 'noEsta' (con dirección en el sistema y no se encuentra), y solo sin dirección:
+      // 'fuera' (consta en el sistema pero no está en plataforma), 'salio' (ya salió),
+      // 'otroSscc' (encontrado con un SSCC distinto al pedido).
+      const SIN_LOCALIZAR_ = ['noEsta', 'fuera', 'salio'];
+      const AYUDA_UBI_ = {
+        fuera: 'Consta en el sistema pero no está físicamente en la plataforma. El jefe lo verá para rectificarlo en myISO.',
+        salio: 'Figura ya enviado o cargado. En la nota puedes poner el nº de carga o la fecha si la sabes.',
+        otroSscc: 'El palet existe pero con otro SSCC. Escribe el SSCC real y dónde está.',
+      };
       var estadoUbi = conUbicacion ? 'aqui' : 'otra';
       function marcarUbicacion(nuevo) {
         estadoUbi = nuevo;
-        const si = document.getElementById('ubiSi');
-        if (si) si.classList.toggle('activo', nuevo === 'aqui');
-        document.getElementById('ubiNo').classList.toggle('activo', nuevo === 'otra');
-        document.getElementById('ubiNoEsta').classList.toggle('activo', nuevo === 'noEsta');
-        document.getElementById('ubiReal').style.display = nuevo === 'otra' ? 'block' : 'none';
+        [['ubiSi', 'aqui'], ['ubiNo', 'otra'], ['ubiNoEsta', 'noEsta'], ['ubiFuera', 'fuera'], ['ubiSalio', 'salio'], ['ubiOtroSscc', 'otroSscc']].forEach(function (par) {
+          const b = document.getElementById(par[0]);
+          if (b) b.classList.toggle('activo', nuevo === par[1]);
+        });
+        document.getElementById('ubiReal').style.display = (nuevo === 'otra' || nuevo === 'otroSscc') ? 'block' : 'none';
         const sscc = document.getElementById('ssccEncontrado');
-        if (sscc) sscc.style.display = nuevo === 'noEsta' ? 'none' : 'block';
-        document.getElementById('bloqueContenido').style.display = nuevo === 'noEsta' ? 'none' : 'block';
+        if (sscc) {
+          // Búsqueda de artículo: SSCC opcional al localizar. Palet concreto: solo al "Con otro SSCC" (obligatorio).
+          sscc.style.display = SIN_LOCALIZAR_.indexOf(nuevo) !== -1 ? 'none' : (r.sscc ? (nuevo === 'otroSscc' ? 'block' : 'none') : 'block');
+          sscc.placeholder = nuevo === 'otroSscc' ? 'SSCC con el que lo has encontrado (obligatorio)' : 'SSCC del palet encontrado (opcional)';
+        }
+        document.getElementById('bloqueContenido').style.display = SIN_LOCALIZAR_.indexOf(nuevo) !== -1 ? 'none' : 'block';
+        document.getElementById('ayudaUbi').textContent = AYUDA_UBI_[nuevo] || '';
+        document.getElementById('notaRev').placeholder = (nuevo === 'fuera' || nuevo === 'salio') ? 'Nota (opcional): dónde consta, nº de carga…' : 'Nota (opcional)';
       }
       const btnSi = document.getElementById('ubiSi');
       if (btnSi) btnSi.onclick = function () { marcarUbicacion('aqui'); };
       document.getElementById('ubiNo').onclick = function () { marcarUbicacion('otra'); };
-      document.getElementById('ubiNoEsta').onclick = function () { marcarUbicacion('noEsta'); };
+      [['ubiNoEsta', 'noEsta'], ['ubiFuera', 'fuera'], ['ubiSalio', 'salio'], ['ubiOtroSscc', 'otroSscc']].forEach(function (par) {
+        const b = document.getElementById(par[0]);
+        if (b) b.onclick = function () { marcarUbicacion(par[1]); };
+      });
 
       function pintarExtras() {
         const cont = document.getElementById('extrasRev');
@@ -1752,8 +2050,8 @@
         const btn = this;
         const nota = document.getElementById('notaRev').value.trim();
         var resultado;
-        if (estadoUbi === 'noEsta') {
-          resultado = { localizado: false, nota: nota };
+        if (SIN_LOCALIZAR_.indexOf(estadoUbi) !== -1) {
+          resultado = { localizado: false, nota: nota, motivo: estadoUbi === 'fuera' ? 'no_en_plataforma' : (estadoUbi === 'salio' ? 'ya_salio' : null) };
         } else {
           const lineas = [];
           for (var i = 0; i < esperado.length; i++) {
@@ -1769,11 +2067,12 @@
           // bloqueaba "Terminar revisión" pidiendo la ubicación real aunque
           // tienda no hubiera pedido revisar ubicación (el servidor la
           // ignora en ese caso — ver completarRevisionPalet).
-          if (pideUbicacionRev_ && estadoUbi === 'otra' && !ubicacionReal) { kAlerta('Indica dónde está el palet.'); return; }
+          if (pideUbicacionRev_ && (estadoUbi === 'otra' || estadoUbi === 'otroSscc') && !ubicacionReal) { kAlerta('Indica dónde está el palet.'); return; }
+          if (estadoUbi === 'otroSscc' && !(document.getElementById('ssccEncontrado').value || '').trim()) { kAlerta('Escribe el SSCC con el que lo has encontrado.'); return; }
           const extras = REVISION_EXTRAS_.filter(function (x) { return String(x.codigo_lm || '').trim() && Number(x.cantidad) > 0; });
           const campoSscc = document.getElementById('ssccEncontrado');
           resultado = {
-            localizado: true, ubicacionOk: estadoUbi === 'aqui', ubicacionReal: ubicacionReal,
+            localizado: true, otroSscc: estadoUbi === 'otroSscc', ubicacionOk: estadoUbi === 'aqui', ubicacionReal: ubicacionReal,
             ssccEncontrado: campoSscc ? campoSscc.value.trim() : '', lineas: lineas, extras: extras, nota: nota,
           };
         }
@@ -1798,14 +2097,31 @@
       }
     }
 
+    /** Texto largo de un palet no localizado según el motivo que dio el operario. */
+    function textoNoLocalizado_(motivo) {
+      if (motivo === 'no_en_plataforma') return 'No está en plataforma (consta en el sistema).';
+      if (motivo === 'ya_salio') return 'Ya salió: figura enviado o cargado.';
+      return 'No se ha localizado el palet.';
+    }
+
+    /** Etiqueta corta del resultado de una revisión con diferencias (lista del jefe). */
+    function etiquetaDiferenciaRevision_(r) {
+      const res = r.resultado || {};
+      if (res.localizado === false) {
+        return res.motivo === 'no_en_plataforma' ? 'No está en plataforma' : (res.motivo === 'ya_salio' ? 'Ya salió' : 'No localizado');
+      }
+      return res.ssccDistinto ? 'Con otro SSCC' : 'Con diferencias';
+    }
+
     function resumenResultadoRevision_(r) {
       const res = r.resultado || {};
       var h = '';
       if (res.localizado === false) {
-        h += '<div class="meta">❌ <b>No se ha localizado el palet.</b></div>';
+        h += '<div class="meta">❌ <b>' + escHtmlSie_(textoNoLocalizado_(res.motivo)) + '</b></div>';
         if (res.nota) h += '<div class="meta">Nota: ' + escHtmlSie_(res.nota) + '</div>';
         return h;
       }
+      if (res.ssccDistinto) h += '<div class="meta">🔀 <b>Localizado con otro SSCC.</b> Se pidió ' + escHtmlSie_(r.sscc || '—') + '</div>';
       if (res.ssccEncontrado) h += '<div class="meta">SSCC encontrado: <b>' + escHtmlSie_(res.ssccEncontrado) + '</b></div>';
       if (res.ubicacionOk === false) {
         h += '<div class="meta">📍 ' + (r.ubicacion_esperada ? 'Ubicación: esperada ' + escHtmlSie_(r.ubicacion_esperada) + ' · real' : 'Localizado en') +
@@ -1906,7 +2222,7 @@
           html += difs.length ? difs.map(function (r) {
             return '<div class="fila tipo-revision" style="cursor:default;">' +
               '<div class="tipo"><span>' + escHtmlSie_(etiquetaRevisionOp_(r)) + '</span><span class="chip-urgencia peligro">' +
-                (r.resultado && r.resultado.localizado === false ? 'No localizado' : 'Con diferencias') + '</span></div>' +
+                etiquetaDiferenciaRevision_(r) + '</span></div>' +
               resumenResultadoRevision_(r) +
               '<div class="meta">Revisó: ' + escHtmlSie_(r.revisada_por || '—') + ' · ' + tiempoDesde_(r.revisada_en) + ' · pedía: ' + escHtmlSie_(r.solicitante_ldap || '—') + '</div>' +
               '<button class="btn-ob" style="margin-top:8px;" data-gestionar="' + r.id + '">Marcar gestionada</button></div>';
