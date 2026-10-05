@@ -512,7 +512,7 @@
       document.getElementById('app').classList.toggle('ancho', MODO_JEFE);
       if (MODO_JEFE) {
         programarAvisosJefe_();
-        if (VISTA.nombre === 'volumenes') return renderVolumenes();
+        if (VISTA.nombre === 'volumenes') return renderProductividad_();
         if (VISTA.nombre === 'hodos') return renderHodos();
         if (VISTA.nombre === 'operarios') return renderOperariosGestion();
         if (VISTA.nombre === 'historial') return renderHistorialHoy();
@@ -534,7 +534,7 @@
       if (VISTA.nombre === 'stock') return renderStock();
       if (VISTA.nombre === 'estado') return renderEstado();
       if (VISTA.nombre === 'panel') return renderPanel();
-      if (VISTA.nombre === 'volumenes') return renderVolumenes();
+      if (VISTA.nombre === 'volumenes') return renderProductividad_();
     }
 
     function renderTabsBar_() {
@@ -546,7 +546,7 @@
           { nombre: 'hodos', label: 'HODOS' },
           { nombre: 'sie', label: 'SIE por ubicar' },
           { nombre: 'operarios', label: 'Operarios' },
-          { nombre: 'volumenes', label: 'Volúmenes' },
+          { nombre: 'volumenes', label: 'Productividad' },
         ];
         return '<div class="tabs">' + tabsJefe.map(function (t) {
           return '<a href="#" data-tab="' + t.nombre + '" class="' + (VISTA.nombre === t.nombre ? 'activa' : '') +
@@ -2917,45 +2917,8 @@
         .marcarColaIndividual(peticionId, valor);
     }
 
-    function renderVolumenes() {
-      document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
-        '<h1>Volúmenes de trabajo</h1>' +
-        '<h3>Hoy</h3><div id="volHoy">Cargando…</div>' +
-        '<h3>Últimos 14 días</h3><div id="volHistorico">Cargando…</div>';
-      sincronizarPickers_();
-
-      google.script.run.withSuccessHandler(function (json) {
-        const datos = JSON.parse(json);
-        const cont = document.getElementById('volHoy');
-        if (!datos.filas.length) { cont.innerHTML = '<p class="meta">Sin líneas preparadas hoy todavía.</p>'; return; }
-        var html = '<table class="vol"><tr><th>Operario</th>' +
-          datos.horas.map(function (h) { return '<th>' + h + 'h</th>'; }).join('') +
-          '<th>Total</th></tr>';
-        html += datos.filas.map(function (f) {
-          return '<tr><td>' + f.operario + '</td>' +
-            f.porHora.map(function (n) { return '<td>' + (n || '') + '</td>'; }).join('') +
-            '<td class="total">' + f.total + '</td></tr>';
-        }).join('');
-        html += '</table>';
-        cont.innerHTML = html;
-      }).listarVolumenesHoy();
-
-      google.script.run.withSuccessHandler(function (json) {
-        const dias = JSON.parse(json);
-        const cont = document.getElementById('volHistorico');
-        if (!dias.length) { cont.innerHTML = '<p class="meta">Sin datos todavía.</p>'; return; }
-        const max = Math.max.apply(null, dias.map(function (d) { return d.total; }));
-        cont.innerHTML = '<div class="bars">' +
-          dias.map(function (d) {
-            const alturaPct = max ? Math.round((d.total / max) * 100) : 0;
-            return '<div class="bar"><div class="n">' + d.total + '</div>' +
-              '<div class="fill" style="height:' + alturaPct + '%"></div>' +
-              '<div class="d">' + d.dia.slice(5) + '</div></div>';
-          }).join('') + '</div>';
-      }).listarVolumenesHistorico();
-    }
-
     document.addEventListener('DOMContentLoaded', function () { render(); });
   </script>
+  <?!= incluir_('ProductividadUI') ?>
 </body>
 </html>

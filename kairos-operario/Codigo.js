@@ -12,3 +12,8 @@ function doGet(e) {
   try { output.setFaviconUrl(FAVICON_KAIROS_URL_); } catch (err) { console.warn('Favicon: ' + err); }
   return output;
 }
+
+/** Inserta el contenido de otro archivo HTML del proyecto (sin evaluarlo como plantilla). */
+function incluir_(nombre) {
+  return HtmlService.createHtmlOutputFromFile(nombre).getContent();
+}

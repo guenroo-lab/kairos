@@ -1,0 +1,768 @@
+<style>
+  /* ——— Panel de productividad (modo jefe). Todo con variables del tema: sirve en claro y oscuro. ——— */
+  .pr { display:flex; flex-direction:column; gap:14px; }
+  .pr-card { background:linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%); border:1px solid var(--ink-800); border-radius:var(--radius-card); box-shadow:var(--shadow-card); padding:16px 18px; min-width:0; }
+  .pr-card h2 { font-size:12px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:var(--text-500); margin:0 0 12px; display:flex; align-items:baseline; justify-content:space-between; gap:8px; }
+  .pr-card h2 small { font-size:11px; font-weight:600; text-transform:none; letter-spacing:0; color:var(--text-600); }
+  .pr-cab { display:flex; align-items:flex-end; justify-content:space-between; gap:12px; flex-wrap:wrap; }
+  .pr-cab h1 { font-size:26px; letter-spacing:-.02em; margin:0; }
+  .pr-sub { margin:4px 0 0; color:var(--text-500); font-size:13px; }
+  .pr-sub b { color:var(--text-300); font-variant-numeric:tabular-nums; }
+  .pr-acc { display:flex; gap:8px; }
+  .pr button.pr-btn { min-height:36px; padding:7px 14px; font-size:12.5px; border-radius:var(--radius-chip); background:var(--ink-800); color:var(--text-300); border:1px solid var(--ink-700); }
+  .pr button.pr-btn.primario { background:var(--accent); color:var(--accent-ink); border-color:transparent; }
+  .pr button.pr-btn:focus-visible, .pr button.pr-seg:focus-visible, .pr button.pr-chip:focus-visible, .pr-fila:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+
+  /* filtros */
+  .pr-filtros { z-index:5; display:flex; flex-direction:column; gap:10px; padding:12px 14px; }
+  .pr-grupo { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .pr-grupo > label { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:var(--text-600); min-width:62px; }
+  .pr-segs { display:inline-flex; background:var(--ink-950); border:1px solid var(--ink-800); border-radius:var(--radius-chip); padding:3px; gap:2px; flex-wrap:wrap; }
+  .pr button.pr-seg { min-height:30px; padding:5px 13px; font-size:12.5px; font-weight:700; border-radius:var(--radius-chip); background:transparent; color:var(--text-500); display:inline-flex; align-items:center; gap:6px; }
+  .pr button.pr-seg[aria-pressed="true"] { background:var(--accent); color:var(--accent-ink); box-shadow:0 2px 10px -3px var(--accent); }
+  .pr button.pr-chip { min-height:32px; padding:5px 12px 5px 9px; font-size:12.5px; font-weight:700; border-radius:var(--radius-chip); background:var(--ink-900); color:var(--text-500); border:1px solid var(--ink-700); display:inline-flex; align-items:center; gap:7px; }
+  .pr button.pr-chip[aria-pressed="true"] { background:var(--ink-850); color:var(--text-100); border-color:var(--text-600); }
+  .pr button.pr-chip .pr-n { font-size:11px; font-weight:800; color:var(--text-600); font-variant-numeric:tabular-nums; }
+  .pr-punto { width:9px; height:9px; border-radius:50%; flex:0 0 9px; }
+  .pr-select, .pr-fecha { margin:0; padding:6px 10px; font-size:13px; min-height:36px; }
+  .pr-resumen { font-size:12px; color:var(--text-500); display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .pr-resumen a { color:var(--accent); font-weight:700; cursor:pointer; text-decoration:none; }
+
+  @media (min-width: 900px) and (min-height: 820px) { .pr-filtros { position:sticky; top:0; } }
+
+  /* KPI */
+  .pr-kpis { display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:12px; }
+  .pr-kpi { padding:14px 16px 12px; display:flex; flex-direction:column; gap:4px; position:relative; overflow:hidden; }
+  .pr-kpi .et { font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:var(--text-500); }
+  .pr-kpi .val { font-size:34px; font-weight:800; letter-spacing:-.03em; line-height:1.05; font-variant-numeric:tabular-nums; color:var(--text-100); }
+  .pr-kpi .val small { font-size:14px; font-weight:700; color:var(--text-500); letter-spacing:0; margin-left:4px; }
+  .pr-kpi .sub { font-size:12px; color:var(--text-500); }
+  .pr-kpi svg.spark { position:absolute; right:14px; top:38px; width:84px; height:30px; opacity:.9; }
+  .pr-delta { display:inline-flex; align-items:center; gap:4px; font-size:11.5px; font-weight:800; padding:2px 8px; border-radius:var(--radius-chip); width:fit-content; font-variant-numeric:tabular-nums; }
+  .pr-delta.bien { background:rgba(26,143,76,.14); color:var(--ok); }
+  .pr-delta.mal { background:var(--danger-bg); color:var(--danger-fg); }
+  .pr-delta.igual { background:var(--ink-800); color:var(--text-500); }
+  .pr-delta small { font-weight:600; opacity:.8; }
+
+  /* destacados */
+  .pr-destacados { display:flex; gap:10px; flex-wrap:wrap; }
+  .pr-dest { flex:1 1 220px; display:flex; gap:10px; align-items:center; padding:10px 14px; border-radius:var(--radius-card); background:var(--accent-dim); border:1px solid var(--accent-line); min-width:0; }
+  .pr-dest .ic { font-size:20px; line-height:1; }
+  .pr-dest b { display:block; font-size:13px; color:var(--text-100); }
+  .pr-dest span { font-size:12px; color:var(--text-500); }
+
+  /* cuadrículas */
+  .pr-fila2 { display:grid; grid-template-columns:minmax(0,2fr) minmax(0,1fr); gap:14px; }
+  .pr-fila2.igual { grid-template-columns:minmax(0,1fr) minmax(0,1fr); }
+  @media (max-width: 980px) { .pr-fila2, .pr-fila2.igual { grid-template-columns:minmax(0,1fr); } }
+
+  /* barras */
+  .pr-barras { display:flex; align-items:flex-end; gap:6px; height:200px; padding-top:20px; position:relative; border-bottom:1px solid var(--ink-700); background-image:repeating-linear-gradient(to top, transparent 0, transparent calc(25% - 1px), var(--ink-800) calc(25% - 1px), var(--ink-800) 25%); }
+  .pr-col { flex:1; min-width:0; height:100%; display:flex; flex-direction:column; justify-content:flex-end; align-items:center; position:relative; }
+  .pr-col .pila { width:100%; max-width:46px; display:flex; flex-direction:column-reverse; border-radius:6px 6px 0 0; overflow:hidden; transform-origin:bottom; animation:pr-crece .45s cubic-bezier(.2,.8,.2,1) both; }
+  .pr-col .pila i { display:block; width:100%; }
+  .pr-col .tot { position:absolute; top:-18px; font-size:10.5px; font-weight:700; color:var(--text-500); font-variant-numeric:tabular-nums; }
+  .pr-col.fuera .pila { opacity:.28; }
+  .pr-col.hoy .pila { outline:2px dashed var(--accent); outline-offset:-2px; }
+  .pr-ejex { display:flex; gap:6px; margin-top:6px; }
+  .pr-ejex span { flex:1; text-align:center; font-size:10.5px; color:var(--text-500); font-variant-numeric:tabular-nums; min-width:0; overflow:hidden; text-overflow:clip; white-space:nowrap; }
+  .pr-ejex span.fuera { opacity:.55; }
+  .pr-linea { position:absolute; left:0; right:0; top:20px; bottom:0; width:100%; height:calc(100% - 20px); pointer-events:none; overflow:visible; }
+  @keyframes pr-crece { from { transform:scaleY(0); } to { transform:scaleY(1); } }
+  @media (prefers-reduced-motion: reduce) { .pr-col .pila { animation:none; } }
+  .pr-leyenda { display:flex; gap:12px; flex-wrap:wrap; margin-top:10px; font-size:11.5px; color:var(--text-500); }
+  .pr-leyenda span { display:inline-flex; align-items:center; gap:6px; }
+
+  /* servicios */
+  .pr-servicios { display:grid; grid-template-columns:repeat(auto-fit,minmax(250px,1fr)); gap:12px; }
+  .pr-serv { padding:14px 16px; cursor:pointer; text-align:left; display:block; width:100%; border:1px solid var(--ink-800); background:linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%); border-radius:var(--radius-card); box-shadow:var(--shadow-card); color:var(--text-100); font:inherit; min-height:0; }
+  .pr-serv.apagado { opacity:.45; }
+  .pr-serv .cab { display:flex; align-items:center; gap:8px; font-size:13px; font-weight:800; }
+  .pr-serv .num { font-size:30px; font-weight:800; letter-spacing:-.02em; margin:6px 0 2px; font-variant-numeric:tabular-nums; }
+  .pr-serv .num small { font-size:12px; font-weight:700; color:var(--text-500); margin-left:4px; }
+  .pr-mini { display:grid; grid-template-columns:repeat(3,max-content); justify-content:space-between; gap:8px 12px; margin-top:8px; }
+  .pr-mini div { font-size:11px; color:var(--text-500); }
+  .pr-mini b { display:block; font-size:14px; color:var(--text-100); font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .pr-barra { height:6px; border-radius:99px; background:var(--ink-800); overflow:hidden; margin-top:10px; }
+  .pr-barra > i { display:block; height:100%; border-radius:99px; }
+
+  /* ranking */
+  .pr-rank { display:flex; flex-direction:column; gap:6px; }
+  .pr-fila { display:grid; grid-template-columns:34px minmax(110px,1.3fr) minmax(120px,2fr) 64px 64px 64px 64px; gap:12px; align-items:center; padding:8px 10px; border-radius:12px; background:var(--ink-900); border:1px solid var(--ink-800); cursor:pointer; text-align:left; width:100%; font:inherit; color:var(--text-100); min-height:0; }
+  .pr-fila.activa { border-color:var(--accent); background:var(--accent-dim); }
+  .pr-fila.cabecera { background:transparent; border-color:transparent; cursor:default; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-600); padding-top:0; padding-bottom:0; }
+  .pr-fila .av { width:34px; height:34px; border-radius:50%; background:var(--accent); color:var(--accent-ink); font-weight:800; font-size:12px; display:flex; align-items:center; justify-content:center; }
+  .pr-fila .nom { font-weight:800; font-size:13.5px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pr-fila .nom small { display:block; font-size:11px; font-weight:600; color:var(--text-500); }
+  .pr-fila .bar { height:10px; border-radius:99px; background:var(--ink-800); overflow:hidden; display:flex; }
+  .pr-fila .bar i { display:block; height:100%; }
+  .pr-fila .c { text-align:right; font-variant-numeric:tabular-nums; font-size:13px; font-weight:700; }
+  .pr-fila .c small { display:block; font-size:10.5px; font-weight:600; color:var(--text-600); }
+  .pr-fila .c.malo { color:var(--danger-fg); }
+  @media (max-width: 900px) { .pr-fila { grid-template-columns:34px minmax(0,1fr) 56px 56px; } .pr-fila .bar, .pr-fila .c:nth-of-type(n+5) { display:none; } .pr-fila.cabecera { display:none; } }
+  .pr-mas { margin-top:8px; }
+
+  /* calidad, pendiente, ciclo */
+  .pr-fila-q { display:grid; grid-template-columns:minmax(90px,1fr) 2fr 54px; gap:10px; align-items:center; font-size:12.5px; margin-bottom:9px; }
+  .pr-fila-q .b { height:8px; border-radius:99px; background:var(--ink-800); overflow:hidden; }
+  .pr-fila-q .b i { display:block; height:100%; border-radius:99px; background:var(--accent); }
+  .pr-fila-q .n { text-align:right; font-weight:800; font-variant-numeric:tabular-nums; }
+  .pr-ahora { display:flex; flex-direction:column; gap:10px; }
+  .pr-ah { padding:10px 12px; border-radius:12px; background:var(--ink-900); border:1px solid var(--ink-800); }
+  .pr-ah .t { display:flex; align-items:center; gap:8px; font-weight:800; font-size:13px; }
+  .pr-ah .d { font-size:12px; color:var(--text-500); margin-top:4px; }
+  .pr-ah .d b { color:var(--text-100); font-variant-numeric:tabular-nums; }
+  .pr-ah .quien { display:flex; gap:5px; flex-wrap:wrap; margin-top:6px; }
+  .pr-ah .quien span { font-size:10.5px; font-weight:700; padding:2px 8px; border-radius:99px; background:var(--ink-800); color:var(--text-300); }
+  .pr-vieja { color:var(--danger-fg); }
+  .pr-ciclo { display:flex; height:16px; border-radius:99px; overflow:hidden; background:var(--ink-800); }
+  .pr-ciclo i { display:block; height:100%; }
+  .pr-ciclo-leyenda { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:6px 12px; margin-top:12px; font-size:11.5px; color:var(--text-500); }
+  .pr-ciclo-leyenda b { color:var(--text-100); font-variant-numeric:tabular-nums; }
+
+  /* mapa de calor */
+  .pr-mapa { display:grid; gap:3px; overflow-x:auto; padding-bottom:4px; }
+  .pr-mapa .h, .pr-mapa .dia { font-size:10.5px; color:var(--text-500); display:flex; align-items:center; justify-content:center; font-variant-numeric:tabular-nums; white-space:nowrap; }
+  .pr-mapa .dia { justify-content:flex-start; padding-right:8px; }
+  .pr-mapa .cel { height:24px; border-radius:5px; background:var(--ink-800); position:relative; min-width:20px; }
+  .pr-mapa .cel i { position:absolute; inset:0; border-radius:5px; background:var(--accent); }
+
+  .pr-vacio { text-align:center; padding:34px 12px; color:var(--text-500); font-size:14px; }
+  .pr-vacio b { display:block; font-size:16px; color:var(--text-300); margin-bottom:4px; }
+  .pr-esq { background:linear-gradient(100deg, var(--ink-850) 30%, var(--ink-800) 50%, var(--ink-850) 70%); background-size:200% 100%; animation:pr-brillo 1.3s linear infinite; border-radius:var(--radius-card); min-height:120px; border:1px solid var(--ink-800); }
+  @keyframes pr-brillo { from { background-position:200% 0; } to { background-position:-200% 0; } }
+  .pr-nota { font-size:11.5px; color:var(--text-600); line-height:1.5; }
+  .pr-nota b { color:var(--text-500); }
+</style>
+
+<script>
+// ============================ PRODUCTIVIDAD ============================
+// Datos agregados del servidor (Productividad.js) → filtros y cálculos en el
+// navegador. Prefijo PR_ en todo lo global para no chocar con Index.html.
+
+var PR_SERVICIOS_ = [
+  { k: 'pc_s', n: 'Pedido cliente · sin transporte', corto: 'Pedido cliente', c: 'var(--tipo-pedido)' },
+  { k: 'pc_t', n: 'Pedido cliente · con transporte', corto: 'Con transporte', c: '#22b8cf' },
+  { k: 'ces', n: 'Cesión', corto: 'Cesión', c: 'var(--tipo-cesion)' },
+  { k: 'ref', n: 'Refill', corto: 'Refill', c: 'var(--tipo-refill)' },
+  { k: 'rev', n: 'Revisión de stock', corto: 'Revisión', c: '#f59e0b' },
+];
+var PR_INCIDENCIAS_ = [
+  { k: 'sp', n: 'Sin palet' }, { k: 'sm', n: 'Sin mercancía' }, { k: 'oi', n: 'Otras incidencias' },
+  { k: 'pa', n: 'Preparación parcial' }, { k: 'df', n: 'Diferencia en revisión' },
+];
+var PR_TRAMOS_ = [
+  { n: 'Menos de 1 h', c: '#34d17a' }, { n: '1 a 2 h', c: '#8bdc5a' }, { n: '2 a 4 h', c: '#f5d34a' },
+  { n: '4 a 8 h', c: '#f59e0b' }, { n: '8 a 24 h', c: '#ef6c4a' }, { n: 'Más de 24 h', c: '#d9304f' },
+];
+var PR_TIENDAS_ = { '014': { n: 'Marbella', c: 'var(--tienda-marbella)' }, '279': { n: 'Mijas', c: 'var(--tienda-mijas)' } };
+var PR_CLAVE_ = 'kairos_prod_v1';
+
+var PR_ESTADO_ = { datos: null, cargadoEn: 0, cargando: false, error: '', f: null, verTodos: false, timer: null };
+
+// ——————————— utilidades ———————————
+function PR_nf_(n, dec) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return Number(n).toLocaleString('es-ES', { maximumFractionDigits: dec === undefined ? 0 : dec, minimumFractionDigits: 0 });
+}
+function PR_dur_(min) {
+  if (min === null || min === undefined || isNaN(min)) return '—';
+  min = Math.round(min);
+  if (min < 60) return min + ' min';
+  if (min < 1440) { var h = Math.floor(min / 60), m = min % 60; return h + ' h' + (m ? ' ' + m + ' min' : ''); }
+  var d = Math.floor(min / 1440), hh = Math.floor((min % 1440) / 60);
+  return d + ' d' + (hh ? ' ' + hh + ' h' : '');
+}
+function PR_esc_(t) { return (typeof escHtmlSie_ === 'function') ? escHtmlSie_(t) : String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+function PR_sumarDias_(dia, n) { var p = dia.split('-'); return new Date(Date.UTC(+p[0], +p[1] - 1, +p[2] + n)).toISOString().slice(0, 10); }
+function PR_difDias_(a, b) { return Math.round((Date.parse(b + 'T00:00:00Z') - Date.parse(a + 'T00:00:00Z')) / 86400000); }
+function PR_fechaCorta_(dia) { var p = dia.split('-'); return p[2] + '/' + p[1]; }
+var PR_DIAS_SEMANA_ = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+function PR_diaSemana_(dia) { return PR_DIAS_SEMANA_[new Date(dia + 'T12:00:00Z').getUTCDay()]; }
+function PR_servicio_(k) { for (var i = 0; i < PR_SERVICIOS_.length; i++) { if (PR_SERVICIOS_[i].k === k) return PR_SERVICIOS_[i]; } return { k: k, n: k, corto: k, c: 'var(--text-500)' }; }
+function PR_iniciales_(nombre) {
+  var partes = String(nombre).split('+')[0].trim().replace(/[.]/g, ' ').split(/\s+/).filter(Boolean);
+  return ((partes[0] || '?')[0] + (partes[1] ? partes[1][0] : (partes[0] || '')[1] || '')).toUpperCase();
+}
+
+// ——————————— filtros y periodos ———————————
+function PR_filtrosPorDefecto_() {
+  var sv = {}; PR_SERVICIOS_.forEach(function (s) { sv[s.k] = true; });
+  return { periodo: '7', desde: '', hasta: '', tienda: '', servicios: sv, vista: 'equipos', operario: '' };
+}
+function PR_cargarFiltros_() {
+  var f = PR_filtrosPorDefecto_();
+  try {
+    var g = JSON.parse(localStorage.getItem(PR_CLAVE_) || 'null');
+    if (g) {
+      if (['hoy', 'ayer', '7', '30', 'mes', 'custom'].indexOf(g.periodo) !== -1) f.periodo = g.periodo;
+      if (g.desde) f.desde = g.desde; if (g.hasta) f.hasta = g.hasta;
+      if (g.tienda === '014' || g.tienda === '279') f.tienda = g.tienda;
+      if (g.vista === 'personas') f.vista = 'personas';
+      if (g.servicios) PR_SERVICIOS_.forEach(function (s) { if (g.servicios[s.k] === false) f.servicios[s.k] = false; });
+    }
+  } catch (e) {}
+  if (!PR_serviciosActivos_(f).length) f = PR_filtrosPorDefecto_();
+  return f;
+}
+function PR_guardarFiltros_() { try { localStorage.setItem(PR_CLAVE_, JSON.stringify(PR_ESTADO_.f)); } catch (e) {} }
+function PR_serviciosActivos_(f) { return PR_SERVICIOS_.filter(function (s) { return f.servicios[s.k]; }).map(function (s) { return s.k; }); }
+
+/** Periodo elegido y el anterior de la misma duración (mismo nº de días). */
+function PR_periodos_(f, hoy) {
+  var d, h;
+  if (f.periodo === 'hoy') { d = h = hoy; }
+  else if (f.periodo === 'ayer') { d = h = PR_sumarDias_(hoy, -1); }
+  else if (f.periodo === '7') { d = PR_sumarDias_(hoy, -6); h = hoy; }
+  else if (f.periodo === '30') { d = PR_sumarDias_(hoy, -29); h = hoy; }
+  else if (f.periodo === 'mes') { d = hoy.slice(0, 8) + '01'; h = hoy; }
+  else { d = f.desde || PR_sumarDias_(hoy, -6); h = f.hasta || hoy; if (h < d) { var t = d; d = h; h = t; } }
+  if (PR_difDias_(d, h) > 59) d = PR_sumarDias_(h, -59);
+  var n = PR_difDias_(d, h) + 1;
+  var pd = PR_sumarDias_(d, -n), ph = PR_sumarDias_(d, -1);
+  if (f.periodo === 'mes') { // mes anterior, mismos días
+    var y = +hoy.slice(0, 4), m = +hoy.slice(5, 7) - 1;
+    var primero = new Date(Date.UTC(y, m - 1, 1)).toISOString().slice(0, 10);
+    pd = primero; ph = PR_sumarDias_(primero, n - 1);
+  }
+  return { desde: d, hasta: h, n: n, prevDesde: pd, prevHasta: ph, incluyeHoy: h >= hoy, soloHoy: f.periodo === 'hoy' };
+}
+/** Días que hay que pedir al servidor: periodo, anterior y, como mínimo, 14 días para la tendencia. */
+function PR_rangoNecesario_(f, hoy) {
+  var p = PR_periodos_(f, hoy);
+  var desde = p.prevDesde < PR_sumarDias_(p.hasta, -13) ? p.prevDesde : PR_sumarDias_(p.hasta, -13);
+  var hasta = p.hasta > hoy ? p.hasta : hoy;
+  if (PR_difDias_(desde, hasta) > 99) desde = PR_sumarDias_(hasta, -99);
+  return { desde: desde, hasta: hasta };
+}
+
+// ——————————— datos ———————————
+function PR_decodificar_(r) {
+  var D = { generado: r.generado, hoy: r.hoy, desde: r.desde, hasta: r.hasta };
+  D.L = r.L.map(function (f) { return { d: r.d[f[0]], h: f[1], t: r.t[f[2]], s: r.s[f[3]], o: r.o[f[4]], i: f[5], l: f[6], u: f[7], p: f[8] }; });
+  D.P = r.P.map(function (f) { return { d: r.d[f[0]], t: r.t[f[1]], s: r.s[f[2]], o: r.o[f[3]], n: f[4] }; });
+  D.C = r.C.map(function (f) { return { d: r.d[f[0]], t: r.t[f[1]], s: r.s[f[2]], n: f[3], min: f[4], b: f.slice(5, 11) }; });
+  D.E = r.E.map(function (f) { return { d: r.d[f[0]], t: r.t[f[1]], s: r.s[f[2]], n: f[3] }; });
+  D.B = r.B.map(function (f) { return { t: r.t[f[0]], s: r.s[f[1]], pre: f[2], enp: f[3], ubi: f[4], vieja: f[5], quien: f[6] }; });
+  return D;
+}
+function PR_horaActual_(D) { // hora de Madrid del momento en que se generaron los datos
+  try { return +new Date(D.generado).toLocaleString('en-GB', { timeZone: 'Europe/Madrid', hour: '2-digit', hourCycle: 'h23' }); } catch (e) { return 23; }
+}
+
+/** Reparte las filas entre personas (cada línea de un equipo se divide a partes iguales) y aplica los filtros. */
+function PR_filasL_(D, f, desde, hasta, horaTope) {
+  var sv = f.servicios, out = [];
+  D.L.forEach(function (r) {
+    if (r.d < desde || r.d > hasta) return;
+    if (!sv[r.s]) return;
+    if (f.tienda && r.t !== f.tienda) return;
+    if (horaTope !== undefined && r.h > horaTope) return;
+    if (f.vista === 'personas') {
+      var nombres = r.o.split(' + ');
+      if (f.operario && nombres.indexOf(f.operario) === -1) return;
+      var k = 1 / nombres.length;
+      nombres.forEach(function (n) { out.push({ d: r.d, h: r.h, t: r.t, s: r.s, o: n, i: r.i, l: r.l * k, u: r.u * k, p: r.p * k, equipo: r.o }); });
+    } else {
+      if (f.operario && r.o !== f.operario) return;
+      out.push({ d: r.d, h: r.h, t: r.t, s: r.s, o: r.o, i: r.i, l: r.l, u: r.u, p: r.p, equipo: r.o });
+    }
+  });
+  return out;
+}
+function PR_soloRevisiones_(f) { var a = PR_serviciosActivos_(f); return a.length === 1 && a[0] === 'rev'; }
+
+/** Todos los indicadores de un periodo con los filtros dados. */
+function PR_kpis_(D, f, desde, hasta, horaTope) {
+  var filas = PR_filasL_(D, f, desde, hasta, horaTope);
+  var soloRev = PR_soloRevisiones_(f);
+  var lineas = filas.filter(function (r) { return soloRev ? r.s === 'rev' : r.s !== 'rev'; });
+  var k = { lineas: 0, unidades: 0, palets: 0, incidencias: 0, horas: 0, pedidos: 0, entradas: 0, cicloMin: null, cicloN: 0, cicloRapido: null, soloRev: soloRev, pedidosPorPersona: !!f.operario };
+  var horas = {};
+  lineas.forEach(function (r) {
+    k.lineas += r.l; k.unidades += r.u; k.palets += r.p;
+    if (r.i) k.incidencias += r.l;
+    horas[r.o + '|' + r.d + '|' + r.h] = true;
+  });
+  // horas de trabajo = (persona o equipo, día, hora) con actividad
+  k.horas = Object.keys(horas).length;
+  k.ritmo = k.horas ? k.lineas / k.horas : null;
+  k.pctInc = k.lineas ? 100 * k.incidencias / k.lineas : null;
+  var tiendaOk = function (t) { return !f.tienda || t === f.tienda; };
+  var servOk = function (s) { return f.servicios[s] && s !== 'rev'; };
+  if (!soloRev) {
+    if (f.operario) {
+      D.P.forEach(function (r) {
+        if (r.d < desde || r.d > hasta || !tiendaOk(r.t) || !servOk(r.s)) return;
+        if (f.vista === 'personas' ? r.o.split(' + ').indexOf(f.operario) === -1 : r.o !== f.operario) return;
+        k.pedidos += r.n;
+      });
+    } else {
+      D.C.forEach(function (r) {
+        if (r.d < desde || r.d > hasta || !tiendaOk(r.t) || !servOk(r.s)) return;
+        k.pedidos += r.n; k.cicloN += r.n; k.cicloMin = (k.cicloMin || 0) + r.min;
+        k.cicloRapido = (k.cicloRapido || 0) + r.b[0] + r.b[1] + r.b[2];
+      });
+      if (k.cicloN) { k.cicloMedia = k.cicloMin / k.cicloN; k.pctRapido = 100 * k.cicloRapido / k.cicloN; }
+      D.E.forEach(function (r) {
+        if (r.d < desde || r.d > hasta || !tiendaOk(r.t) || !servOk(r.s)) return;
+        k.entradas += r.n;
+      });
+    }
+  }
+  return k;
+}
+function PR_delta_(actual, previo, menosEsMejor) {
+  if (actual === null || previo === null || previo === undefined || actual === undefined || previo === 0 && actual === 0) return { txt: '=', cls: 'igual', pct: 0 };
+  if (previo === 0) return { txt: 'nuevo', cls: 'igual', pct: null };
+  var pct = 100 * (actual - previo) / Math.abs(previo);
+  if (Math.abs(pct) < 1) return { txt: '=', cls: 'igual', pct: 0 };
+  var sube = pct > 0, bien = menosEsMejor ? !sube : sube;
+  return { txt: (sube ? '▲ ' : '▼ ') + PR_nf_(Math.abs(pct), Math.abs(pct) < 10 ? 1 : 0) + '%', cls: bien ? 'bien' : 'mal', pct: pct };
+}
+
+/** Serie por día (últimos n días hasta `hasta`) de un indicador, para sparklines y tendencia. */
+function PR_serieDiaria_(D, f, hasta, n, que) {
+  var dias = [], i;
+  for (i = n - 1; i >= 0; i--) dias.push(PR_sumarDias_(hasta, -i));
+  var mapa = {}; dias.forEach(function (d) { mapa[d] = 0; });
+  var soloRev = PR_soloRevisiones_(f);
+  if (que === 'pedidos' && !f.operario) {
+    D.C.forEach(function (r) { if (r.d in mapa && f.servicios[r.s] && r.s !== 'rev' && (!f.tienda || r.t === f.tienda)) mapa[r.d] += r.n; });
+  } else {
+    PR_filasL_(D, f, dias[0], hasta).forEach(function (r) {
+      if (!(r.d in mapa)) return;
+      if (soloRev ? r.s !== 'rev' : r.s === 'rev') return;
+      if (que === 'unidades') mapa[r.d] += r.u; else mapa[r.d] += r.l;
+    });
+  }
+  return dias.map(function (d) { return { d: d, v: mapa[d] }; });
+}
+
+// ——————————— gráficos ———————————
+function PR_spark_(serie, color) {
+  var max = 0; serie.forEach(function (s) { if (s.v > max) max = s.v; });
+  if (!serie.length || !max) return '';
+  var w = 84, h = 30, n = serie.length, pts = serie.map(function (s, i) { return (n === 1 ? w / 2 : i * (w - 2) / (n - 1) + 1).toFixed(1) + ',' + (h - 3 - (s.v / max) * (h - 8)).toFixed(1); });
+  var ult = pts[pts.length - 1].split(',');
+  return '<svg class="spark" viewBox="0 0 ' + w + ' ' + h + '" aria-hidden="true"><polyline fill="none" stroke="' + color + '" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" points="' + pts.join(' ') + '"/><circle cx="' + ult[0] + '" cy="' + ult[1] + '" r="2.6" fill="' + color + '"/></svg>';
+}
+function PR_pilas_(columnas, max, opciones) {
+  // columnas: [{ etiqueta, partes:[{c, v, n}], total, cls, titulo }]
+  var html = '<div class="pr-barras">';
+  columnas.forEach(function (c) {
+    var alto = max ? Math.round(100 * c.total / max) : 0;
+    html += '<div class="pr-col ' + (c.cls || '') + '" title="' + PR_esc_(c.titulo || '') + '">' +
+      (c.total ? '<span class="tot">' + PR_nf_(c.total, c.total < 10 && c.total % 1 ? 1 : 0) + '</span>' : '') +
+      '<div class="pila" style="height:' + alto + '%">' +
+      c.partes.map(function (p) { return p.v ? '<i style="background:' + p.c + ';height:' + (100 * p.v / c.total).toFixed(1) + '%"></i>' : ''; }).join('') +
+      '</div></div>';
+  });
+  html += '</div><div class="pr-ejex">' + columnas.map(function (c) { return '<span class="' + (c.cls || '') + '">' + c.etiqueta + '</span>'; }).join('') + '</div>';
+  return html;
+}
+function PR_leyendaServicios_(claves) {
+  return '<div class="pr-leyenda">' + claves.map(function (k) { var s = PR_servicio_(k); return '<span><i class="pr-punto" style="background:' + s.c + '"></i>' + PR_esc_(s.corto) + '</span>'; }).join('') + '</div>';
+}
+
+// ——————————— cálculo de cada bloque ———————————
+function PR_bloqueHoras_(D, f, p) {
+  var filas = PR_filasL_(D, f, p.desde, p.hasta);
+  var porHora = {}, hmin = 24, hmax = 0;
+  filas.forEach(function (r) {
+    porHora[r.h] = porHora[r.h] || {}; porHora[r.h][r.s] = (porHora[r.h][r.s] || 0) + r.l;
+    if (r.h < hmin) hmin = r.h; if (r.h > hmax) hmax = r.h;
+  });
+  if (hmin > hmax) { hmin = 7; hmax = 19; }
+  hmin = Math.min(hmin, 7); hmax = Math.max(hmax, 18);
+  var claves = PR_serviciosActivos_(f), cols = [], max = 0, mejor = null;
+  for (var h = hmin; h <= hmax; h++) {
+    var partes = claves.map(function (k) { return { c: PR_servicio_(k).c, v: (porHora[h] && porHora[h][k]) || 0 }; });
+    var total = partes.reduce(function (s, x) { return s + x.v; }, 0);
+    if (total > max) max = total;
+    if (!mejor || total > mejor.total) mejor = { h: h, total: total };
+    var actual = p.incluyeHoy && h === PR_horaActual_(D);
+    cols.push({ etiqueta: h, partes: partes, total: total, cls: actual ? 'hoy' : '', titulo: h + ':00 – ' + h + ':59 · ' + PR_nf_(total, 1) + ' ' + (PR_soloRevisiones_(f) ? 'revisiones' : 'líneas') });
+  }
+  return { cols: cols, max: max, mejor: mejor && mejor.total ? mejor : null, claves: claves };
+}
+function PR_bloqueTendencia_(D, f, p) {
+  var n = Math.max(14, p.n), hasta = p.hasta > D.hoy ? D.hoy : p.hasta;
+  if (n > 60) n = 60;
+  var lin = PR_serieDiaria_(D, f, hasta, n, 'lineas'), ped = PR_serieDiaria_(D, f, hasta, n, 'pedidos');
+  var max = 0; lin.concat(ped).forEach(function (s) { if (s.v > max) max = s.v; });
+  var cols = lin.map(function (s, i) {
+    var dentro = s.d >= p.desde && s.d <= p.hasta;
+    var etiqueta = n <= 16 ? PR_diaSemana_(s.d) + '<br>' + PR_fechaCorta_(s.d) : (i % Math.ceil(n / 14) === 0 ? PR_fechaCorta_(s.d) : '');
+    return { etiqueta: etiqueta, partes: [{ c: 'var(--accent)', v: s.v }], total: s.v, cls: (dentro ? '' : 'fuera') + (s.d === D.hoy ? ' hoy' : ''),
+      titulo: PR_diaSemana_(s.d) + ' ' + PR_fechaCorta_(s.d) + ' · ' + PR_nf_(s.v, 1) + ' líneas · ' + PR_nf_(ped[i].v) + ' pedidos completados' + (s.d === D.hoy ? ' (hoy, aún en curso)' : '') };
+  });
+  var puntos = ped.map(function (s, i) { return (100 * (i + .5) / n).toFixed(2) + ',' + (100 - (max ? 100 * s.v / max : 0)).toFixed(2); });
+  return { cols: cols, max: max, puntos: puntos, n: n, hayPedidos: ped.some(function (s) { return s.v > 0; }) };
+}
+function PR_bloqueServicios_(D, f, p, horaTope) {
+  var base = {}; PR_SERVICIOS_.forEach(function (s) { base[s.k] = true; });
+  var fx = { periodo: f.periodo, tienda: f.tienda, vista: f.vista, operario: f.operario, servicios: base };
+  var out = [], totalLineas = 0;
+  PR_SERVICIOS_.forEach(function (s) {
+    var one = {}; one[s.k] = true;
+    var k = PR_kpis_(D, { periodo: f.periodo, tienda: f.tienda, vista: f.vista, operario: f.operario, servicios: one }, p.desde, p.hasta);
+    var lineas = s.k === 'rev' ? k.lineas : k.lineas; // rev: solo-rev trata revisiones como líneas
+    out.push({ s: s, k: k, activo: !!f.servicios[s.k] });
+    totalLineas += lineas;
+  });
+  out.forEach(function (o) { o.cuota = totalLineas ? 100 * o.k.lineas / totalLineas : 0; });
+  return out;
+}
+function PR_bloqueRanking_(D, f, p) {
+  var filas = PR_filasL_(D, f, p.desde, p.hasta), soloRev = PR_soloRevisiones_(f), mapa = {};
+  filas.forEach(function (r) {
+    if (soloRev ? r.s !== 'rev' : r.s === 'rev') return;
+    var m = mapa[r.o] || (mapa[r.o] = { o: r.o, l: 0, u: 0, p: 0, inc: 0, horas: {}, porHora: {}, porServ: {}, esEquipo: r.o.indexOf('+') !== -1 });
+    m.l += r.l; m.u += r.u; m.p += r.p; if (r.i) m.inc += r.l;
+    m.horas[r.d + '|' + r.h] = true;
+    m.porHora[r.h] = (m.porHora[r.h] || 0) + r.l;
+    m.porServ[r.s] = (m.porServ[r.s] || 0) + r.l;
+  });
+  var pedidos = {};
+  D.P.forEach(function (r) {
+    if (r.d < p.desde || r.d > p.hasta || !f.servicios[r.s] || r.s === 'rev' || (f.tienda && r.t !== f.tienda)) return;
+    if (f.vista === 'personas') { var ns = r.o.split(' + '); ns.forEach(function (n) { pedidos[n] = (pedidos[n] || 0) + r.n / ns.length; }); }
+    else pedidos[r.o] = (pedidos[r.o] || 0) + r.n;
+  });
+  var lista = Object.keys(mapa).map(function (k) {
+    var m = mapa[k], horas = Object.keys(m.horas).length, mejor = null;
+    Object.keys(m.porHora).forEach(function (h) { if (!mejor || m.porHora[h] > mejor.v) mejor = { h: +h, v: m.porHora[h] }; });
+    return { o: m.o, esEquipo: m.esEquipo, l: m.l, u: m.u, p: m.p, pctInc: m.l ? 100 * m.inc / m.l : 0, horas: horas, ritmo: horas ? m.l / horas : null, pedidos: pedidos[m.o] || 0, mejorHora: mejor ? mejor.h : null, porServ: m.porServ };
+  });
+  lista.sort(function (a, b) { return b.l - a.l; });
+  return lista;
+}
+function PR_bloqueCalidad_(D, f, p) {
+  var cuenta = { sp: 0, sm: 0, oi: 0, pa: 0, df: 0 }, total = 0, revTotal = 0;
+  PR_filasL_(D, f, p.desde, p.hasta).forEach(function (r) {
+    if (r.s === 'rev') { revTotal += r.l; if (r.i === 'df') cuenta.df += r.l; }
+    else { total += r.l; if (r.i) cuenta[r.i] += r.l; }
+  });
+  return { cuenta: cuenta, total: total, revTotal: revTotal };
+}
+function PR_bloqueCiclo_(D, f, p) {
+  var b = [0, 0, 0, 0, 0, 0], n = 0;
+  D.C.forEach(function (r) {
+    if (r.d < p.desde || r.d > p.hasta || !f.servicios[r.s] || r.s === 'rev' || (f.tienda && r.t !== f.tienda)) return;
+    for (var i = 0; i < 6; i++) b[i] += r.b[i]; n += r.n;
+  });
+  return { b: b, n: n };
+}
+function PR_bloqueMapa_(D, f, p) {
+  var filas = PR_filasL_(D, f, p.desde, p.hasta), mapa = {}, max = 0, hmin = 24, hmax = 0;
+  filas.forEach(function (r) {
+    if (PR_soloRevisiones_(f) ? r.s !== 'rev' : r.s === 'rev') return;
+    var k = r.d + '|' + r.h; mapa[k] = (mapa[k] || 0) + r.l; if (mapa[k] > max) max = mapa[k];
+    if (r.h < hmin) hmin = r.h; if (r.h > hmax) hmax = r.h;
+  });
+  if (hmin > hmax) return null;
+  var dias = []; for (var i = 0; i < p.n; i++) dias.push(PR_sumarDias_(p.desde, i));
+  return { mapa: mapa, max: max, hmin: Math.min(hmin, 7), hmax: Math.max(hmax, 18), dias: dias };
+}
+
+// ——————————— pintado ———————————
+function PR_htmlFiltros_(D, f, p) {
+  var seg = function (grupo, valor, texto, extra) { return '<button type="button" class="pr-seg" data-pr="' + grupo + ':' + valor + '" aria-pressed="' + (extra.activo ? 'true' : 'false') + '">' + (extra.punto ? '<i class="pr-punto" style="background:' + extra.punto + '"></i>' : '') + texto + '</button>'; };
+  var h = '<div class="pr-card pr-filtros">';
+  h += '<div class="pr-grupo"><label>Periodo</label><div class="pr-segs">' +
+    [['hoy', 'Hoy'], ['ayer', 'Ayer'], ['7', '7 días'], ['30', '30 días'], ['mes', 'Este mes'], ['custom', 'Personalizado']].map(function (x) { return seg('periodo', x[0], x[1], { activo: f.periodo === x[0] }); }).join('') + '</div>';
+  if (f.periodo === 'custom') {
+    h += '<input type="date" class="pr-fecha" id="prDesde" value="' + p.desde + '" max="' + D.hoy + '" aria-label="Desde"> <span class="pr-resumen">a</span> <input type="date" class="pr-fecha" id="prHasta" value="' + p.hasta + '" max="' + D.hoy + '" aria-label="Hasta">';
+  }
+  h += '</div>';
+  h += '<div class="pr-grupo"><label>Tienda</label><div class="pr-segs">' +
+    seg('tienda', '', 'Todas', { activo: !f.tienda }) + seg('tienda', '014', 'Marbella', { activo: f.tienda === '014', punto: PR_TIENDAS_['014'].c }) + seg('tienda', '279', 'Mijas', { activo: f.tienda === '279', punto: PR_TIENDAS_['279'].c }) + '</div>' +
+    '<label style="min-width:auto;margin-left:10px">Ver por</label><div class="pr-segs">' + seg('vista', 'equipos', 'Equipos', { activo: f.vista === 'equipos' }) + seg('vista', 'personas', 'Personas', { activo: f.vista === 'personas' }) + '</div>';
+  var nombres = {}; D.L.forEach(function (r) { (f.vista === 'personas' ? r.o.split(' + ') : [r.o]).forEach(function (n) { nombres[n] = true; }); });
+  var lista = Object.keys(nombres).sort(function (a, b) { return a.localeCompare(b, 'es'); });
+  if (f.operario && lista.indexOf(f.operario) === -1) lista.push(f.operario);
+  h += '<select class="pr-select" id="prOperario" aria-label="Filtrar por ' + (f.vista === 'personas' ? 'persona' : 'equipo') + '"><option value="">' + (f.vista === 'personas' ? 'Todas las personas' : 'Todos los equipos') + '</option>' +
+    lista.map(function (n) { return '<option value="' + PR_esc_(n) + '"' + (n === f.operario ? ' selected' : '') + '>' + PR_esc_(n) + '</option>'; }).join('') + '</select></div>';
+  var cuentaServ = {};
+  PR_filasL_(D, { servicios: (function () { var a = {}; PR_SERVICIOS_.forEach(function (s) { a[s.k] = true; }); return a; })(), tienda: f.tienda, vista: f.vista, operario: f.operario }, p.desde, p.hasta).forEach(function (r) { cuentaServ[r.s] = (cuentaServ[r.s] || 0) + r.l; });
+  h += '<div class="pr-grupo"><label>Servicio</label>' + PR_SERVICIOS_.map(function (s) {
+    return '<button type="button" class="pr-chip" data-pr="serv:' + s.k + '" aria-pressed="' + (f.servicios[s.k] ? 'true' : 'false') + '"><i class="pr-punto" style="background:' + s.c + '"></i>' + PR_esc_(s.n) + ' <span class="pr-n">' + PR_nf_(cuentaServ[s.k] || 0) + '</span></button>';
+  }).join('') + '</div>';
+  var act = [];
+  act.push(p.desde === p.hasta ? PR_fechaCorta_(p.desde) : PR_fechaCorta_(p.desde) + ' – ' + PR_fechaCorta_(p.hasta));
+  act.push('comparado con ' + (p.prevDesde === p.prevHasta ? PR_fechaCorta_(p.prevDesde) : PR_fechaCorta_(p.prevDesde) + ' – ' + PR_fechaCorta_(p.prevHasta)) + (p.soloHoy ? ' (a la misma hora)' : ''));
+  var hayFiltro = f.tienda || f.operario || PR_serviciosActivos_(f).length < PR_SERVICIOS_.length || f.periodo !== '7' || f.vista !== 'equipos';
+  h += '<div class="pr-resumen">' + act.join(' · ') + (hayFiltro ? ' · <a data-pr="reiniciar:1" role="button" tabindex="0">Quitar filtros</a>' : '') + '</div></div>';
+  return h;
+}
+function PR_htmlKpis_(D, f, p) {
+  var hora = p.soloHoy ? PR_horaActual_(D) : undefined;
+  var a = PR_kpis_(D, f, p.desde, p.hasta), b = PR_kpis_(D, f, p.prevDesde, p.prevHasta, hora);
+  var nSpark = Math.max(7, Math.min(14, p.n)), hastaS = p.hasta > D.hoy ? D.hoy : p.hasta;
+  var sLin = PR_serieDiaria_(D, f, hastaS, nSpark, 'lineas'), sUni = PR_serieDiaria_(D, f, hastaS, nSpark, 'unidades'), sPed = PR_serieDiaria_(D, f, hastaS, nSpark, 'pedidos');
+  var etiquetaLinea = a.soloRev ? 'Revisiones realizadas' : 'Líneas preparadas';
+  var tile = function (et, val, uni, sub, delta, spark) {
+    return '<div class="pr-card pr-kpi"><span class="et">' + et + '</span>' + (spark || '') + '<span class="val">' + val + (uni ? '<small>' + uni + '</small>' : '') + '</span>' +
+      (delta ? '<span class="pr-delta ' + delta.cls + '">' + delta.txt + ' <small>' + (p.soloHoy ? 'vs ayer a esta hora' : 'vs periodo anterior') + '</small></span>' : '') +
+      '<span class="sub">' + sub + '</span></div>';
+  };
+  var h = '<div class="pr-kpis">';
+  h += tile(etiquetaLinea, PR_nf_(a.lineas, a.lineas % 1 ? 1 : 0), '', PR_nf_(a.lineas / Math.max(1, p.n), 1) + ' de media al día', PR_delta_(a.lineas, b.lineas, false), PR_spark_(sLin, 'var(--accent)'));
+  h += tile(a.pedidosPorPersona ? 'Pedidos en los que participa' : 'Pedidos completados', PR_nf_(a.pedidos, a.pedidos % 1 ? 1 : 0), '',
+    a.soloRev ? 'No aplica a revisiones' : (a.pedidosPorPersona ? 'Pedidos donde ha preparado alguna línea' : 'Han entrado ' + PR_nf_(a.entradas) + (a.entradas > a.pedidos ? ' · se acumula trabajo' : a.entradas < a.pedidos ? ' · se está vaciando la cola' : '')),
+    a.soloRev ? null : PR_delta_(a.pedidos, b.pedidos, false), a.soloRev ? '' : PR_spark_(sPed, 'var(--tipo-pedido)'));
+  if (!a.unidades && a.palets) h += tile('Palets preparados', PR_nf_(a.palets, a.palets % 1 ? 1 : 0), '', 'Todo el trabajo del periodo es refill', PR_delta_(a.palets, b.palets, false), '');
+  else h += tile('Unidades preparadas', PR_nf_(a.unidades), '', a.palets ? PR_nf_(a.palets, a.palets % 1 ? 1 : 0) + ' palets de refill' : 'Sin palets en el periodo', PR_delta_(a.unidades, b.unidades, false), PR_spark_(sUni, 'var(--tipo-cesion)'));
+  h += tile('Ritmo de trabajo', a.ritmo === null ? '—' : PR_nf_(a.ritmo, 1), a.soloRev ? 'revis./h' : 'líneas/h', PR_nf_(a.horas) + ' horas con actividad', PR_delta_(a.ritmo, b.ritmo, false), '');
+  h += tile('Tiempo de ciclo', a.cicloMedia === undefined || a.pedidosPorPersona ? '—' : PR_dur_(a.cicloMedia), '', a.pedidosPorPersona ? 'No se mide por persona' : (a.cicloN ? PR_nf_(a.pctRapido) + '% de los pedidos en menos de 4 h' : 'Sin pedidos cerrados'),
+    (a.cicloMedia === undefined || b.cicloMedia === undefined) ? null : PR_delta_(a.cicloMedia, b.cicloMedia, true), '');
+  h += tile('Líneas con incidencia', a.pctInc === null ? '—' : PR_nf_(a.pctInc, 1), '%', PR_nf_(a.incidencias, a.incidencias % 1 ? 1 : 0) + ' de ' + PR_nf_(a.lineas, a.lineas % 1 ? 1 : 0), PR_delta_(a.pctInc, b.pctInc, true), '');
+  return h + '</div>';
+}
+function PR_htmlDestacados_(D, f, p, horas, ranking, servicios) {
+  var d = [];
+  if (horas.mejor) d.push(['⏱️', 'Hora más productiva: ' + horas.mejor.h + ':00', PR_nf_(horas.mejor.total, 1) + ' ' + (PR_soloRevisiones_(f) ? 'revisiones' : 'líneas') + ' en esa franja']);
+  if (ranking.length) { var top = ranking[0]; d.push(['🏅', (f.vista === 'personas' ? 'Más trabajo: ' : 'Equipo con más trabajo: ') + top.o, PR_nf_(top.l, top.l % 1 ? 1 : 0) + ' líneas · ' + (top.ritmo === null ? '—' : PR_nf_(top.ritmo, 1)) + ' líneas/h']); }
+  var conRitmo = ranking.filter(function (r) { return r.horas >= 3; }).sort(function (a, b) { return b.ritmo - a.ritmo; });
+  if (conRitmo.length > 1) d.push(['⚡', 'Mejor ritmo: ' + conRitmo[0].o, PR_nf_(conRitmo[0].ritmo, 1) + ' líneas por hora de trabajo']);
+  var mayor = servicios.slice().sort(function (a, b) { return b.k.lineas - a.k.lineas; })[0];
+  if (mayor && mayor.k.lineas) d.push(['📦', 'Servicio con más carga: ' + mayor.s.n, PR_nf_(mayor.cuota) + '% de las líneas del periodo']);
+  var vieja = null; D.B.forEach(function (b) { if ((!f.tienda || b.t === f.tienda) && f.servicios[b.s] && b.vieja > (vieja ? vieja.vieja : 0)) vieja = b; });
+  if (vieja && vieja.vieja >= 120) d.push(['🕐', 'Lo más antiguo pendiente: ' + PR_dur_(vieja.vieja), PR_servicio_(vieja.s).n + ' · ' + (PR_TIENDAS_[vieja.t] || { n: vieja.t }).n]);
+  if (!d.length) return '';
+  return '<div class="pr-destacados">' + d.slice(0, 4).map(function (x) { return '<div class="pr-dest"><span class="ic" aria-hidden="true">' + x[0] + '</span><div><b>' + PR_esc_(x[1]) + '</b><span>' + PR_esc_(x[2]) + '</span></div></div>'; }).join('') + '</div>';
+}
+function PR_htmlHoras_(horas, f) {
+  if (!horas.max) return '<div class="pr-vacio"><b>Sin actividad en este periodo</b>Prueba con otro periodo o quita algún filtro.</div>';
+  return PR_pilas_(horas.cols, horas.max) + PR_leyendaServicios_(horas.claves);
+}
+function PR_htmlTendencia_(t) {
+  if (!t.max) return '<div class="pr-vacio"><b>Sin datos</b>No hay actividad en estos días.</div>';
+  var svg = t.hayPedidos ? '<svg class="pr-linea" viewBox="0 0 100 100" preserveAspectRatio="none" aria-hidden="true"><polyline fill="none" stroke="var(--text-100)" stroke-width="1.6" vector-effect="non-scaling-stroke" stroke-linejoin="round" points="' + t.puntos.join(' ') + '"/></svg>' : '';
+  var h = '<div style="position:relative">' + PR_pilas_(t.cols, t.max) + svg + '</div>';
+  return h + '<div class="pr-leyenda"><span><i class="pr-punto" style="background:var(--accent)"></i>Líneas preparadas</span>' + (t.hayPedidos ? '<span><i class="pr-punto" style="background:var(--text-100)"></i>Pedidos completados</span>' : '') + '<span style="margin-left:auto">Los días más tenues quedan fuera del periodo elegido</span></div>';
+}
+function PR_htmlServicios_(servicios, f) {
+  return '<div class="pr-servicios">' + servicios.map(function (o) {
+    var k = o.k, uni = o.s.k === 'ref' ? (k.palets ? PR_nf_(k.palets, k.palets % 1 ? 1 : 0) + ' palets' : '') : (o.s.k === 'rev' ? '' : PR_nf_(k.unidades) + ' uds');
+    var etiq = o.s.k === 'rev' ? 'revisiones' : 'líneas';
+    return '<button type="button" class="pr-serv ' + (o.activo ? '' : 'apagado') + '" data-pr="solo:' + o.s.k + '" title="Pulsa para ver solo este servicio" aria-pressed="' + (o.activo ? 'true' : 'false') + '">' +
+      '<div class="cab"><i class="pr-punto" style="background:' + o.s.c + '"></i>' + PR_esc_(o.s.n) + '</div>' +
+      '<div class="num">' + PR_nf_(k.lineas, k.lineas % 1 ? 1 : 0) + '<small>' + etiq + '</small></div>' +
+      '<div class="pr-barra"><i style="width:' + Math.min(100, o.cuota).toFixed(1) + '%;background:' + o.s.c + '"></i></div>' +
+      '<div class="pr-mini">' +
+        '<div>Pedidos<b>' + (o.s.k === 'rev' ? '—' : PR_nf_(k.pedidos, k.pedidos % 1 ? 1 : 0)) + '</b></div>' +
+        '<div>Ritmo<b>' + (k.ritmo === null ? '—' : PR_nf_(k.ritmo, 1) + '/h') + '</b></div>' +
+        '<div>Incidencias<b' + (k.pctInc > 8 ? ' style="color:var(--danger-fg)"' : '') + '>' + (k.pctInc === null ? '—' : PR_nf_(k.pctInc, 1) + '%') + '</b></div>' +
+        '<div>Ciclo<b>' + (k.cicloMedia === undefined || o.s.k === 'rev' ? '—' : PR_dur_(k.cicloMedia)) + '</b></div>' +
+        '<div>Cantidad<b>' + (uni || '—') + '</b></div>' +
+        '<div>Reparto<b>' + PR_nf_(o.cuota) + '%</b></div>' +
+      '</div></button>';
+  }).join('') + '</div>';
+}
+function PR_htmlRanking_(lista, f) {
+  if (!lista.length) return '<div class="pr-vacio"><b>Nadie ha preparado nada</b>en este periodo con estos filtros.</div>';
+  var max = lista[0].l, mostrar = PR_ESTADO_.verTodos ? lista : lista.slice(0, 10);
+  var h = '<div class="pr-rank"><div class="pr-fila cabecera"><span></span><span>' + (f.vista === 'personas' ? 'Persona' : 'Equipo') + '</span><span>Líneas por servicio</span><span class="c">Líneas</span><span class="c">Ritmo</span><span class="c">Horas</span><span class="c">Incid.</span></div>';
+  mostrar.forEach(function (r) {
+    var barra = Object.keys(r.porServ).map(function (s) { return '<i style="width:' + (100 * r.porServ[s] / max).toFixed(1) + '%;background:' + PR_servicio_(s).c + '" title="' + PR_esc_(PR_servicio_(s).n) + ': ' + PR_nf_(r.porServ[s], 1) + '"></i>'; }).join('');
+    h += '<button type="button" class="pr-fila ' + (f.operario === r.o ? 'activa' : '') + '" data-pr="persona:' + PR_esc_(r.o) + '" title="Pulsa para ver solo a ' + PR_esc_(r.o) + '">' +
+      '<span class="av">' + PR_esc_(PR_iniciales_(r.o)) + '</span>' +
+      '<span class="nom">' + PR_esc_(r.o) + '<small>' + (r.pedidos ? PR_nf_(r.pedidos, r.pedidos % 1 ? 1 : 0) + ' pedidos' : '') + (r.mejorHora !== null ? (r.pedidos ? ' · ' : '') + 'mejor hora: ' + r.mejorHora + ':00' : '') + '</small></span>' +
+      '<span class="bar">' + barra + '</span>' +
+      '<span class="c">' + PR_nf_(r.l, r.l % 1 ? 1 : 0) + '<small>' + (r.p ? PR_nf_(r.p, r.p % 1 ? 1 : 0) + ' palets' : PR_nf_(r.u) + ' uds') + '</small></span>' +
+      '<span class="c">' + (r.ritmo === null ? '—' : PR_nf_(r.ritmo, 1)) + '<small>líneas/h</small></span>' +
+      '<span class="c">' + PR_nf_(r.horas) + '<small>horas</small></span>' +
+      '<span class="c ' + (r.pctInc > 8 ? 'malo' : '') + '">' + PR_nf_(r.pctInc, 1) + '%<small>incidencias</small></span></button>';
+  });
+  h += '</div>';
+  if (lista.length > 10) h += '<button type="button" class="pr-btn pr-mas" data-pr="ver:todos">' + (PR_ESTADO_.verTodos ? 'Ver solo los 10 primeros' : 'Ver los ' + lista.length + ' ' + (f.vista === 'personas' ? 'personas' : 'equipos')) + '</button>';
+  if (f.vista === 'personas') h += '<p class="pr-nota" style="margin:10px 0 0">En equipo, cada línea se reparte a partes iguales entre las personas que la prepararon.</p>';
+  return h;
+}
+function PR_htmlCalidad_(c) {
+  var max = 0; PR_INCIDENCIAS_.forEach(function (i) { if (c.cuenta[i.k] > max) max = c.cuenta[i.k]; });
+  var total = PR_INCIDENCIAS_.reduce(function (s, i) { return s + c.cuenta[i.k]; }, 0);
+  if (!total) return '<div class="pr-vacio"><b>Sin incidencias ✓</b>Todo lo preparado en el periodo salió completo.</div>';
+  return PR_INCIDENCIAS_.map(function (i) {
+    var n = c.cuenta[i.k];
+    return '<div class="pr-fila-q"><span>' + i.n + '</span><div class="b"><i style="width:' + (max ? 100 * n / max : 0).toFixed(1) + '%"></i></div><span class="n">' + PR_nf_(n, n % 1 ? 1 : 0) + '</span></div>';
+  }).join('') + '<p class="pr-nota" style="margin:8px 0 0">' +
+    (c.total ? 'De <b>' + PR_nf_(c.total, c.total % 1 ? 1 : 0) + '</b> líneas, un <b>' + PR_nf_(100 * (c.cuenta.sp + c.cuenta.sm + c.cuenta.oi + c.cuenta.pa) / c.total, 1) + '%</b> tuvo incidencia. ' : '') +
+    (c.revTotal ? 'De <b>' + PR_nf_(c.revTotal) + '</b> revisiones de palet, <b>' + PR_nf_(c.cuenta.df) + '</b> con diferencia.' : '') + '</p>';
+}
+function PR_htmlCiclo_(c) {
+  if (!c.n) return '<div class="pr-vacio"><b>Sin pedidos cerrados</b>en este periodo.</div>';
+  return '<div class="pr-ciclo" role="img" aria-label="Distribución del tiempo de ciclo">' + c.b.map(function (n, i) { return n ? '<i style="width:' + (100 * n / c.n).toFixed(1) + '%;background:' + PR_TRAMOS_[i].c + '" title="' + PR_TRAMOS_[i].n + ': ' + n + '"></i>' : ''; }).join('') + '</div>' +
+    '<div class="pr-ciclo-leyenda">' + c.b.map(function (n, i) { return '<span><i class="pr-punto" style="display:inline-block;background:' + PR_TRAMOS_[i].c + ';margin-right:6px"></i>' + PR_TRAMOS_[i].n + '<br><b>' + PR_nf_(100 * n / c.n) + '%</b> · ' + n + '</span>'; }).join('') + '</div>' +
+    '<p class="pr-nota" style="margin:12px 0 0">Ciclo = desde que se pide hasta que se prepara la última línea. Una reserva cuenta desde el día en que se hace visible para preparar.</p>';
+}
+function PR_htmlAhora_(D, f) {
+  var filas = D.B.filter(function (b) { return (!f.tienda || b.t === f.tienda) && f.servicios[b.s]; });
+  var porS = {};
+  filas.forEach(function (b) {
+    var o = porS[b.s] || (porS[b.s] = { pre: 0, enp: 0, ubi: 0, vieja: 0, quien: {} });
+    o.pre += b.pre; o.enp += b.enp; o.ubi += b.ubi; if (b.vieja > o.vieja) o.vieja = b.vieja; b.quien.forEach(function (q) { o.quien[q] = true; });
+  });
+  var claves = PR_SERVICIOS_.filter(function (s) { return porS[s.k] && (porS[s.k].pre || porS[s.k].enp || porS[s.k].ubi); });
+  if (!claves.length) return '<div class="pr-vacio"><b>Todo al día ✓</b>No hay nada pendiente.</div>';
+  return '<div class="pr-ahora">' + claves.map(function (s) {
+    var o = porS[s.k];
+    return '<div class="pr-ah"><div class="t"><i class="pr-punto" style="background:' + s.c + '"></i>' + PR_esc_(s.n) + '</div>' +
+      '<div class="d">' + (s.k === 'rev' ? '<b>' + o.pre + '</b> por revisar' : '<b>' + o.pre + '</b> por preparar · <b>' + o.enp + '</b> en curso' + (o.ubi ? ' · <b>' + o.ubi + '</b> por ubicar' : '')) +
+      (o.vieja ? ' · <span class="' + (o.vieja >= 240 ? 'pr-vieja' : '') + '">la más antigua lleva <b>' + PR_dur_(o.vieja) + '</b></span>' : '') + '</div>' +
+      (Object.keys(o.quien).length ? '<div class="quien">' + Object.keys(o.quien).map(function (q) { return '<span>' + PR_esc_(q) + '</span>'; }).join('') + '</div>' : '') + '</div>';
+  }).join('') + '</div>';
+}
+function PR_htmlMapa_(m) {
+  if (!m) return '';
+  var cols = m.hmax - m.hmin + 1, h = '<div class="pr-mapa" style="grid-template-columns:62px repeat(' + cols + ',minmax(20px,1fr))"><span></span>';
+  for (var hh = m.hmin; hh <= m.hmax; hh++) h += '<span class="h">' + hh + '</span>';
+  m.dias.forEach(function (d) {
+    h += '<span class="dia">' + PR_diaSemana_(d) + ' ' + PR_fechaCorta_(d) + '</span>';
+    for (var hh2 = m.hmin; hh2 <= m.hmax; hh2++) {
+      var v = m.mapa[d + '|' + hh2] || 0;
+      h += '<span class="cel" title="' + PR_diaSemana_(d) + ' ' + PR_fechaCorta_(d) + ' ' + hh2 + ':00 · ' + PR_nf_(v, 1) + ' líneas">' + (v ? '<i style="opacity:' + (0.15 + 0.85 * v / m.max).toFixed(2) + '"></i>' : '') + '</span>';
+    }
+  });
+  return h + '</div>';
+}
+
+function PR_pintar_() {
+  var raiz = document.getElementById('prRaiz');
+  if (!raiz) return;
+  var E = PR_ESTADO_, D = E.datos, f = E.f;
+  if (!D) {
+    raiz.innerHTML = '<div class="pr"><div class="pr-esq" style="min-height:96px"></div><div class="pr-kpis"><div class="pr-esq"></div><div class="pr-esq"></div><div class="pr-esq"></div><div class="pr-esq"></div></div><div class="pr-esq" style="min-height:240px"></div>' +
+      (E.error ? '<div class="pr-card"><div class="pr-vacio"><b>No se han podido cargar los datos</b>' + PR_esc_(E.error) + '<br><br><button type="button" class="pr-btn primario" data-pr="recargar:1">Reintentar</button></div></div>' : '') + '</div>';
+    return;
+  }
+  var scroll = window.pageYOffset || 0;
+  var p = PR_periodos_(f, D.hoy);
+  var horas = PR_bloqueHoras_(D, f, p), tend = PR_bloqueTendencia_(D, f, p), servicios = PR_bloqueServicios_(D, f, p), ranking = PR_bloqueRanking_(D, f, p);
+  var calidad = PR_bloqueCalidad_(D, f, p), ciclo = PR_bloqueCiclo_(D, f, p), mapa = p.n >= 3 ? PR_bloqueMapa_(D, f, p) : null;
+  var h = '<div class="pr">';
+  h += '<div class="pr-cab"><div><h1>Productividad</h1><p class="pr-sub">Cómo se está trabajando, quién y a qué ritmo · actualizado <b>' + new Date(D.generado).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + '</b>' +
+    (E.cargando ? ' · <b>actualizando…</b>' : '') + '</p></div><div class="pr-acc"><button type="button" class="pr-btn" data-pr="csv:1">⬇ Descargar CSV</button><button type="button" class="pr-btn primario" data-pr="recargar:1">↻ Actualizar</button></div></div>';
+  h += PR_htmlFiltros_(D, f, p);
+  h += PR_htmlKpis_(D, f, p);
+  h += PR_htmlDestacados_(D, f, p, horas, ranking, servicios);
+  h += '<div class="pr-fila2"><div class="pr-card"><h2>Actividad por hora <small>' + (p.n > 1 ? 'suma de todo el periodo' : 'durante el día') + '</small></h2>' + PR_htmlHoras_(horas, f) + '</div>' +
+    '<div class="pr-card"><h2>Ahora mismo <small>pendiente de hacer</small></h2>' + PR_htmlAhora_(D, f) + '</div></div>';
+  h += '<div class="pr-card"><h2>Tendencia diaria <small>últimos ' + tend.n + ' días</small></h2>' + PR_htmlTendencia_(tend) + '</div>';
+  h += '<div><h3 style="margin:2px 0 8px">Por servicio</h3>' + PR_htmlServicios_(servicios, f) + '</div>';
+  h += '<div class="pr-fila2"><div class="pr-card"><h2>' + (f.vista === 'personas' ? 'Personas' : 'Equipos') + ' <small>pulsa uno para filtrar</small></h2>' + PR_htmlRanking_(ranking, f) + '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:14px;min-width:0"><div class="pr-card"><h2>Calidad <small>incidencias del periodo</small></h2>' + PR_htmlCalidad_(calidad) + '</div>' +
+    '<div class="pr-card"><h2>Rapidez de los pedidos <small>tiempo de ciclo</small></h2>' + PR_htmlCiclo_(ciclo) + '</div></div></div>';
+  if (mapa) h += '<div class="pr-card"><h2>Mapa de intensidad <small>líneas por día y hora</small></h2>' + PR_htmlMapa_(mapa) + '</div>';
+  h += '<p class="pr-nota"><b>Cómo se mide.</b> Los días y horas son hora de Madrid. «Ritmo» = líneas preparadas dividido por las horas en las que esa persona o equipo tuvo actividad. «Ciclo» no se calcula por persona. Los datos salen de las líneas marcadas como preparadas, los pedidos cerrados y las revisiones de palet.</p></div>';
+  raiz.innerHTML = h;
+  PR_ESTADO_.pintadoEn = Date.now();
+  if (scroll) window.scrollTo(0, scroll);
+}
+
+// ——————————— carga, eventos, exportación ———————————
+function PR_hoyMadrid_() { try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }); } catch (e) { return new Date().toISOString().slice(0, 10); } }
+
+function PR_cargar_(forzar, seguimiento) {
+  var E = PR_ESTADO_;
+  if (!E.f) E.f = PR_cargarFiltros_();
+  var hoy = (E.datos && E.datos.hoy) || PR_hoyMadrid_();
+  var necesario = PR_rangoNecesario_(E.f, hoy);
+  var cubierto = E.datos && E.datos.desde <= necesario.desde && E.datos.hasta >= necesario.hasta && Date.now() - E.cargadoEn < 90000;
+  if (cubierto && !forzar) { PR_pintar_(); return; }
+  if (E.cargando) return;
+  E.cargando = true; E.error = '';
+  var pedido = necesario;
+  if (E.datos) PR_pintar_(); // "actualizando…" sin perder lo que se ve
+  google.script.run
+    .withSuccessHandler(function (json) {
+      E.cargando = false;
+      try { E.datos = PR_decodificar_(JSON.parse(json)); E.cargadoEn = Date.now(); E.error = ''; } catch (err) { E.error = 'Los datos no tienen el formato esperado.'; }
+      PR_pintar_();
+      // si mientras tanto el periodo pedía más días, se vuelve a cargar
+      if (!E.error && E.datos && !seguimiento) { var n2 = PR_rangoNecesario_(E.f, E.datos.hoy); if (E.datos.desde > n2.desde || E.datos.hasta < n2.hasta) PR_cargar_(true, true); }
+    })
+    .withFailureHandler(function (err) {
+      E.cargando = false; E.error = (err && err.message) || 'Error de conexión.';
+      PR_pintar_();
+    })
+    .obtenerProductividad(pedido.desde, pedido.hasta);
+}
+
+function PR_accion_(texto, valorSelect) {
+  var E = PR_ESTADO_, f = E.f, i = texto.indexOf(':'), tipo = texto.slice(0, i), v = texto.slice(i + 1);
+  if (tipo === 'periodo') { f.periodo = v; if (v === 'custom' && !f.desde) { var hoy = (E.datos && E.datos.hoy) || PR_hoyMadrid_(); f.desde = PR_sumarDias_(hoy, -6); f.hasta = hoy; } }
+  else if (tipo === 'tienda') f.tienda = v;
+  else if (tipo === 'vista') { f.vista = v; f.operario = ''; }
+  else if (tipo === 'serv') { f.servicios[v] = !f.servicios[v]; if (!PR_serviciosActivos_(f).length) f.servicios[v] = true; }
+  else if (tipo === 'solo') { var todosOn = PR_serviciosActivos_(f).length === 1 && f.servicios[v]; PR_SERVICIOS_.forEach(function (s) { f.servicios[s.k] = todosOn ? true : s.k === v; }); }
+  else if (tipo === 'persona') f.operario = f.operario === v ? '' : v;
+  else if (tipo === 'ver') E.verTodos = !E.verTodos;
+  else if (tipo === 'reiniciar') { E.f = PR_filtrosPorDefecto_(); }
+  else if (tipo === 'recargar') { PR_cargar_(true); return; }
+  else if (tipo === 'csv') { PR_csv_(); return; }
+  PR_guardarFiltros_();
+  PR_cargar_(false);
+}
+
+function PR_csv_() {
+  var E = PR_ESTADO_, D = E.datos; if (!D) return;
+  var f = E.f, p = PR_periodos_(f, D.hoy), lineas = [];
+  var q = function (t) { return '"' + String(t).replace(/"/g, '""') + '"'; };
+  lineas.push(['Productividad Kairos', p.desde + ' a ' + p.hasta, 'Tienda: ' + (f.tienda ? PR_TIENDAS_[f.tienda].n : 'Todas'), 'Servicios: ' + PR_serviciosActivos_(f).map(function (k) { return PR_servicio_(k).n; }).join(' / ')].map(q).join(';'));
+  lineas.push('');
+  lineas.push([f.vista === 'personas' ? 'Persona' : 'Equipo', 'Líneas', 'Unidades', 'Palets', 'Pedidos', 'Horas con actividad', 'Líneas por hora', '% incidencias'].map(q).join(';'));
+  PR_bloqueRanking_(D, f, p).forEach(function (r) {
+    lineas.push([r.o, r.l.toFixed(1).replace('.', ','), Math.round(r.u), r.p.toFixed(1).replace('.', ','), r.pedidos.toFixed(1).replace('.', ','), r.horas, r.ritmo === null ? '' : r.ritmo.toFixed(2).replace('.', ','), r.pctInc.toFixed(1).replace('.', ',')].map(q).join(';'));
+  });
+  lineas.push('');
+  lineas.push(['Día', 'Líneas', 'Pedidos completados'].map(q).join(';'));
+  var sl = PR_serieDiaria_(D, f, p.hasta, p.n, 'lineas'), sp = PR_serieDiaria_(D, f, p.hasta, p.n, 'pedidos');
+  sl.forEach(function (s, i) { lineas.push([s.d, s.v.toFixed(1).replace('.', ','), sp[i].v].map(q).join(';')); });
+  var texto = '﻿' + lineas.join('\r\n');
+  try {
+    var blob = new Blob([texto], { type: 'text/csv;charset=utf-8' }), a = document.createElement('a');
+    a.href = URL.createObjectURL(blob); a.download = 'productividad-' + p.desde + '-a-' + p.hasta + '.csv';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  } catch (err) {
+    kAlerta('No se ha podido descargar el archivo en este dispositivo. Pruébalo desde un ordenador.');
+  }
+}
+
+function PR_delegar_(ev) {
+  var el = ev.target.closest ? ev.target.closest('[data-pr]') : null;
+  if (!el) return;
+  ev.preventDefault();
+  PR_accion_(el.getAttribute('data-pr'));
+}
+
+function renderProductividad_() {
+  var E = PR_ESTADO_;
+  if (E.timer) { clearInterval(E.timer); E.timer = null; }
+  document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() + '<div id="prRaiz"></div>';
+  sincronizarPickers_();
+  var raiz = document.getElementById('prRaiz');
+  raiz.addEventListener('click', PR_delegar_);
+  raiz.addEventListener('keydown', function (ev) { if ((ev.key === 'Enter' || ev.key === ' ') && ev.target.getAttribute && ev.target.getAttribute('role') === 'button') PR_delegar_(ev); });
+  raiz.addEventListener('change', function (ev) {
+    var t = ev.target;
+    if (t.id === 'prOperario') { E.f.operario = t.value; PR_guardarFiltros_(); PR_pintar_(); }
+    else if (t.id === 'prDesde' || t.id === 'prHasta') {
+      var d = document.getElementById('prDesde').value, h = document.getElementById('prHasta').value;
+      if (d && h) { E.f.desde = d; E.f.hasta = h; PR_guardarFiltros_(); PR_cargar_(false); }
+    }
+  });
+  if (!E.f) E.f = PR_cargarFiltros_();
+  PR_pintar_();
+  PR_cargar_(false);
+  // El periodo que incluye hoy se refresca solo cada 2 minutos mientras esta pantalla está abierta.
+  E.timer = setInterval(function () {
+    if (typeof VISTA === 'undefined' || VISTA.nombre !== 'volumenes' || !document.getElementById('prRaiz')) { clearInterval(E.timer); E.timer = null; return; }
+    if (document.hidden) return;
+    var hoy = (E.datos && E.datos.hoy) || PR_hoyMadrid_();
+    if (PR_periodos_(E.f, hoy).incluyeHoy) PR_cargar_(true);
+  }, 120000);
+}
+</script>
