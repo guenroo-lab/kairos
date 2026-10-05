@@ -4,10 +4,10 @@
   <base target="_top">
   <script>
     (function () {
-      var m = 'dark', t = 'taisared';
+      var m = 'light', t = 'retro80s';
       try {
-        m = localStorage.getItem('kairos_mode_pick') || 'dark';
-        t = localStorage.getItem('kairos_theme_pick') || 'taisared';
+        m = localStorage.getItem('kairos_mode_pick') || 'light';
+        t = localStorage.getItem('kairos_theme_pick') || 'retro80s';
       } catch (e) {}
       document.documentElement.setAttribute('data-kmode', m);
       document.documentElement.setAttribute('data-ktheme', t);
@@ -417,7 +417,7 @@
         '<button class="pick" data-for="lmgreen" onclick="setKTema(\'lmgreen\')" type="button"><span class="dot"></span>Verde LM</button>' +
         '<button class="pick" data-for="taisared" onclick="setKTema(\'taisared\')" type="button"><span class="dot"></span>Rojo Taisa</button>' +
         '<button class="pick" data-for="amber" onclick="setKTema(\'amber\')" type="button"><span class="dot"></span>Ámbar</button>' +
-        '<button class="pick" data-for="retro80s" onclick="setKTema(\'retro80s\')" type="button"><span class="dot"></span>Retro 80s</button>' +
+        '<button class="pick" data-for="retro80s" onclick="setKTema(\'retro80s\')" type="button"><span class="dot"></span>Fresh Prince</button>' +
         '</div></div>';
     }
 
@@ -430,7 +430,7 @@
       document.documentElement.setAttribute('data-kmode', modo);
       try { localStorage.setItem('kairos_mode_pick', modo); } catch (e) {}
       var actual = document.documentElement.getAttribute('data-ktheme');
-      if (TEMAS_MODOS[actual].indexOf(modo) === -1) setKTema('taisared'); else sincronizarPickers_();
+      if (TEMAS_MODOS[actual].indexOf(modo) === -1) setKTema('retro80s'); else sincronizarPickers_();
     }
 
     function setKTema(nombre) {
