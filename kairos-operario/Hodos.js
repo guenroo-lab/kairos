@@ -82,6 +82,12 @@ function _dispararEtiquetaSiProcede_(peticionId) {
 }
 
 function _enviarEtiquetaHodos_(payload) {
+  return _llamarHodos_(payload, 'HODOS rechazó la etiqueta').idUnico;
+}
+
+/** Llama al webhook de HODOS (mismo token que la creación de etiquetas) y
+ *  devuelve el JSON de respuesta, ya comprobado (ok = true). */
+function _llamarHodos_(payload, textoError) {
   const props = PropertiesService.getScriptProperties();
   const url = props.getProperty('HODOS_WEBAPP_URL');
   const token = props.getProperty('INCPC_SHARED_TOKEN');
@@ -104,8 +110,8 @@ function _enviarEtiquetaHodos_(payload) {
   } catch (eParse) {
     throw new Error('Respuesta no válida de HODOS (¿problema de autenticación?): ' + texto.substring(0, 200));
   }
-  if (!json.ok) throw new Error('HODOS rechazó la etiqueta: ' + json.error);
-  return json.idUnico;
+  if (!json.ok) throw new Error((textoError || 'HODOS rechazó la petición') + ': ' + json.error);
+  return json;
 }
 
 /** ============ Pantalla HODOS (jefe de equipo): crear/editar/anular ============
@@ -126,6 +132,41 @@ function listarEtiquetasCompleto() {
     '&order=fecha_creacion.desc&limit=200',
     'public');
   return _json_(etiquetas);
+}
+
+/** Imprimir etiquetas "Petición Reserva" igual que desde la pestaña "Prep.
+ *  Pedidos" de HODOS: el HTML (etiqueta Zebra 100x150 con logos y código de
+ *  barras) lo genera el propio HODOS, así que sale idéntico y si allí cambia la
+ *  etiqueta, aquí cambia sola. Se piden por id: lo que se imprime es exactamente
+ *  lo que luego se marca como impreso. */
+function _idsEtiquetasHodos_(idsUnicos) {
+  if (!Array.isArray(idsUnicos) || !idsUnicos.length) throw new Error('Elige al menos una etiqueta.');
+  if (idsUnicos.length > 200) throw new Error('Demasiadas etiquetas de una vez (máximo 200).');
+  // Los ids acaban dentro de un filtro "id_unico=in.(a,b,c)": solo caracteres de
+  // un id real, nada que pueda abrir otro filtro.
+  const vistos = {};
+  const ids = [];
+  idsUnicos.forEach(function (id) {
+    const limpio = String(id == null ? '' : id).trim();
+    if (!/^[A-Za-z0-9._-]{1,40}$/.test(limpio)) throw new Error('Id de etiqueta no válido: "' + limpio + '".');
+    if (!vistos[limpio]) { vistos[limpio] = true; ids.push(limpio); }
+  });
+  return ids;
+}
+
+function htmlEtiquetasHodos(idsUnicos) {
+  const ids = _idsEtiquetasHodos_(idsUnicos);
+  const json = _llamarHodos_({ accion: 'htmlEtiquetasPreparacion', idsUnicos: ids }, 'HODOS no pudo preparar las etiquetas');
+  if (!json.html) throw new Error('HODOS no devolvió las etiquetas. ¿Está desplegada su última versión?');
+  return _json_({ html: json.html });
+}
+
+/** Las marca como impresas en HODOS (desaparecen de "Prep. Pedidos" y del
+ *  marcador de la pestaña HODOS). Solo cambia la bandera de esos ids. */
+function marcarEtiquetasHodosImpresas(idsUnicos) {
+  const ids = _idsEtiquetasHodos_(idsUnicos);
+  const json = _llamarHodos_({ accion: 'marcarImpresasPreparacion', idsUnicos: ids }, 'HODOS no pudo marcar las etiquetas como impresas');
+  return _json_({ cantidad: (json.resultado || {}).cantidad || 0 });
 }
 
 function crearEtiquetaHodosManual(destino, numeroPedido, codigoLm, cantidad, operario) {
@@ -152,6 +193,25 @@ function editarEtiquetaHodos(idUnico, destino, numeroPedido) {
   cambios.numero_pedido = numeroPedido ? String(numeroPedido).trim() : null;
   supaUpdate_('etiquetas', 'id_unico=eq.' + encodeURIComponent(idUnico), cambios, 'public');
   return _json_({ ok: true });
+}
+
+/** Anular varias a la vez. Solo toca etiquetas de este panel (Petición Reserva
+ *  pendientes de imprimir) que no estén ya anuladas; mismo cambio que
+ *  anularEtiquetaHodos (estado = ANULADA), en lotes de 30 ids por la longitud
+ *  máxima de la URL. Devuelve cuántas se anularon. */
+function anularEtiquetasHodos(idsUnicos) {
+  const ids = _idsEtiquetasHodos_(idsUnicos);
+  var cantidad = 0;
+  for (var i = 0; i < ids.length; i += 30) {
+    const trozo = ids.slice(i, i + 30);
+    const filas = supaUpdate_('etiquetas',
+      'subtipo=eq.' + encodeURIComponent(SUBTIPO_HODOS_PREPARACION_) +
+      '&pendiente_impresion_incpc=eq.true&estado=neq.ANULADA' +
+      '&id_unico=in.(' + trozo.map(encodeURIComponent).join(',') + ')',
+      { estado: 'ANULADA' }, 'public');
+    cantidad += (filas || []).length;
+  }
+  return _json_({ cantidad: cantidad });
 }
 
 function anularEtiquetaHodos(idUnico) {

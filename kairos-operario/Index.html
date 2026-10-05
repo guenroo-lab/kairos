@@ -175,11 +175,6 @@
     .rev-linea input { width:96px; margin:0; }
     .rev-extra { display:flex; gap:8px; align-items:center; margin-bottom:6px; }
     .rev-extra input { margin:0; }
-    #zonaImprimir { display:none; }
-    @media print {
-      body > *:not(#zonaImprimir) { display:none !important; }
-      #zonaImprimir { display:block !important; color:#000; padding:40px; }
-    }
 
     .brand-head { display:flex; flex-wrap:wrap; align-items:center; gap:10px; margin-bottom:10px; }
     .brand-badge { background:#fff; border-radius:10px; padding:6px 10px; display:flex; align-items:center; box-shadow:0 2px 8px -3px rgba(0,0,0,.4); }
@@ -252,6 +247,10 @@
     .btn-flujo.pedidos { background:linear-gradient(155deg,#d9e5ff,#9bb8ff); }
     .btn-flujo.refill { background:linear-gradient(155deg,#daf5dd,#92dc9c); }
     .btn-flujo.revision { background:linear-gradient(155deg,#fff0cf,#ffd37a); }
+    .barra-seleccion-hodos { display:flex; flex-wrap:wrap; align-items:center; gap:8px; margin:10px 0; padding:8px 12px; border:1px solid var(--ink-800); border-radius:var(--radius-card); background:var(--ink-900); }
+    .barra-seleccion-hodos .sel-todas { display:flex; align-items:center; gap:8px; margin-right:auto; font-size:13px; font-weight:700; color:var(--text-300); cursor:pointer; }
+    .barra-seleccion-hodos input, .sel-hodos input { width:20px; height:20px; margin:0; accent-color:var(--accent); cursor:pointer; }
+    .sel-hodos { flex:0 0 28px; display:flex; align-items:center; }
     .contador-tienda { font-size:11px; font-weight:800; text-transform:none; letter-spacing:normal; background:rgba(11,18,32,.18); padding:3px 10px; border-radius:20px; color:#0b1220; }
 
     /* ——— Operario escrito a mano (pantalla de elegir operario) ——— */
@@ -2440,10 +2439,16 @@
     function renderHodos() {
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
         '<h1>HODOS · Peticiones de Reserva</h1>' +
-        '<p class="meta">Crear pasa por la app HODOS real (seguro). Editar/Anular cambian la base directamente — puede no reflejarse en HODOS si ella hace algo más al cambiar estos campos.</p>' +
-        '<button onclick="renderFormCrearEtiqueta_()">+ Crear etiqueta</button>' +
+        '<p class="meta">Imprimir saca la misma etiqueta que la pestaña "Prep. Pedidos" de HODOS y la marca como impresa. Crear e imprimir pasan por la app HODOS real (seguro). Editar/Anular cambian la base directamente — puede no reflejarse en HODOS si ella hace algo más al cambiar estos campos.</p>' +
+        '<button id="btnImprimirTodasHodos" onclick="imprimirPendientesHodos_()" disabled>🖨 Imprimir todas las pendientes</button> ' +
+        '<button class="secundario" onclick="renderFormCrearEtiqueta_()">+ Crear etiqueta</button>' +
         '<div id="formCrearEtiqueta"></div>' +
         '<input class="entrada" id="buscarHodos" placeholder="Buscar por nº pedido, destino, id, estado…" style="margin-top:10px;">' +
+        '<div class="barra-seleccion-hodos" id="barraHodos">' +
+          '<label class="sel-todas"><input type="checkbox" id="selTodasHodos" onchange="seleccionarTodasHodos_(this.checked)"> <span id="selTodasTexto">Seleccionar todas</span></label>' +
+          '<button class="secundario" id="btnImprimirSelHodos" onclick="imprimirSeleccionHodos_()" disabled>🖨 Imprimir seleccionadas</button> ' +
+          '<button class="peligro" id="btnAnularSelHodos" onclick="anularSeleccionHodos_()" disabled>🚫 Anular seleccionadas</button>' +
+        '</div>' +
         '<div id="listaHodosCompleto">Cargando…</div>';
       sincronizarPickers_();
       document.getElementById('buscarHodos').oninput = function (e) {
@@ -2470,10 +2475,94 @@
       return HODOS_CACHE_.filter(function (e) { return e.id_unico === idUnico; })[0];
     }
 
+    /** Las que se imprimen con "todas las pendientes": todas las de la lista
+     *  completa (no solo las que deja ver el buscador) menos las anuladas. */
+    function etiquetasHodosImprimibles_() {
+      return HODOS_CACHE_.filter(function (e) { return e.estado !== 'ANULADA'; });
+    }
+
+    // Selección múltiple: solo cuenta lo que se ve (al filtrar con el buscador o
+    // recargar la lista, lo que ya no está a la vista se deselecciona), para no
+    // anular ni imprimir nada que la persona no tenga delante.
+    var HODOS_SELECCION_ = {};
+
+    function idsSeleccionadosHodos_() {
+      return Object.keys(HODOS_SELECCION_).filter(function (id) { return HODOS_SELECCION_[id]; });
+    }
+
+    function actualizarBarraHodos_() {
+      const n = idsSeleccionadosHodos_().length;
+      const visibles = HODOS_VISIBLES_.length;
+      const btnImp = document.getElementById('btnImprimirSelHodos');
+      const btnAn = document.getElementById('btnAnularSelHodos');
+      const todas = document.getElementById('selTodasHodos');
+      const texto = document.getElementById('selTodasTexto');
+      if (btnImp) { btnImp.disabled = n === 0 || IMPRIMIENDO_HODOS_; btnImp.textContent = '🖨 Imprimir seleccionadas' + (n ? ' (' + n + ')' : ''); }
+      if (btnAn) { btnAn.disabled = n === 0 || IMPRIMIENDO_HODOS_; btnAn.textContent = '🚫 Anular seleccionadas' + (n ? ' (' + n + ')' : ''); }
+      if (todas) { todas.disabled = visibles === 0; todas.checked = visibles > 0 && n === visibles; todas.indeterminate = n > 0 && n < visibles; }
+      if (texto) texto.textContent = n ? n + ' de ' + visibles + ' seleccionadas' : 'Seleccionar todas' + (visibles ? ' (' + visibles + ')' : '');
+    }
+
+    var HODOS_VISIBLES_ = []; // ids de la lista tal y como se ve ahora (sin anuladas)
+
+    function alternarSeleccionHodos_(idUnico, marcado) {
+      if (marcado) HODOS_SELECCION_[idUnico] = true; else delete HODOS_SELECCION_[idUnico];
+      actualizarBarraHodos_();
+    }
+
+    function seleccionarTodasHodos_(marcado) {
+      HODOS_SELECCION_ = {};
+      if (marcado) HODOS_VISIBLES_.forEach(function (id) { HODOS_SELECCION_[id] = true; });
+      document.querySelectorAll('#listaHodosCompleto input[data-hid]').forEach(function (c) { c.checked = !!marcado; });
+      actualizarBarraHodos_();
+    }
+
+    function imprimirSeleccionHodos_() {
+      imprimirEtiquetasHodos_(idsSeleccionadosHodos_());
+    }
+
+    function anularSeleccionHodos_() {
+      const ids = idsSeleccionadosHodos_();
+      if (!ids.length || IMPRIMIENDO_HODOS_) return;
+      const detalle = ids.slice(0, 8).map(function (id) {
+        const e = _etiquetaPorId_(id);
+        return escHtmlSie_(e ? (e.numero_pedido || '(sin nº)') + ' → ' + e.destino : id);
+      }).join('<br>') + (ids.length > 8 ? '<br>… y ' + (ids.length - 8) + ' más' : '');
+      kConfirmar('¿Anular ' + ids.length + ' etiqueta' + (ids.length === 1 ? '' : 's') + '?<br><br>' + detalle +
+        '<br><br>Esto actualiza la base directamente y no se puede deshacer desde aquí.').then(function (ok) {
+        if (!ok) return;
+        IMPRIMIENDO_HODOS_ = true; // bloquea los botones mientras se anula
+        actualizarBarraHodos_();
+        google.script.run
+          .withSuccessHandler(function (json) {
+            IMPRIMIENDO_HODOS_ = false;
+            HODOS_SELECCION_ = {};
+            const n = JSON.parse(json).cantidad;
+            cargarHodosCompleto_();
+            if (n !== ids.length) kAlerta('Se han anulado ' + n + ' de ' + ids.length + ': las demás ya no estaban pendientes (otra persona las ha tocado). La lista se ha actualizado.');
+          })
+          .withFailureHandler(function (err) {
+            IMPRIMIENDO_HODOS_ = false;
+            actualizarBarraHodos_();
+            kAlerta('No se han podido anular: ' + escHtmlSie_(err.message));
+            cargarHodosCompleto_();
+          })
+          .anularEtiquetasHodos(ids);
+      });
+    }
+
     function pintarHodos_(lista) {
+      HODOS_VISIBLES_ = lista.filter(function (e) { return e.estado !== 'ANULADA'; }).map(function (e) { return e.id_unico; });
+      Object.keys(HODOS_SELECCION_).forEach(function (id) { if (HODOS_VISIBLES_.indexOf(id) === -1) delete HODOS_SELECCION_[id]; });
+      const btnTodas = document.getElementById('btnImprimirTodasHodos');
+      if (btnTodas) {
+        const n = etiquetasHodosImprimibles_().length;
+        btnTodas.disabled = n === 0;
+        btnTodas.textContent = '🖨 Imprimir todas las pendientes' + (n ? ' (' + n + ')' : '');
+      }
       const cont = document.getElementById('listaHodosCompleto');
       if (!cont) return;
-      if (!lista.length) { cont.innerHTML = '<p class="meta">Sin etiquetas.</p>'; return; }
+      if (!lista.length) { cont.innerHTML = '<p class="meta">Sin etiquetas.</p>'; actualizarBarraHodos_(); return; }
       cont.innerHTML = lista.map(function (e) {
         const anulada = e.estado === 'ANULADA';
         // Bug real (revisión adversarial con Codex CLI, mismo día): estos
@@ -2481,14 +2570,16 @@
         // mano por un jefe vía editarEtiquetaHodos) y se quedaron sin
         // escapar cuando se arregló el resto del fichero.
         return '<div class="linea">' +
-          '<div><div class="desc">' + escHtmlSie_(e.numero_pedido || '(sin nº)') + ' → ' + escHtmlSie_(e.destino) + '</div>' +
+          (anulada ? '<div class="sel-hodos"></div>' : '<label class="sel-hodos"><input type="checkbox" data-hid="' + escHtmlSie_(e.id_unico) + '"' + (HODOS_SELECCION_[e.id_unico] ? ' checked' : '') + ' onchange="alternarSeleccionHodos_(this.getAttribute(\'data-hid\'), this.checked)"></label>') +
+          '<div style="flex:1;min-width:0;"><div class="desc">' + escHtmlSie_(e.numero_pedido || '(sin nº)') + ' → ' + escHtmlSie_(e.destino) + '</div>' +
           '<div class="meta">' + escHtmlSie_(e.id_unico) + ' · ' + escHtmlSie_(e.estado) + ' · ' + escHtmlSie_(e.origen || '') + ' · ' + new Date(e.fecha_creacion).toLocaleString('es-ES') + '</div></div>' +
-          '<div><button class="secundario" onclick="imprimirEtiqueta_(\'' + escHtmlSie_(_jsStr_(e.id_unico)) + '\')">Imprimir</button> ' +
+          '<div>' + (anulada ? '' : '<button class="secundario" onclick="imprimirEtiquetasHodos_([\'' + escHtmlSie_(_jsStr_(e.id_unico)) + '\'])">Imprimir</button> ') +
           (anulada ? '' :
             '<button class="secundario" onclick="renderFormEditarEtiqueta_(\'' + escHtmlSie_(_jsStr_(e.id_unico)) + '\')">Editar</button> ' +
             '<button class="peligro" onclick="anularEtiquetaUI_(\'' + escHtmlSie_(_jsStr_(e.id_unico)) + '\', this)">Anular</button>') +
           '</div></div>';
       }).join('');
+      actualizarBarraHodos_();
     }
 
     function renderFormCrearEtiqueta_() {
@@ -2541,21 +2632,118 @@
       });
     }
 
-    function imprimirEtiqueta_(idUnico) {
-      const e = _etiquetaPorId_(idUnico);
-      if (!e) return;
-      var zona = document.getElementById('zonaImprimir');
-      if (!zona) {
-        zona = document.createElement('div');
-        zona.id = 'zonaImprimir';
-        document.body.appendChild(zona);
+    // ——— Imprimir etiquetas "Petición Reserva" ———
+    // Misma etiqueta y mismo flujo que la pestaña "Prep. Pedidos" de HODOS: el HTML
+    // lo genera HODOS (Zebra 100x150 mm, logos, código de barras del id) y se
+    // imprime desde una ventana propia, esperando a que carguen las imágenes
+    // (esperarRenderizadoParaImprimir_ y imprimirEnMarcoOculto_ son copia de las de
+    // HODOS: imprimir antes de tiempo descuadra las etiquetas). Tras abrir la
+    // impresión se marcan como impresas, igual que allí.
+
+    function esperarRenderizadoParaImprimir_(ventana, callback) {
+      var doc = ventana.document;
+      var imgs = doc.images ? Array.prototype.slice.call(doc.images) : [];
+      var pendientes = imgs.filter(function (img) { return !img.complete; }).length;
+      var tope = setTimeout(listo, 2000 + imgs.length * 20);
+
+      function listo() {
+        clearTimeout(tope);
+        ventana.requestAnimationFrame(function () {
+          ventana.requestAnimationFrame(callback);
+        });
       }
-      zona.innerHTML =
-        '<div style="font-size:28px;font-weight:800;">' + escHtmlSie_(e.destino) + '</div>' +
-        '<div style="font-size:20px;margin-top:10px;">Pedido: ' + escHtmlSie_(e.numero_pedido || '—') + '</div>' +
-        '<div style="font-size:16px;margin-top:6px;">' + escHtmlSie_(e.id_unico) + '</div>' +
-        '<div style="font-size:14px;margin-top:6px;">' + new Date(e.fecha_creacion).toLocaleString('es-ES') + '</div>';
-      window.print();
+
+      if (pendientes === 0) { listo(); return; }
+      function comprobar() {
+        pendientes--;
+        if (pendientes <= 0) listo();
+      }
+      imgs.forEach(function (img) {
+        if (img.complete) return;
+        img.addEventListener('load', comprobar, { once: true });
+        img.addEventListener('error', comprobar, { once: true });
+      });
+    }
+
+    function imprimirEnMarcoOculto_(html) {
+      // Si el navegador bloqueó la ventana emergente: imprime desde un iframe oculto.
+      var ifr = document.createElement('iframe');
+      ifr.style.cssText = 'position:fixed;right:0;bottom:0;width:0;height:0;border:0;';
+      document.body.appendChild(ifr);
+      ifr.contentDocument.open();
+      ifr.contentDocument.write(html);
+      ifr.contentDocument.close();
+      esperarRenderizadoParaImprimir_(ifr.contentWindow, function () {
+        try {
+          ifr.contentWindow.focus();
+          ifr.contentWindow.print();
+        } catch (e) {
+          kAlerta('No se pudo imprimir: ' + escHtmlSie_(e.message));
+        }
+        setTimeout(function () { document.body.removeChild(ifr); }, 1000);
+      });
+    }
+
+    var IMPRIMIENDO_HODOS_ = false;
+
+    /** Imprime las etiquetas de esos ids (más antigua primero, lo decide HODOS) y
+     *  las marca como impresas. La ventana se abre YA, dentro del clic: si se abre
+     *  tras la respuesta del servidor el navegador la bloquea. */
+    function imprimirEtiquetasHodos_(idsUnicos) {
+      if (IMPRIMIENDO_HODOS_) return;
+      if (!idsUnicos || !idsUnicos.length) return;
+      IMPRIMIENDO_HODOS_ = true;
+      const botones = document.querySelectorAll('#btnImprimirTodasHodos, #listaHodosCompleto button');
+      botones.forEach(function (b) { b.disabled = true; });
+      actualizarBarraHodos_();
+      function terminar() {
+        IMPRIMIENDO_HODOS_ = false;
+        HODOS_SELECCION_ = {};
+        cargarHodosCompleto_(); // la lista vuelve a pintarse (y reactiva los botones)
+      }
+      var ventana = window.open('', '_blank');
+      if (ventana) ventana.document.write('Generando etiquetas...');
+      function fallo(mensaje) {
+        if (ventana && !ventana.closed) ventana.close();
+        IMPRIMIENDO_HODOS_ = false;
+        botones.forEach(function (b) { b.disabled = false; });
+        actualizarBarraHodos_();
+        kAlerta('No se han podido imprimir las etiquetas: ' + escHtmlSie_(mensaje));
+      }
+      google.script.run
+        .withSuccessHandler(function (json) {
+          const html = JSON.parse(json).html;
+          function marcar() {
+            google.script.run
+              .withSuccessHandler(terminar)
+              .withFailureHandler(function (err) {
+                IMPRIMIENDO_HODOS_ = false;
+                kAlerta('Las etiquetas se han enviado a imprimir, pero no se han podido marcar como impresas (' + escHtmlSie_(err.message) + '). Sigue en la lista: no las imprimas dos veces.');
+                cargarHodosCompleto_();
+              })
+              .marcarEtiquetasHodosImpresas(idsUnicos);
+          }
+          if (ventana && !ventana.closed) {
+            ventana.document.open();
+            ventana.document.write(html);
+            ventana.document.close();
+            esperarRenderizadoParaImprimir_(ventana, function () {
+              ventana.focus();
+              ventana.print();
+            });
+          } else {
+            imprimirEnMarcoOculto_(html); // ventana bloqueada: iframe oculto
+          }
+          marcar();
+        })
+        .withFailureHandler(function (err) { fallo(err.message); })
+        .htmlEtiquetasHodos(idsUnicos);
+    }
+
+    function imprimirPendientesHodos_() {
+      const lista = etiquetasHodosImprimibles_();
+      if (!lista.length) return;
+      imprimirEtiquetasHodos_(lista.map(function (e) { return e.id_unico; }));
     }
 
     /** ============ Pantalla Operarios (jefe de equipo): alta/baja ============ */
