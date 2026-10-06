@@ -14,7 +14,9 @@
  *      (día y hora = los de la última línea preparada, que es cuando el equipo termina)
  *   E: pedidos entrados (creados) [dia, tienda, servicio, nº]
  *   B: lo pendiente AHORA [tienda, servicio, por preparar, en preparación, por ubicar, minutos de la más antigua, [quién trabaja]]
- *   J: jefe de cada turno por día { 'yyyy-MM-dd': [jefe de mañana, jefe de tarde] } (TurnosJefe.js)
+ *   J: jefe de cada turno por día { 'yyyy-MM-dd': [jefe de mañana, jefe de tarde] } (TurnosJefe.js): lo anotado
+ *      a mano si lo hay y, si no, lo que dice el cuadrante. JA = solo cuadrante · JM = solo a mano ·
+ *      cuad = { ok, origen, actualizado, error, conflictos } de la lectura del cuadrante
  *   corte: hora (Madrid) a partir de la cual el turno es de tarde · jefes: lista de jefes de turno
  *  Días y horas siempre en hora de Madrid. */
 
@@ -204,6 +206,13 @@ function obtenerProductividad(desde, hasta) {
       c.masAntigua = Math.max(c.masAntigua, Math.max(0, Math.round((ahora - Date.parse(r.creada_en)) / 60000)));
     });
 
+  // Jefes de turno (cuadrante + correcciones a mano). Nunca debe romper el panel.
+  let turnos;
+  try { turnos = _turnosResolver_(desde, hasta); } catch (e) {
+    Logger.log('⚠️ Jefes de turno: ' + e.message);
+    turnos = { J: {}, JA: {}, JM: {}, cuad: { ok: false, origen: 'ninguno', actualizado: '', error: e.message, conflictos: {} } };
+  }
+
   function filas(mapa) { return Object.keys(mapa).map(function (k) { return mapa[k].fila; }); }
   function lista(grupo) { return Object.keys(dic[grupo]).sort(function (a, b) { return dic[grupo][a] - dic[grupo][b]; }); }
   // B se codifica ANTES de leer los diccionarios: puede añadir tiendas o
@@ -214,7 +223,7 @@ function obtenerProductividad(desde, hasta) {
   });
   return _json_({
     generado: new Date(ahora).toISOString(), hoy: hoy, desde: desde, hasta: hasta,
-    corte: TURNOS_CORTE_HORA_, jefes: TURNOS_JEFES_, J: _turnosLeer_(desde, hasta),
+    corte: TURNOS_CORTE_HORA_, jefes: TURNOS_JEFES_, J: turnos.J, JA: turnos.JA, JM: turnos.JM, cuad: turnos.cuad,
     d: lista('d'), t: lista('t'), s: lista('s'), o: lista('o'),
     L: filas(celdasL),
     P: Object.keys(pedidosPorCelda).map(function (k) { const c = pedidosPorCelda[k]; return c.fila.concat([Object.keys(c.ids).length]); }),

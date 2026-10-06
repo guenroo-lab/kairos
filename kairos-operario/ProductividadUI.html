@@ -172,6 +172,8 @@
   .pr-cd .tn > span { font-size:10.5px; color:var(--text-600); font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
   .pr-cd .tn .chips { display:flex; gap:5px; flex-wrap:wrap; }
   @media (max-width: 640px) { .pr-cd { grid-template-columns:minmax(0,1fr); } .pr-cd .dia { padding-top:0; } }
+  .pr button.pr-jc.mano { box-shadow:inset 0 0 0 2px var(--warn-line, var(--ink-700)); }
+  .pr-conf { color:var(--warn-fg, var(--text-500)); font-weight:700; text-transform:none; letter-spacing:0; }
   .pr-hist { margin-top:12px; font-size:12px; color:var(--text-500); }
   .pr-hist li { margin:3px 0; }
 
@@ -288,7 +290,7 @@ function PR_rangoNecesario_(f, hoy) {
 
 // ——————————— datos ———————————
 function PR_decodificar_(r) {
-  var D = { generado: r.generado, hoy: r.hoy, desde: r.desde, hasta: r.hasta, corte: r.corte || 14, jefes: r.jefes || [], J: r.J || {} };
+  var D = { generado: r.generado, hoy: r.hoy, desde: r.desde, hasta: r.hasta, corte: r.corte || 14, jefes: r.jefes || [], J: r.J || {}, JA: r.JA || {}, JM: r.JM || {}, cuad: r.cuad || null };
   D.L = r.L.map(function (f) { return { d: r.d[f[0]], h: f[1], t: r.t[f[2]], s: r.s[f[3]], o: r.o[f[4]], i: f[5], l: f[6], u: f[7], p: f[8] }; });
   D.P = r.P.map(function (f) { return { d: r.d[f[0]], t: r.t[f[1]], s: r.s[f[2]], o: r.o[f[3]], n: f[4] }; });
   D.C = r.C.map(function (f) { return { d: r.d[f[0]], h: f[1], t: r.t[f[2]], s: r.s[f[3]], n: f[4], min: f[5], b: f.slice(6, 12) }; });
@@ -610,29 +612,42 @@ function PR_actividadTurnos_(D) {
   return act;
 }
 
-/** Anota o quita (si ya estaba) el jefe de un turno: se ve al instante y se guarda en el servidor. */
-function PR_ponerJ_(D, dia, v) { if (v && (v[0] || v[1])) D.J[dia] = [v[0] || '', v[1] || '']; else delete D.J[dia]; }
+/** Jefe que vale de cada turno de un día: lo anotado a mano (D.JM) si lo hay y, si no, lo que dice el cuadrante (D.JA). Se guarda en D.J. */
+function PR_recalcJ_(D, dia) {
+  var a = D.JA[dia] || ['', ''], m = D.JM[dia] || ['', ''], v = [m[0] || a[0], m[1] || a[1]];
+  if (v[0] || v[1]) D.J[dia] = v; else delete D.J[dia];
+}
+function PR_ponerManual_(D, dia, man) {
+  if (man && (man[0] || man[1])) D.JM[dia] = [man[0] || '', man[1] || '']; else delete D.JM[dia];
+  PR_recalcJ_(D, dia);
+}
+/** Corrige a mano el jefe de un turno (se ve al instante y se guarda en el servidor). Pulsar al que ya vale quita
+ *  la corrección (vuelve el cuadrante); si ese venía del cuadrante no hay nada que quitar. */
 function PR_asignar_(dia, turno, jefe) {
   var E = PR_ESTADO_, D = E.datos; if (!D) return;
-  var i = turno === 'm' ? 0 : 1, previo = (D.J[dia] || ['', '']).slice(), nuevo = previo.slice();
-  nuevo[i] = previo[i] === jefe ? '' : jefe;
-  PR_ponerJ_(D, dia, nuevo);
+  var i = turno === 'm' ? 0 : 1, man = (D.JM[dia] || ['', '']).slice(), auto = D.JA[dia] || ['', ''], enviar = jefe;
+  if (jefe === (man[i] || auto[i])) { if (!man[i]) return; enviar = ''; }
+  var nuevo = man.slice(); nuevo[i] = enviar === auto[i] ? '' : enviar;
+  PR_ponerManual_(D, dia, nuevo);
   E.guardando = (E.guardando || 0) + 1;
   PR_pintar_();
   google.script.run
     .withSuccessHandler(function (json) {
       E.guardando--;
-      try { var r = JSON.parse(json); if (!E.guardando) PR_ponerJ_(D, r.dia, r.v); } catch (err) {}
+      try {
+        var r = JSON.parse(json);
+        if (!E.guardando) { if (r.a && (r.a[0] || r.a[1])) D.JA[r.dia] = r.a; else delete D.JA[r.dia]; PR_ponerManual_(D, r.dia, r.m); }
+      } catch (err) {}
       E.historial = null;
       PR_pintar_();
     })
     .withFailureHandler(function (err) {
       E.guardando--;
-      PR_ponerJ_(D, dia, previo);
+      PR_ponerManual_(D, dia, man);
       PR_pintar_();
       kAlerta('No se ha podido guardar el cambio: ' + ((err && err.message) || 'error de conexión') + '.');
     })
-    .asignarJefeTurno(dia, turno, nuevo[i]);
+    .asignarJefeTurno(dia, turno, enviar);
 }
 
 /** Datos de una carga parcial (hoy y ayer) metidos en los que ya hay, sin volver a pedir todo el periodo. */
@@ -641,9 +656,12 @@ function PR_mezclar_(D, N) {
   ['L', 'P', 'C', 'E'].forEach(function (k) { D[k] = D[k].filter(function (r) { return !dentro(r); }).concat(N[k].filter(dentro)); });
   D.B = N.B; D.generado = N.generado; D.hoy = N.hoy; D.corte = N.corte; D.jefes = N.jefes;
   if (b > D.hasta) D.hasta = b;
+  D.cuad = N.cuad;
   if (!PR_ESTADO_.guardando) {
-    Object.keys(D.J).forEach(function (d) { if (d >= a && d <= b) delete D.J[d]; });
-    Object.keys(N.J).forEach(function (d) { D.J[d] = N.J[d]; });
+    ['J', 'JA', 'JM'].forEach(function (k) {
+      Object.keys(D[k]).forEach(function (d) { if (d >= a && d <= b) delete D[k][d]; });
+      Object.keys(N[k]).forEach(function (d) { D[k][d] = N[k][d]; });
+    });
   }
   return D;
 }
@@ -812,11 +830,19 @@ function PR_htmlMapa_(m) {
   return h + '</div>';
 }
 
+/** Un botón por jefe: marcado el que vale. Con borde discontinuo si es una corrección a mano (si no, viene del cuadrante). */
 function PR_htmlChipsJefe_(D, dia, turno) {
-  var v = D.J[dia] || ['', ''], actual = v[turno === 'm' ? 0 : 1];
+  var i = turno === 'm' ? 0 : 1, man = (D.JM[dia] || ['', ''])[i], auto = (D.JA[dia] || ['', ''])[i], actual = man || auto;
   return D.jefes.map(function (n) {
-    return '<button type="button" class="pr-jc" data-pr="asig:' + dia + '|' + turno + '|' + PR_esc_(n) + '" aria-pressed="' + (actual === n ? 'true' : 'false') + '" title="' + PR_esc_(n) + '">' + PR_esc_(PR_corto_(n)) + '</button>';
+    var on = actual === n;
+    var titulo = n + (on ? (man ? ' · anotado a mano (púlsalo para volver al cuadrante)' : ' · según el cuadrante') : (auto === n ? ' · el cuadrante decía este' : ''));
+    return '<button type="button" class="pr-jc' + (on && man ? ' mano' : '') + '" data-pr="asig:' + dia + '|' + turno + '|' + PR_esc_(n) + '" aria-pressed="' + (on ? 'true' : 'false') + '" title="' + PR_esc_(titulo) + '">' + PR_esc_(PR_corto_(n)) + '</button>';
   }).join('');
+}
+/** Aviso de un turno en el que el cuadrante no decide (dos jefes con el mismo código). */
+function PR_avisoTurno_(D, dia, turno) {
+  var c = D.cuad && D.cuad.conflictos && D.cuad.conflictos[dia];
+  return (c && c.indexOf(turno) !== -1) ? ' · <span class="pr-conf">el cuadrante pone a dos jefes: elige</span>' : '';
 }
 function PR_htmlCalendario_(D) {
   var E = PR_ESTADO_, act = PR_actividadTurnos_(D), filas = '', dias = 0;
@@ -828,17 +854,17 @@ function PR_htmlCalendario_(D) {
     var falta = ((a.m.lin || a.m.ped) && !v[0]) || ((a.t.lin || a.t.ped) && !v[1]);
     var turno = function (k, nombre) {
       var x = a[k];
-      return '<div class="tn"><span>' + nombre + ' · ' + ((x.lin || x.ped) ? PR_nf_(x.lin) + ' líneas · ' + PR_nf_(x.ped) + ' pedidos' : 'sin actividad') + '</span><div class="chips">' + PR_htmlChipsJefe_(D, dia, k) + '</div></div>';
+      return '<div class="tn"><span>' + nombre + ' · ' + ((x.lin || x.ped) ? PR_nf_(x.lin) + ' líneas · ' + PR_nf_(x.ped) + ' pedidos' : 'sin actividad') + PR_avisoTurno_(D, dia, k === 'm' ? 'm' : 't') + '</span><div class="chips">' + PR_htmlChipsJefe_(D, dia, k) + '</div></div>';
     };
     filas += '<div class="pr-cd ' + (falta ? 'falta' : '') + '"><div class="dia">' + PR_diaSemana_(dia) + ' ' + PR_fechaCorta_(dia) + (i === 0 ? '<small>hoy</small>' : '') + '</div>' + turno('m', 'Mañana') + turno('t', 'Tarde') + '</div>';
   }
   var hist = '';
   if (E.historial === 'cargando') hist = '<p class="pr-hist">Cargando…</p>';
   else if (E.historial) hist = '<ul class="pr-hist">' + (E.historial.length ? E.historial.map(function (x) {
-    return '<li>' + new Date(x.cuando).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' · ' + PR_diaSemana_(x.dia) + ' ' + PR_fechaCorta_(x.dia) + ' ' + (x.turno === 'm' ? 'mañana' : 'tarde') + ': ' + PR_esc_(x.jefe || 'sin jefe') + (x.antes ? ' (antes ' + PR_esc_(x.antes) + ')' : '') + '</li>';
+    return '<li>' + new Date(x.cuando).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' · ' + PR_diaSemana_(x.dia) + ' ' + PR_fechaCorta_(x.dia) + ' ' + (x.turno === 'm' ? 'mañana' : 'tarde') + ': ' + (x.jefe ? PR_esc_(x.jefe) + ' (a mano)' : 'vuelve a valer el cuadrante') + (x.antes ? ' · antes ' + PR_esc_(x.antes) : '') + '</li>';
   }).join('') : '<li>Aún no hay cambios anotados.</li>') + '</ul>';
   return '<div class="pr-cal"><h3>Calendario de turnos</h3>' +
-    '<p class="ay">Pulsa quién llevó cada turno; si lo pulsas otra vez, se quita. Los días con trabajo y sin jefe anotado salen resaltados. La mañana llega hasta las ' + D.corte + ':00 y la tarde empieza a esa hora.</p>' +
+    '<p class="ay">Los turnos vienen del cuadrante (M = mañana, T = tarde; quien tiene P hace otras funciones y no cuenta). Solo hay que tocar algo si el jefe de ese día fue otro: lo que anotes aquí manda (borde discontinuo) y, si lo vuelves a pulsar, vuelve a valer el cuadrante. Los días con trabajo y sin jefe salen resaltados. La mañana llega hasta las ' + D.corte + ':00 y la tarde empieza a esa hora.</p>' +
     filas + '<button type="button" class="pr-btn pr-mas" data-pr="hist:1">' + (E.historial ? 'Ocultar últimos cambios' : 'Ver últimos cambios') + '</button>' + hist + '</div>';
 }
 function PR_htmlJefes_(D, f, p, J) {
@@ -846,9 +872,12 @@ function PR_htmlJefes_(D, f, p, J) {
   var E = PR_ESTADO_, met = J.met;
   var seg = function (g, v, t, on) { return '<button type="button" class="pr-seg" data-pr="' + g + ':' + v + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + t + '</button>'; };
   var h = '<div class="pr-card pr-jefes"><h2>Jefes de turno <small>quién saca más trabajo con su equipo</small></h2>';
-  h += '<div class="pr-hoy"><span class="tt">Hoy · ' + PR_diaSemana_(D.hoy) + ' ' + PR_fechaCorta_(D.hoy) + '</span>' +
-    '<div class="turno"><b>Mañana</b>' + PR_htmlChipsJefe_(D, D.hoy, 'm') + '</div><div class="turno"><b>Tarde</b>' + PR_htmlChipsJefe_(D, D.hoy, 't') + '</div>' +
+  var cu = D.cuad;
+  h += '<div class="pr-hoy"><span class="tt">Hoy · ' + PR_diaSemana_(D.hoy) + ' ' + PR_fechaCorta_(D.hoy) + (cu && cu.ok ? ' · según el cuadrante' : '') + '</span>' +
+    '<div class="turno"><b>Mañana</b>' + PR_htmlChipsJefe_(D, D.hoy, 'm') + PR_avisoTurno_(D, D.hoy, 'm') + '</div><div class="turno"><b>Tarde</b>' + PR_htmlChipsJefe_(D, D.hoy, 't') + PR_avisoTurno_(D, D.hoy, 't') + '</div>' +
     '<button type="button" class="pr-btn" style="margin-left:auto" data-pr="cal:1">' + (E.editor ? 'Cerrar calendario' : 'Calendario de turnos') + '</button></div>';
+  if (cu && !cu.ok) h += '<div class="pr-jlider aviso"><span aria-hidden="true">⚠️</span><span><b>No se ha podido leer el cuadrante</b>, así que los jefes de turno hay que anotarlos a mano (arriba para hoy, o en el calendario para otros días).</span></div>';
+  else if (cu && cu.origen === 'copia') h += '<div class="pr-jlider aviso"><span aria-hidden="true">ℹ️</span><span>El cuadrante no se ha podido abrir ahora; se usa la copia del ' + new Date(cu.actualizado).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + '. Si hubo cambios después, anótalos a mano.</span></div>';
   if (E.editor) h += PR_htmlCalendario_(D);
   h += '<div class="pr-jctl"><div class="pr-segs">' + seg('jt', '', 'Todos los turnos', !J.turnoSel) + seg('jt', 'm', 'Mañana', J.turnoSel === 'm') + seg('jt', 't', 'Tarde', J.turnoSel === 't') + '</div>' +
     '<div class="pr-segs">' + PR_METRICAS_JEFE_.map(function (m) { return seg('jm', m.k, m.n, m.k === met.k); }).join('') + '</div></div>';
@@ -856,7 +885,7 @@ function PR_htmlJefes_(D, f, p, J) {
     return h + '<div class="pr-jlider aviso">Para comparar jefes hay que ver todos los equipos: quita el filtro de ' + (f.vista === 'personas' ? 'persona' : 'equipo') + ' de arriba.</div></div>';
   }
   if (!J.lista.length) {
-    h += '<div class="pr-vacio"><b>Todavía no hay turnos con jefe anotado en este periodo</b>Anota arriba quién lleva el turno de hoy, o rellena los días anteriores en «Calendario de turnos».</div>';
+    h += '<div class="pr-vacio"><b>Todavía no hay turnos con jefe en este periodo</b>El cuadrante no tiene turnos M o T para estos jefes en estos días y no se ha anotado nada a mano. Puedes anotarlos en «Calendario de turnos».</div>';
   } else {
     var l = J.lider;
     if (l) h += '<div class="pr-jlider"><span aria-hidden="true">🏆</span><span><b>' + PR_esc_(l.nombre) + '</b> lidera en ' + met.n.toLowerCase() + ' con <b>' + PR_nf_(l.valor, met.dec) + '</b>' +
@@ -877,8 +906,8 @@ function PR_htmlJefes_(D, f, p, J) {
         '<span class="c ' + (j.pctInc > 8 ? 'malo' : '') + '">' + (j.pctInc === null ? '—' : PR_nf_(j.pctInc, 1) + '%') + '<small>incidencias</small></span></div>';
     });
   }
-  if (J.sin.n) h += '<div class="pr-sinasig"><span aria-hidden="true">⚠️</span><span><b>' + J.sin.n + (J.sin.n === 1 ? ' turno con trabajo' : ' turnos con trabajo') + ' sin jefe anotado</b> (' + PR_nf_(J.sin.ped) + ' pedidos y ' + PR_nf_(J.sin.lin, J.sin.lin % 1 ? 1 : 0) + ' líneas que no cuentan para nadie).</span><button type="button" class="pr-btn" data-pr="cal:1">Rellenar</button></div>';
-  h += '<p class="pr-nota" style="margin:12px 0 0">Cada turno se atribuye al jefe anotado para ese día. Un pedido cuenta en el turno donde se preparó su última línea. «Equipo» son las personas distintas que prepararon en sus turnos. El índice compara con la media de todos los jefes <b>en el mismo turno</b>, para no penalizar a quien lleva el turno más cargado.</p></div>';
+  if (J.sin.n) h += '<div class="pr-sinasig"><span aria-hidden="true">⚠️</span><span><b>' + J.sin.n + (J.sin.n === 1 ? ' turno con trabajo' : ' turnos con trabajo') + ' sin jefe</b> (' + PR_nf_(J.sin.ped) + ' pedidos y ' + PR_nf_(J.sin.lin, J.sin.lin % 1 ? 1 : 0) + ' líneas que no cuentan para nadie: el cuadrante no tiene a ninguno de estos jefes en ese turno, o tiene a dos).</span><button type="button" class="pr-btn" data-pr="cal:1">Revisar</button></div>';
+  h += '<p class="pr-nota" style="margin:12px 0 0">Cada turno se atribuye al jefe que el cuadrante pone en M (mañana) o T (tarde) ese día; el que tiene P hace otras funciones y no cuenta. Lo anotado a mano manda sobre el cuadrante. Un pedido cuenta en el turno donde se preparó su última línea. «Equipo» son las personas distintas que prepararon en sus turnos. El índice compara con la media de todos los jefes <b>en el mismo turno</b>, para no penalizar a quien lleva el turno más cargado.</p></div>';
   return h;
 }
 
@@ -1007,7 +1036,7 @@ function PR_csv_() {
       var t = j.tot;
       lineas.push([j.nombre, t.tur, j.s.m.tur, j.s.t.tur, t.ped, nf(t.tur ? t.ped / t.tur : null, 2), nf(t.lin, 1), nf(t.tur ? t.lin / t.tur : null, 1), nf(j.personasMedia, 1), nf(j.ritmo, 2), nf(j.pctInc, 1), nf(j.indice, 2)].map(q).join(';'));
     });
-    if (J.sin.n) lineas.push(['(sin jefe anotado)', J.sin.n, '', '', J.sin.ped, '', nf(J.sin.lin, 1), '', '', '', '', ''].map(q).join(';'));
+    if (J.sin.n) lineas.push(['(sin jefe)', J.sin.n, '', '', J.sin.ped, '', nf(J.sin.lin, 1), '', '', '', '', ''].map(q).join(';'));
   }
   lineas.push('');
   lineas.push(['Día', 'Líneas', 'Pedidos completados'].map(q).join(';'));
