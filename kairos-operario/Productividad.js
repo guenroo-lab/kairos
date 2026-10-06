@@ -10,9 +10,12 @@
  *   L: líneas preparadas [dia, hora, tienda, servicio, operario, incidencia, líneas, unidades, palets]
  *      (las revisiones de palet entran aquí con servicio 'rev', 1 por revisión)
  *   P: pedidos en los que participó cada operario [dia, tienda, servicio, operario, nº pedidos]
- *   C: pedidos cerrados [dia, tienda, servicio, nº, suma minutos de ciclo, b0..b5 por tramos de ciclo]
+ *   C: pedidos completados [dia, hora, tienda, servicio, nº, suma minutos de ciclo, b0..b5 por tramos de ciclo]
+ *      (día y hora = los de la última línea preparada, que es cuando el equipo termina)
  *   E: pedidos entrados (creados) [dia, tienda, servicio, nº]
  *   B: lo pendiente AHORA [tienda, servicio, por preparar, en preparación, por ubicar, minutos de la más antigua, [quién trabaja]]
+ *   J: jefe de cada turno por día { 'yyyy-MM-dd': [jefe de mañana, jefe de tarde] } (TurnosJefe.js)
+ *   corte: hora (Madrid) a partir de la cual el turno es de tarde · jefes: lista de jefes de turno
  *  Días y horas siempre en hora de Madrid. */
 
 const PROD_TIENDAS_ = ['014', '279'];
@@ -144,18 +147,20 @@ function obtenerProductividad(desde, hasta) {
     '&tienda_origen' + tiendas + '&select=id,tipo,tienda_origen,transporte,creada_en,cerrada_en,visible_desde')
     .forEach(function (p) {
       const cierreMs = Date.parse(p.cerrada_en);
-      const m = _madridDeUtc_(cierreMs);
       // El ciclo termina al preparar la última línea (un pedido con transporte
-      // puede esperar horas a que le den ubicación antes de "cerrarse").
+      // puede esperar horas a que le den ubicación antes de "cerrarse"). El día
+      // y la hora del pedido completado son los de esa última línea: es cuando
+      // el equipo terminó su trabajo (y de qué turno fue).
       const finMs = ultimaLineaDePeticion[p.id] && ultimaLineaDePeticion[p.id] < cierreMs ? ultimaLineaDePeticion[p.id] : cierreMs;
+      const m = _madridDeUtc_(finMs);
       const min = _minutosDeCiclo_(Date.parse(p.creada_en), p.visible_desde, finMs);
       const servicio = _servicioDe_(p);
-      const k = [idx('d', m.dia), idx('t', p.tienda_origen), idx('s', servicio)].join('|');
-      const c = celdasC[k] || (celdasC[k] = { fila: [idx('d', m.dia), idx('t', p.tienda_origen), idx('s', servicio), 0, 0, 0, 0, 0, 0, 0, 0] });
-      c.fila[3] += 1; c.fila[4] += min;
+      const k = [idx('d', m.dia), m.hora, idx('t', p.tienda_origen), idx('s', servicio)].join('|');
+      const c = celdasC[k] || (celdasC[k] = { fila: [idx('d', m.dia), m.hora, idx('t', p.tienda_origen), idx('s', servicio), 0, 0, 0, 0, 0, 0, 0, 0] });
+      c.fila[4] += 1; c.fila[5] += min;
       var tramo = PROD_TRAMOS_CICLO_MIN_.length;
       for (var i = 0; i < PROD_TRAMOS_CICLO_MIN_.length; i++) { if (min < PROD_TRAMOS_CICLO_MIN_[i]) { tramo = i; break; } }
-      c.fila[5 + tramo] += 1;
+      c.fila[6 + tramo] += 1;
     });
 
   // ——— Pedidos que entran ———
@@ -209,6 +214,7 @@ function obtenerProductividad(desde, hasta) {
   });
   return _json_({
     generado: new Date(ahora).toISOString(), hoy: hoy, desde: desde, hasta: hasta,
+    corte: TURNOS_CORTE_HORA_, jefes: TURNOS_JEFES_, J: _turnosLeer_(desde, hasta),
     d: lista('d'), t: lista('t'), s: lista('s'), o: lista('o'),
     L: filas(celdasL),
     P: Object.keys(pedidosPorCelda).map(function (k) { const c = pedidosPorCelda[k]; return c.fila.concat([Object.keys(c.ids).length]); }),

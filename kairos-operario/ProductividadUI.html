@@ -127,6 +127,54 @@
   .pr-mapa .cel { height:24px; border-radius:5px; background:var(--ink-800); position:relative; min-width:20px; }
   .pr-mapa .cel i { position:absolute; inset:0; border-radius:5px; background:var(--accent); }
 
+  /* jefes de turno */
+  .pr-hoy { display:flex; gap:10px 18px; flex-wrap:wrap; align-items:center; padding:10px 12px; margin-bottom:12px; border-radius:12px; background:var(--ink-900); border:1px solid var(--ink-800); }
+  .pr-hoy .tt { font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.07em; color:var(--text-600); }
+  .pr-hoy .turno { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .pr-hoy .turno > b { font-size:12.5px; color:var(--text-300); min-width:52px; }
+  .pr button.pr-jc { min-height:32px; padding:4px 12px; font-size:12.5px; font-weight:700; border-radius:var(--radius-chip); background:var(--ink-850); color:var(--text-500); border:1px solid var(--ink-700); }
+  .pr button.pr-jc[aria-pressed="true"] { background:var(--accent); color:var(--accent-ink); border-color:transparent; box-shadow:0 2px 10px -4px var(--accent); }
+  .pr button.pr-jc:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+  .pr-jctl { display:flex; gap:10px 16px; flex-wrap:wrap; align-items:center; margin-bottom:12px; }
+  .pr-jctl .pr-segs { flex:0 1 auto; }
+  .pr-jlider { display:flex; gap:10px; align-items:center; padding:10px 14px; margin-bottom:12px; border-radius:12px; background:var(--accent-dim); border:1px solid var(--accent-line); font-size:13px; color:var(--text-300); }
+  .pr-jlider b { color:var(--text-100); }
+  .pr-jlider.aviso { background:var(--ink-900); border-color:var(--ink-700); color:var(--text-500); }
+  .pr-jf { display:grid; grid-template-columns:38px minmax(130px,1.1fr) minmax(170px,2fr) repeat(4,64px); gap:12px; align-items:center; padding:10px 12px; border-radius:12px; background:var(--ink-900); border:1px solid var(--ink-800); margin-bottom:6px; }
+  .pr-jf.cab { background:transparent; border-color:transparent; padding-top:0; padding-bottom:0; font-size:10.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-600); margin-bottom:2px; }
+  .pr-jf.primero { border-color:var(--accent); background:var(--accent-dim); }
+  .pr-jf .av { width:38px; height:38px; border-radius:50%; background:var(--accent); color:var(--accent-ink); font-weight:800; font-size:13px; display:flex; align-items:center; justify-content:center; }
+  .pr-jf .nom { font-weight:800; font-size:14px; min-width:0; }
+  .pr-jf .nom small { display:block; font-size:11px; font-weight:600; color:var(--text-500); margin-top:2px; }
+  .pr-jf .nom .poco { color:var(--warn-fg, var(--text-500)); font-weight:700; }
+  .pr-jf .val { display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .pr-jf .val .n { display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+  .pr-jf .val .n b { font-size:22px; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .pr-jf .val .n small { font-size:11px; color:var(--text-500); font-weight:600; }
+  .pr-jf .bar { height:8px; border-radius:99px; background:var(--ink-800); overflow:hidden; }
+  .pr-jf .bar i { display:block; height:100%; border-radius:99px; background:var(--accent); }
+  .pr-jf .c { text-align:right; font-variant-numeric:tabular-nums; font-size:13px; font-weight:700; }
+  .pr-jf .c small { display:block; font-size:10.5px; font-weight:600; color:var(--text-600); }
+  .pr-jf .c.malo { color:var(--danger-fg); }
+  @media (max-width: 980px) { .pr-jf { grid-template-columns:38px minmax(0,1fr) 70px 70px; } .pr-jf .val { grid-column:2 / 5; grid-row:2; } .pr-jf .c:nth-of-type(n+6) { display:none; } .pr-jf.cab { display:none; } }
+  .pr-sinasig { display:flex; gap:12px; align-items:center; flex-wrap:wrap; padding:10px 14px; margin-top:10px; border-radius:12px; background:var(--warn-bg, var(--ink-900)); border:1px solid var(--warn-line, var(--ink-700)); font-size:12.5px; color:var(--text-300); }
+  .pr-sinasig b { color:var(--text-100); }
+  .pr-sinasig .pr-btn { margin-left:auto; }
+  .pr-cal { margin-top:14px; border-top:1px solid var(--ink-800); padding-top:12px; }
+  .pr-cal h3 { margin:0 0 4px; font-size:14px; }
+  .pr-cal .ay { font-size:12px; color:var(--text-500); margin:0 0 10px; line-height:1.5; }
+  .pr-cd { display:grid; grid-template-columns:78px minmax(0,1fr) minmax(0,1fr); gap:8px 14px; align-items:start; padding:9px 10px; border-radius:10px; border:1px solid transparent; }
+  .pr-cd:nth-child(even) { background:var(--ink-900); }
+  .pr-cd.falta { border-color:var(--warn-line, var(--ink-700)); background:var(--warn-bg, var(--ink-900)); }
+  .pr-cd .dia { font-size:12.5px; font-weight:800; color:var(--text-300); padding-top:6px; line-height:1.25; }
+  .pr-cd .dia small { display:block; font-weight:600; color:var(--text-600); }
+  .pr-cd .tn { display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .pr-cd .tn > span { font-size:10.5px; color:var(--text-600); font-weight:700; text-transform:uppercase; letter-spacing:.05em; }
+  .pr-cd .tn .chips { display:flex; gap:5px; flex-wrap:wrap; }
+  @media (max-width: 640px) { .pr-cd { grid-template-columns:minmax(0,1fr); } .pr-cd .dia { padding-top:0; } }
+  .pr-hist { margin-top:12px; font-size:12px; color:var(--text-500); }
+  .pr-hist li { margin:3px 0; }
+
   .pr-vacio { text-align:center; padding:34px 12px; color:var(--text-500); font-size:14px; }
   .pr-vacio b { display:block; font-size:16px; color:var(--text-300); margin-bottom:4px; }
   .pr-esq { background:linear-gradient(100deg, var(--ink-850) 30%, var(--ink-800) 50%, var(--ink-850) 70%); background-size:200% 100%; animation:pr-brillo 1.3s linear infinite; border-radius:var(--radius-card); min-height:120px; border:1px solid var(--ink-800); }
@@ -188,7 +236,7 @@ function PR_iniciales_(nombre) {
 // ——————————— filtros y periodos ———————————
 function PR_filtrosPorDefecto_() {
   var sv = {}; PR_SERVICIOS_.forEach(function (s) { sv[s.k] = true; });
-  return { periodo: '7', desde: '', hasta: '', tienda: '', servicios: sv, vista: 'equipos', operario: '' };
+  return { periodo: '7', desde: '', hasta: '', tienda: '', servicios: sv, vista: 'equipos', operario: '', jt: '', jm: 'ped' };
 }
 function PR_cargarFiltros_() {
   var f = PR_filtrosPorDefecto_();
@@ -199,6 +247,8 @@ function PR_cargarFiltros_() {
       if (g.desde) f.desde = g.desde; if (g.hasta) f.hasta = g.hasta;
       if (g.tienda === '014' || g.tienda === '279') f.tienda = g.tienda;
       if (g.vista === 'personas') f.vista = 'personas';
+      if (g.jt === 'm' || g.jt === 't') f.jt = g.jt;
+      if (PR_METRICAS_JEFE_.some(function (m) { return m.k === g.jm; })) f.jm = g.jm;
       if (g.servicios) PR_SERVICIOS_.forEach(function (s) { if (g.servicios[s.k] === false) f.servicios[s.k] = false; });
     }
   } catch (e) {}
@@ -238,10 +288,10 @@ function PR_rangoNecesario_(f, hoy) {
 
 // ——————————— datos ———————————
 function PR_decodificar_(r) {
-  var D = { generado: r.generado, hoy: r.hoy, desde: r.desde, hasta: r.hasta };
+  var D = { generado: r.generado, hoy: r.hoy, desde: r.desde, hasta: r.hasta, corte: r.corte || 14, jefes: r.jefes || [], J: r.J || {} };
   D.L = r.L.map(function (f) { return { d: r.d[f[0]], h: f[1], t: r.t[f[2]], s: r.s[f[3]], o: r.o[f[4]], i: f[5], l: f[6], u: f[7], p: f[8] }; });
   D.P = r.P.map(function (f) { return { d: r.d[f[0]], t: r.t[f[1]], s: r.s[f[2]], o: r.o[f[3]], n: f[4] }; });
-  D.C = r.C.map(function (f) { return { d: r.d[f[0]], t: r.t[f[1]], s: r.s[f[2]], n: f[3], min: f[4], b: f.slice(5, 11) }; });
+  D.C = r.C.map(function (f) { return { d: r.d[f[0]], h: f[1], t: r.t[f[2]], s: r.s[f[3]], n: f[4], min: f[5], b: f.slice(6, 12) }; });
   D.E = r.E.map(function (f) { return { d: r.d[f[0]], t: r.t[f[1]], s: r.s[f[2]], n: f[3] }; });
   D.B = r.B.map(function (f) { return { t: r.t[f[0]], s: r.s[f[1]], pre: f[2], enp: f[3], ubi: f[4], vieja: f[5], quien: f[6] }; });
   return D;
@@ -300,6 +350,7 @@ function PR_kpis_(D, f, desde, hasta, horaTope) {
     } else {
       D.C.forEach(function (r) {
         if (r.d < desde || r.d > hasta || !tiendaOk(r.t) || !servOk(r.s)) return;
+        if (horaTope !== undefined && r.h > horaTope) return;
         k.pedidos += r.n; k.cicloN += r.n; k.cicloMin = (k.cicloMin || 0) + r.min;
         k.cicloRapido = (k.cicloRapido || 0) + r.b[0] + r.b[1] + r.b[2];
       });
@@ -466,6 +517,137 @@ function PR_bloqueMapa_(D, f, p) {
   return { mapa: mapa, max: max, hmin: Math.min(hmin, 7), hmax: Math.max(hmax, 18), dias: dias };
 }
 
+// ——————————— jefes de turno ———————————
+// El trabajo de cada turno (mañana: antes de la hora de corte; tarde: desde ella)
+// se atribuye al jefe que se anotó para ese día y turno (D.J). Un pedido cuenta
+// donde se preparó su última línea. Todo se calcula con los mismos filtros que
+// el resto del panel (periodo, tienda, servicios).
+var PR_METRICAS_JEFE_ = [
+  { k: 'ped', n: 'Pedidos por turno', num: 'ped', den: 'tur', dec: 1, uni: 'pedidos por turno' },
+  { k: 'lin', n: 'Líneas por turno', num: 'lin', den: 'tur', dec: 0, uni: 'líneas por turno' },
+  { k: 'per', n: 'Líneas por persona', num: 'lin', den: 'per', dec: 1, uni: 'líneas por persona' },
+  { k: 'rit', n: 'Ritmo', num: 'lin', den: 'hor', dec: 1, uni: 'líneas por hora' },
+];
+var PR_MIN_TURNOS_JEFE_ = 3;
+function PR_metricaJefe_(k) { for (var i = 0; i < PR_METRICAS_JEFE_.length; i++) { if (PR_METRICAS_JEFE_[i].k === k) return PR_METRICAS_JEFE_[i]; } return PR_METRICAS_JEFE_[0]; }
+function PR_turnoDe_(h, corte) { return h < corte ? 'm' : 't'; }
+function PR_corto_(nombre) { var p = String(nombre).split(' '); return p.length > 1 ? p[0] + ' ' + p[1].charAt(0) + '.' : String(nombre); }
+function PR_acum_() { return { tur: 0, lin: 0, uni: 0, inc: 0, hor: 0, per: 0, ped: 0, min: 0 }; }
+
+/** Trabajo de cada (día, turno) con los filtros del panel. */
+function PR_celdasTurno_(D, f, p) {
+  var fj = { servicios: f.servicios, tienda: f.tienda, vista: 'equipos', operario: '' };
+  var soloRev = PR_soloRevisiones_(f), cel = {};
+  var celda = function (d, h) {
+    var t = PR_turnoDe_(h, D.corte), k = d + '|' + t;
+    return cel[k] || (cel[k] = { d: d, t: t, lin: 0, uni: 0, inc: 0, hor: {}, per: {}, ped: 0, min: 0 });
+  };
+  PR_filasL_(D, fj, p.desde, p.hasta).forEach(function (r) {
+    if (soloRev ? r.s !== 'rev' : r.s === 'rev') return;
+    var c = celda(r.d, r.h);
+    c.lin += r.l; c.uni += r.u;
+    if (r.i) c.inc += r.l;
+    c.hor[r.o + '|' + r.h] = true;
+    r.o.split(' + ').forEach(function (n) { c.per[n] = true; });
+  });
+  if (!soloRev) {
+    D.C.forEach(function (r) {
+      if (r.d < p.desde || r.d > p.hasta || !f.servicios[r.s] || r.s === 'rev' || (f.tienda && r.t !== f.tienda)) return;
+      var c = celda(r.d, r.h); c.ped += r.n; c.min += r.min;
+    });
+  }
+  Object.keys(cel).forEach(function (k) { cel[k].horas = Object.keys(cel[k].hor).length; cel[k].personas = Object.keys(cel[k].per).length; });
+  return cel;
+}
+
+/** Comparativa de jefes de turno: totales, media por turno e índice frente a la media del mismo turno. */
+function PR_bloqueJefes_(D, f, p) {
+  var met = PR_metricaJefe_(f.jm), turnoSel = (f.jt === 'm' || f.jt === 't') ? f.jt : '';
+  if (f.operario) return { bloqueado: true, met: met, turnoSel: turnoSel, lista: [], sin: { n: 0, ped: 0, lin: 0 } };
+  var cel = PR_celdasTurno_(D, f, p), jefes = {}, sin = { n: 0, ped: 0, lin: 0 };
+  Object.keys(cel).forEach(function (k) {
+    var c = cel[k];
+    if (!c.lin && !c.ped) return;
+    if (turnoSel && c.t !== turnoSel) return;
+    var v = D.J[c.d], jefe = v ? v[c.t === 'm' ? 0 : 1] : '';
+    if (!jefe) { sin.n++; sin.ped += c.ped; sin.lin += c.lin; return; }
+    var j = jefes[jefe] || (jefes[jefe] = { nombre: jefe, s: { m: PR_acum_(), t: PR_acum_() } });
+    var a = j.s[c.t];
+    a.tur++; a.lin += c.lin; a.uni += c.uni; a.inc += c.inc; a.hor += c.horas; a.per += c.personas; a.ped += c.ped; a.min += c.min;
+  });
+  var lista = Object.keys(jefes).map(function (n) { return jefes[n]; });
+  var media = { m: { num: 0, den: 0 }, t: { num: 0, den: 0 } };
+  lista.forEach(function (j) { ['m', 't'].forEach(function (t) { media[t].num += j.s[t][met.num]; media[t].den += j.s[t][met.den]; }); });
+  lista.forEach(function (j) {
+    var tot = PR_acum_();
+    ['m', 't'].forEach(function (t) { Object.keys(tot).forEach(function (k) { tot[k] += j.s[t][k]; }); });
+    j.tot = tot;
+    var num = tot[met.num], den = tot[met.den], esperado = 0;
+    j.valor = den ? num / den : null;
+    ['m', 't'].forEach(function (t) { if (media[t].den) esperado += j.s[t][met.den] * media[t].num / media[t].den; });
+    j.indice = (lista.length > 1 && esperado > 0) ? num / esperado : null;
+    j.pocos = tot.tur < PR_MIN_TURNOS_JEFE_;
+    j.pctInc = tot.lin ? 100 * tot.inc / tot.lin : null;
+    j.ritmo = tot.hor ? tot.lin / tot.hor : null;
+    j.personasMedia = tot.tur ? tot.per / tot.tur : null;
+    j.ciclo = tot.ped ? tot.min / tot.ped : null;
+  });
+  lista.sort(function (a, b) {
+    if (a.pocos !== b.pocos) return a.pocos ? 1 : -1;
+    return (b.valor === null ? -1 : b.valor) - (a.valor === null ? -1 : a.valor);
+  });
+  var comparables = lista.filter(function (j) { return !j.pocos && j.valor !== null; });
+  return { bloqueado: false, met: met, turnoSel: turnoSel, lista: lista, sin: sin, media: media,
+    comparables: comparables.length, lider: (comparables.length >= 2 && comparables[0].valor > 0) ? comparables[0] : null };
+}
+
+/** Trabajo de cada (día, turno) sin filtros: para saber qué días hay que rellenar. */
+function PR_actividadTurnos_(D) {
+  var act = {};
+  var cel = function (d, h) { var k = d + '|' + PR_turnoDe_(h, D.corte); return act[k] || (act[k] = { lin: 0, ped: 0 }); };
+  D.L.forEach(function (r) { if (r.s !== 'rev') cel(r.d, r.h).lin += r.l; });
+  D.C.forEach(function (r) { if (r.s !== 'rev') cel(r.d, r.h).ped += r.n; });
+  return act;
+}
+
+/** Anota o quita (si ya estaba) el jefe de un turno: se ve al instante y se guarda en el servidor. */
+function PR_ponerJ_(D, dia, v) { if (v && (v[0] || v[1])) D.J[dia] = [v[0] || '', v[1] || '']; else delete D.J[dia]; }
+function PR_asignar_(dia, turno, jefe) {
+  var E = PR_ESTADO_, D = E.datos; if (!D) return;
+  var i = turno === 'm' ? 0 : 1, previo = (D.J[dia] || ['', '']).slice(), nuevo = previo.slice();
+  nuevo[i] = previo[i] === jefe ? '' : jefe;
+  PR_ponerJ_(D, dia, nuevo);
+  E.guardando = (E.guardando || 0) + 1;
+  PR_pintar_();
+  google.script.run
+    .withSuccessHandler(function (json) {
+      E.guardando--;
+      try { var r = JSON.parse(json); if (!E.guardando) PR_ponerJ_(D, r.dia, r.v); } catch (err) {}
+      E.historial = null;
+      PR_pintar_();
+    })
+    .withFailureHandler(function (err) {
+      E.guardando--;
+      PR_ponerJ_(D, dia, previo);
+      PR_pintar_();
+      kAlerta('No se ha podido guardar el cambio: ' + ((err && err.message) || 'error de conexión') + '.');
+    })
+    .asignarJefeTurno(dia, turno, nuevo[i]);
+}
+
+/** Datos de una carga parcial (hoy y ayer) metidos en los que ya hay, sin volver a pedir todo el periodo. */
+function PR_mezclar_(D, N) {
+  var a = N.desde, b = N.hasta, dentro = function (r) { return r.d >= a && r.d <= b; };
+  ['L', 'P', 'C', 'E'].forEach(function (k) { D[k] = D[k].filter(function (r) { return !dentro(r); }).concat(N[k].filter(dentro)); });
+  D.B = N.B; D.generado = N.generado; D.hoy = N.hoy; D.corte = N.corte; D.jefes = N.jefes;
+  if (b > D.hasta) D.hasta = b;
+  if (!PR_ESTADO_.guardando) {
+    Object.keys(D.J).forEach(function (d) { if (d >= a && d <= b) delete D.J[d]; });
+    Object.keys(N.J).forEach(function (d) { D.J[d] = N.J[d]; });
+  }
+  return D;
+}
+
 // ——————————— pintado ———————————
 function PR_htmlFiltros_(D, f, p) {
   var seg = function (grupo, valor, texto, extra) { return '<button type="button" class="pr-seg" data-pr="' + grupo + ':' + valor + '" aria-pressed="' + (extra.activo ? 'true' : 'false') + '">' + (extra.punto ? '<i class="pr-punto" style="background:' + extra.punto + '"></i>' : '') + texto + '</button>'; };
@@ -520,8 +702,9 @@ function PR_htmlKpis_(D, f, p) {
   h += tile('Líneas con incidencia', a.pctInc === null ? '—' : PR_nf_(a.pctInc, 1), '%', PR_nf_(a.incidencias, a.incidencias % 1 ? 1 : 0) + ' de ' + PR_nf_(a.lineas, a.lineas % 1 ? 1 : 0), PR_delta_(a.pctInc, b.pctInc, true), '');
   return h + '</div>';
 }
-function PR_htmlDestacados_(D, f, p, horas, ranking, servicios) {
+function PR_htmlDestacados_(D, f, p, horas, ranking, servicios, jefes) {
   var d = [];
+  if (jefes && jefes.lider) d.push(['👔', 'Jefe de turno líder: ' + jefes.lider.nombre, PR_nf_(jefes.lider.valor, jefes.met.dec) + ' ' + jefes.met.uni]);
   if (horas.mejor) d.push(['⏱️', 'Hora más productiva: ' + horas.mejor.h + ':00', PR_nf_(horas.mejor.total, 1) + ' ' + (PR_soloRevisiones_(f) ? 'revisiones' : 'líneas') + ' en esa franja']);
   if (ranking.length) { var top = ranking[0]; d.push(['🏅', (f.vista === 'personas' ? 'Más trabajo: ' : 'Equipo con más trabajo: ') + top.o, PR_nf_(top.l, top.l % 1 ? 1 : 0) + ' líneas · ' + (top.ritmo === null ? '—' : PR_nf_(top.ritmo, 1)) + ' líneas/h']); }
   var conRitmo = ranking.filter(function (r) { return r.horas >= 3; }).sort(function (a, b) { return b.ritmo - a.ritmo; });
@@ -629,6 +812,76 @@ function PR_htmlMapa_(m) {
   return h + '</div>';
 }
 
+function PR_htmlChipsJefe_(D, dia, turno) {
+  var v = D.J[dia] || ['', ''], actual = v[turno === 'm' ? 0 : 1];
+  return D.jefes.map(function (n) {
+    return '<button type="button" class="pr-jc" data-pr="asig:' + dia + '|' + turno + '|' + PR_esc_(n) + '" aria-pressed="' + (actual === n ? 'true' : 'false') + '" title="' + PR_esc_(n) + '">' + PR_esc_(PR_corto_(n)) + '</button>';
+  }).join('');
+}
+function PR_htmlCalendario_(D) {
+  var E = PR_ESTADO_, act = PR_actividadTurnos_(D), filas = '', dias = 0;
+  for (var i = 0; i < 21; i++) {
+    var dia = PR_sumarDias_(D.hoy, -i), a = { m: act[dia + '|m'] || { lin: 0, ped: 0 }, t: act[dia + '|t'] || { lin: 0, ped: 0 } }, v = D.J[dia] || ['', ''];
+    var hay = a.m.lin || a.m.ped || a.t.lin || a.t.ped;
+    if (!hay && !v[0] && !v[1] && i > 0) continue;
+    dias++;
+    var falta = ((a.m.lin || a.m.ped) && !v[0]) || ((a.t.lin || a.t.ped) && !v[1]);
+    var turno = function (k, nombre) {
+      var x = a[k];
+      return '<div class="tn"><span>' + nombre + ' · ' + ((x.lin || x.ped) ? PR_nf_(x.lin) + ' líneas · ' + PR_nf_(x.ped) + ' pedidos' : 'sin actividad') + '</span><div class="chips">' + PR_htmlChipsJefe_(D, dia, k) + '</div></div>';
+    };
+    filas += '<div class="pr-cd ' + (falta ? 'falta' : '') + '"><div class="dia">' + PR_diaSemana_(dia) + ' ' + PR_fechaCorta_(dia) + (i === 0 ? '<small>hoy</small>' : '') + '</div>' + turno('m', 'Mañana') + turno('t', 'Tarde') + '</div>';
+  }
+  var hist = '';
+  if (E.historial === 'cargando') hist = '<p class="pr-hist">Cargando…</p>';
+  else if (E.historial) hist = '<ul class="pr-hist">' + (E.historial.length ? E.historial.map(function (x) {
+    return '<li>' + new Date(x.cuando).toLocaleString('es-ES', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' · ' + PR_diaSemana_(x.dia) + ' ' + PR_fechaCorta_(x.dia) + ' ' + (x.turno === 'm' ? 'mañana' : 'tarde') + ': ' + PR_esc_(x.jefe || 'sin jefe') + (x.antes ? ' (antes ' + PR_esc_(x.antes) + ')' : '') + '</li>';
+  }).join('') : '<li>Aún no hay cambios anotados.</li>') + '</ul>';
+  return '<div class="pr-cal"><h3>Calendario de turnos</h3>' +
+    '<p class="ay">Pulsa quién llevó cada turno; si lo pulsas otra vez, se quita. Los días con trabajo y sin jefe anotado salen resaltados. La mañana llega hasta las ' + D.corte + ':00 y la tarde empieza a esa hora.</p>' +
+    filas + '<button type="button" class="pr-btn pr-mas" data-pr="hist:1">' + (E.historial ? 'Ocultar últimos cambios' : 'Ver últimos cambios') + '</button>' + hist + '</div>';
+}
+function PR_htmlJefes_(D, f, p, J) {
+  if (!D.jefes || !D.jefes.length) return '';
+  var E = PR_ESTADO_, met = J.met;
+  var seg = function (g, v, t, on) { return '<button type="button" class="pr-seg" data-pr="' + g + ':' + v + '" aria-pressed="' + (on ? 'true' : 'false') + '">' + t + '</button>'; };
+  var h = '<div class="pr-card pr-jefes"><h2>Jefes de turno <small>quién saca más trabajo con su equipo</small></h2>';
+  h += '<div class="pr-hoy"><span class="tt">Hoy · ' + PR_diaSemana_(D.hoy) + ' ' + PR_fechaCorta_(D.hoy) + '</span>' +
+    '<div class="turno"><b>Mañana</b>' + PR_htmlChipsJefe_(D, D.hoy, 'm') + '</div><div class="turno"><b>Tarde</b>' + PR_htmlChipsJefe_(D, D.hoy, 't') + '</div>' +
+    '<button type="button" class="pr-btn" style="margin-left:auto" data-pr="cal:1">' + (E.editor ? 'Cerrar calendario' : 'Calendario de turnos') + '</button></div>';
+  if (E.editor) h += PR_htmlCalendario_(D);
+  h += '<div class="pr-jctl"><div class="pr-segs">' + seg('jt', '', 'Todos los turnos', !J.turnoSel) + seg('jt', 'm', 'Mañana', J.turnoSel === 'm') + seg('jt', 't', 'Tarde', J.turnoSel === 't') + '</div>' +
+    '<div class="pr-segs">' + PR_METRICAS_JEFE_.map(function (m) { return seg('jm', m.k, m.n, m.k === met.k); }).join('') + '</div></div>';
+  if (J.bloqueado) {
+    return h + '<div class="pr-jlider aviso">Para comparar jefes hay que ver todos los equipos: quita el filtro de ' + (f.vista === 'personas' ? 'persona' : 'equipo') + ' de arriba.</div></div>';
+  }
+  if (!J.lista.length) {
+    h += '<div class="pr-vacio"><b>Todavía no hay turnos con jefe anotado en este periodo</b>Anota arriba quién lleva el turno de hoy, o rellena los días anteriores en «Calendario de turnos».</div>';
+  } else {
+    var l = J.lider;
+    if (l) h += '<div class="pr-jlider"><span aria-hidden="true">🏆</span><span><b>' + PR_esc_(l.nombre) + '</b> lidera en ' + met.n.toLowerCase() + ' con <b>' + PR_nf_(l.valor, met.dec) + '</b>' +
+      '.' + (l.indice !== null ? ' Frente a la media de los turnos que ha llevado: <b>' + (l.indice >= 1 ? '+' : '−') + PR_nf_(Math.abs(100 * (l.indice - 1)), 0) + '%</b>.' : '') + '</span></div>';
+    else h += '<div class="pr-jlider aviso"><span aria-hidden="true">ℹ️</span><span>' + (J.comparables < 2 ? 'Aún hay pocos turnos para comparar con justicia: hacen falta al menos ' + PR_MIN_TURNOS_JEFE_ + ' turnos por jefe en el periodo.' : 'No hay diferencias que destacar.') + '</span></div>';
+    var max = 0; J.lista.forEach(function (j) { if (j.valor !== null && j.valor > max) max = j.valor; });
+    h += '<div class="pr-jf cab"><span></span><span>Jefe</span><span>' + PR_esc_(met.n) + '</span><span class="c">Pedidos</span><span class="c">Líneas</span><span class="c">Equipo</span><span class="c">Incid.</span></div>';
+    J.lista.forEach(function (j, i) {
+      var t = j.tot, mt = j.s.m.tur, tt = j.s.t.tur;
+      var delta = j.indice === null ? '' : (function () { var d = PR_delta_(j.indice, 1, false); return d.cls === 'igual' ? '<span class="pr-delta igual">= media</span>' : '<span class="pr-delta ' + d.cls + '">' + d.txt + ' <small>vs media</small></span>'; })();
+      h += '<div class="pr-jf ' + (j === J.lider ? 'primero' : '') + '">' +
+        '<span class="av">' + PR_esc_(PR_iniciales_(j.nombre)) + '</span>' +
+        '<span class="nom">' + PR_esc_(j.nombre) + '<small>' + PR_nf_(t.tur) + (t.tur === 1 ? ' turno' : ' turnos') + (mt ?' · ' + mt + ' mañana' : '') + (tt ? ' · ' + tt + ' tarde' : '') + (j.pocos ? ' · <span class="poco">pocos para comparar</span>' : '') + '</small></span>' +
+        '<span class="val"><span class="n"><b>' + (j.valor === null ? '—' : PR_nf_(j.valor, met.dec)) + '</b><small>' + met.uni + '</small>' + delta + '</span><span class="bar"><i style="width:' + (max && j.valor ? (100 * j.valor / max).toFixed(1) : 0) + '%"></i></span></span>' +
+        '<span class="c">' + PR_nf_(t.ped) + '<small>pedidos</small></span>' +
+        '<span class="c">' + PR_nf_(t.lin, t.lin % 1 ? 1 : 0) + '<small>líneas</small></span>' +
+        '<span class="c">' + (j.personasMedia === null ? '—' : PR_nf_(j.personasMedia, 1)) + '<small>personas</small></span>' +
+        '<span class="c ' + (j.pctInc > 8 ? 'malo' : '') + '">' + (j.pctInc === null ? '—' : PR_nf_(j.pctInc, 1) + '%') + '<small>incidencias</small></span></div>';
+    });
+  }
+  if (J.sin.n) h += '<div class="pr-sinasig"><span aria-hidden="true">⚠️</span><span><b>' + J.sin.n + (J.sin.n === 1 ? ' turno con trabajo' : ' turnos con trabajo') + ' sin jefe anotado</b> (' + PR_nf_(J.sin.ped) + ' pedidos y ' + PR_nf_(J.sin.lin, J.sin.lin % 1 ? 1 : 0) + ' líneas que no cuentan para nadie).</span><button type="button" class="pr-btn" data-pr="cal:1">Rellenar</button></div>';
+  h += '<p class="pr-nota" style="margin:12px 0 0">Cada turno se atribuye al jefe anotado para ese día. Un pedido cuenta en el turno donde se preparó su última línea. «Equipo» son las personas distintas que prepararon en sus turnos. El índice compara con la media de todos los jefes <b>en el mismo turno</b>, para no penalizar a quien lleva el turno más cargado.</p></div>';
+  return h;
+}
+
 function PR_pintar_() {
   var raiz = document.getElementById('prRaiz');
   if (!raiz) return;
@@ -642,12 +895,14 @@ function PR_pintar_() {
   var p = PR_periodos_(f, D.hoy);
   var horas = PR_bloqueHoras_(D, f, p), tend = PR_bloqueTendencia_(D, f, p), servicios = PR_bloqueServicios_(D, f, p), ranking = PR_bloqueRanking_(D, f, p);
   var calidad = PR_bloqueCalidad_(D, f, p), ciclo = PR_bloqueCiclo_(D, f, p), mapa = p.n >= 3 ? PR_bloqueMapa_(D, f, p) : null;
+  var jefes = PR_bloqueJefes_(D, f, p);
   var h = '<div class="pr">';
   h += '<div class="pr-cab"><div><h1>Productividad</h1><p class="pr-sub">Cómo se está trabajando, quién y a qué ritmo · actualizado <b>' + new Date(D.generado).toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' }) + '</b>' +
     (E.cargando ? ' · <b>actualizando…</b>' : '') + '</p></div><div class="pr-acc"><button type="button" class="pr-btn" data-pr="csv:1">⬇ Descargar CSV</button><button type="button" class="pr-btn primario" data-pr="recargar:1">↻ Actualizar</button></div></div>';
   h += PR_htmlFiltros_(D, f, p);
   h += PR_htmlKpis_(D, f, p);
-  h += PR_htmlDestacados_(D, f, p, horas, ranking, servicios);
+  h += PR_htmlDestacados_(D, f, p, horas, ranking, servicios, jefes);
+  h += PR_htmlJefes_(D, f, p, jefes);
   h += '<div class="pr-fila2"><div class="pr-card"><h2>Actividad por hora <small>' + (p.n > 1 ? 'suma de todo el periodo' : 'durante el día') + '</small></h2>' + PR_htmlHoras_(horas, f) + '</div>' +
     '<div class="pr-card"><h2>Ahora mismo <small>pendiente de hacer</small></h2>' + PR_htmlAhora_(D, f) + '</div></div>';
   h += '<div class="pr-card"><h2>Tendencia diaria <small>últimos ' + tend.n + ' días</small></h2>' + PR_htmlTendencia_(tend) + '</div>';
@@ -665,21 +920,31 @@ function PR_pintar_() {
 // ——————————— carga, eventos, exportación ———————————
 function PR_hoyMadrid_() { try { return new Date().toLocaleDateString('en-CA', { timeZone: 'Europe/Madrid' }); } catch (e) { return new Date().toISOString().slice(0, 10); } }
 
+/** Carga los datos. La primera vez (o si cambia el periodo y faltan días) pide el rango completo;
+ *  para refrescar lo que ya hay solo pide ayer y hoy y lo mezcla (el historial no cambia, y así
+ *  se gasta mucho menos de la base de datos). Cada media hora vuelve a pedirlo todo. */
 function PR_cargar_(forzar, seguimiento) {
   var E = PR_ESTADO_;
   if (!E.f) E.f = PR_cargarFiltros_();
   var hoy = (E.datos && E.datos.hoy) || PR_hoyMadrid_();
   var necesario = PR_rangoNecesario_(E.f, hoy);
-  var cubierto = E.datos && E.datos.desde <= necesario.desde && E.datos.hasta >= necesario.hasta && Date.now() - E.cargadoEn < 90000;
-  if (cubierto && !forzar) { PR_pintar_(); return; }
+  var cubre = !!(E.datos && E.datos.desde <= necesario.desde && E.datos.hasta >= necesario.hasta);
+  var edad = Date.now() - E.cargadoEn;
+  if (cubre && !forzar && edad < 90000) { PR_pintar_(); return; }
   if (E.cargando) return;
+  var parcial = cubre && (Date.now() - (E.completoEn || 0)) < 1800000;
+  var ahoraMadrid = PR_hoyMadrid_(), hasta = ahoraMadrid > hoy ? ahoraMadrid : hoy;
+  var pedido = parcial ? { desde: PR_sumarDias_(hasta, -1), hasta: hasta } : necesario;
   E.cargando = true; E.error = '';
-  var pedido = necesario;
   if (E.datos) PR_pintar_(); // "actualizando…" sin perder lo que se ve
   google.script.run
     .withSuccessHandler(function (json) {
       E.cargando = false;
-      try { E.datos = PR_decodificar_(JSON.parse(json)); E.cargadoEn = Date.now(); E.error = ''; } catch (err) { E.error = 'Los datos no tienen el formato esperado.'; }
+      try {
+        var N = PR_decodificar_(JSON.parse(json));
+        if (parcial && E.datos) PR_mezclar_(E.datos, N); else { E.datos = N; E.completoEn = Date.now(); }
+        E.cargadoEn = Date.now(); E.error = '';
+      } catch (err) { E.error = 'Los datos no tienen el formato esperado.'; }
       PR_pintar_();
       // si mientras tanto el periodo pedía más días, se vuelve a cargar
       if (!E.error && E.datos && !seguimiento) { var n2 = PR_rangoNecesario_(E.f, E.datos.hoy); if (E.datos.desde > n2.desde || E.datos.hasta < n2.hasta) PR_cargar_(true, true); }
@@ -701,10 +966,26 @@ function PR_accion_(texto, valorSelect) {
   else if (tipo === 'persona') f.operario = f.operario === v ? '' : v;
   else if (tipo === 'ver') E.verTodos = !E.verTodos;
   else if (tipo === 'reiniciar') { E.f = PR_filtrosPorDefecto_(); }
+  else if (tipo === 'jt') f.jt = (v === 'm' || v === 't') ? v : '';
+  else if (tipo === 'jm') f.jm = PR_metricaJefe_(v).k;
+  else if (tipo === 'asig') { var q = v.split('|'); if (q.length === 3) PR_asignar_(q[0], q[1], q[2]); return; }
+  else if (tipo === 'cal') { E.editor = !E.editor; PR_pintar_(); return; }
+  else if (tipo === 'hist') { PR_historial_(); return; }
   else if (tipo === 'recargar') { PR_cargar_(true); return; }
   else if (tipo === 'csv') { PR_csv_(); return; }
   PR_guardarFiltros_();
   PR_cargar_(false);
+}
+
+/** Muestra u oculta los últimos cambios de la asignación de turnos (se piden al abrirlos). */
+function PR_historial_() {
+  var E = PR_ESTADO_;
+  if (E.historial) { E.historial = null; PR_pintar_(); return; }
+  E.historial = 'cargando'; PR_pintar_();
+  google.script.run
+    .withSuccessHandler(function (json) { try { E.historial = JSON.parse(json); } catch (err) { E.historial = []; } PR_pintar_(); })
+    .withFailureHandler(function () { E.historial = null; PR_pintar_(); kAlerta('No se han podido cargar los últimos cambios.'); })
+    .obtenerHistorialTurnos();
 }
 
 function PR_csv_() {
@@ -717,6 +998,17 @@ function PR_csv_() {
   PR_bloqueRanking_(D, f, p).forEach(function (r) {
     lineas.push([r.o, r.l.toFixed(1).replace('.', ','), Math.round(r.u), r.p.toFixed(1).replace('.', ','), r.pedidos.toFixed(1).replace('.', ','), r.horas, r.ritmo === null ? '' : r.ritmo.toFixed(2).replace('.', ','), r.pctInc.toFixed(1).replace('.', ',')].map(q).join(';'));
   });
+  var J = PR_bloqueJefes_(D, f, p);
+  if (!J.bloqueado && J.lista.length) {
+    var nf = function (n, d) { return n === null ? '' : Number(n).toFixed(d).replace('.', ','); };
+    lineas.push('');
+    lineas.push(['Jefe de turno', 'Turnos', 'Turnos de mañana', 'Turnos de tarde', 'Pedidos', 'Pedidos por turno', 'Líneas', 'Líneas por turno', 'Personas por turno', 'Líneas por hora', '% incidencias', 'Índice vs media del turno (' + J.met.n + ')'].map(q).join(';'));
+    J.lista.forEach(function (j) {
+      var t = j.tot;
+      lineas.push([j.nombre, t.tur, j.s.m.tur, j.s.t.tur, t.ped, nf(t.tur ? t.ped / t.tur : null, 2), nf(t.lin, 1), nf(t.tur ? t.lin / t.tur : null, 1), nf(j.personasMedia, 1), nf(j.ritmo, 2), nf(j.pctInc, 1), nf(j.indice, 2)].map(q).join(';'));
+    });
+    if (J.sin.n) lineas.push(['(sin jefe anotado)', J.sin.n, '', '', J.sin.ped, '', nf(J.sin.lin, 1), '', '', '', '', ''].map(q).join(';'));
+  }
   lineas.push('');
   lineas.push(['Día', 'Líneas', 'Pedidos completados'].map(q).join(';'));
   var sl = PR_serieDiaria_(D, f, p.hasta, p.n, 'lineas'), sp = PR_serieDiaria_(D, f, p.hasta, p.n, 'pedidos');
@@ -763,6 +1055,6 @@ function renderProductividad_() {
     if (document.hidden) return;
     var hoy = (E.datos && E.datos.hoy) || PR_hoyMadrid_();
     if (PR_periodos_(E.f, hoy).incluyeHoy) PR_cargar_(true);
-  }, 120000);
+  }, 180000);
 }
 </script>
