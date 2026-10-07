@@ -1948,6 +1948,7 @@
     }
 
     const unidadLabel = tipo === 'refill' ? 'nº de palets' : 'unidades';
+    const textoModalPaletsCesion_ = '¿Qué palet(es) cedes? Se ceden enteros, con todo lo que llevan.';
     const c = el(
       '<div class="wrap"><div class="card">' +
         '<button class="btn btn-ghost" id="btnVolver">‹ Volver</button>' +
@@ -1957,7 +1958,7 @@
         '<b>Artículos</b>' +
         '<input class="entrada" id="inBuscar" placeholder="Código LM o nombre del artículo" autocomplete="off">' +
         '<button type="button" class="btn btn-ghost" id="btnEscanear" style="width:auto;padding:6px 10px;margin:4px 6px 8px 0;">📷 Escanear código de barras</button>' +
-        (tipo === 'refill' ? '<button class="btn btn-ghost" id="btnBuscarSscc" style="width:auto;padding:6px 10px;margin:4px 0 8px;">📦 Buscar por SSCC en vez de LM</button>' : '') +
+        (tipo === 'refill' || tipo === 'cesion' ? '<button class="btn btn-ghost" id="btnBuscarSscc" style="width:auto;padding:6px 10px;margin:4px 0 8px;">📦 Buscar por SSCC en vez de LM</button>' : '') +
         '<div id="resultadosBusqueda"></div>' +
         '<div id="lineasAnadidas"></div>' +
         '<input class="entrada" id="inComentario" placeholder="Comentario (opcional)">' +
@@ -1986,8 +1987,17 @@
       };
     }
 
-    var lineas = []; // { codigoLm, designacion, ean, seccion, cantidad }
+    // { codigoLm, designacion, ean, seccion, cantidad }; refill y cesión de palet entero añaden
+    // sscc, ubicacion y, en la cesión, paletCompleto + resumen (ver lineaPaletsEnteros_).
+    var lineas = [];
     var articuloElegido = null;
+
+    /** Cantidad de una línea tal como se muestra: nº de unidades, o de palets enteros en la cesión de palet entero. */
+    function textoCantidadLinea_(l) {
+      if (!l.paletCompleto) return escHtml(l.cantidad + ' ' + unidadLabel);
+      const sscc = String(l.sscc || '').split(' + ').map(function (p) { return p.replace(/\s*\(.*\)\s*$/, '').trim(); }).join(', ');
+      return escHtml(l.cantidad + (l.cantidad === 1 ? ' palet entero' : ' palets enteros') + ' (SSCC ' + sscc + (l.resumen ? ' · ' + l.resumen : '') + ')');
+    }
 
     function pintarLineas() {
       const cont = c.querySelector('#lineasAnadidas');
@@ -1995,7 +2005,7 @@
       lineas.forEach(function (l, idx) {
         const chip = el(
           '<div class="linea-chip"><span>' + escHtml(l.codigoLm) + ' · ' + escHtml(l.designacion || '—') +
-            ' · ' + l.cantidad + ' ' + unidadLabel + '</span>' +
+            ' · ' + textoCantidadLinea_(l) + '</span>' +
             '<button class="btn-ghost" style="width:auto;padding:2px 8px;" data-idx="' + idx + '">Quitar</button></div>'
         );
         chip.querySelector('button').onclick = function () { lineas.splice(idx, 1); pintarLineas(); };
@@ -2072,6 +2082,21 @@
           gas('buscarPaletPorSscc', LDAP, ssccBuscado).then(function (filas) {
             if (!filas.length) { kAlerta('No se ha encontrado ese SSCC con stock en almacén.'); return; }
             if (ssccYaElegidos_()[filas[0].sscc]) { kAlerta('Ese palet ya está en la petición.'); return; }
+            if (tipo === 'cesion') {
+              // El palet se cede entero: no hay que elegir un LM, se enseña lo que lleva y se confirma.
+              const primera = filas[0];
+              const candidato = {
+                sscc: primera.sscc, ubicacion: primera.ubicacion, cantidad: primera.cantidad,
+                contenido: filas.map(function (f) { return { codigo_lm: f.codigo_lm, designacion: f.designacion, cantidad: f.cantidad }; }),
+              };
+              elegirPaletsModal_([candidato], { titulo: textoModalPaletsCesion_ }).then(function (sel) {
+                if (!sel || !sel.length) return;
+                if (ssccYaElegidos_()[sel[0].sscc]) { kAlerta('Ese palet ya está en la petición.'); return; }
+                lineas.push(lineaPaletsEnteros_({ codigo_lm: primera.codigo_lm, designacion: primera.designacion, ean: primera.ean, seccion: primera.seccion }, sel));
+                pintarLineas();
+              });
+              return;
+            }
             elegirLmDePaletModal_(filas).then(function (elegido) {
               if (!elegido) return;
               if (ssccYaElegidos_()[elegido.sscc]) { kAlerta('Ese palet ya está en la petición.'); return; }
@@ -2104,12 +2129,33 @@
       return set;
     }
 
+    /** Cesión de palet entero: una línea con los palets elegidos (sscc y ubicacion con el mismo formato que en
+     *  refill). cantidad = nº de palets; el servidor la convierte en una línea de unidades por cada referencia
+     *  del palet (_resolverPaletsEnterosCesion_), así que aquí solo se guarda un resumen para enseñar. */
+    function lineaPaletsEnteros_(articulo, seleccionados) {
+      var referencias = {}, unidades = 0;
+      seleccionados.forEach(function (s) {
+        (s.contenido || []).forEach(function (x) { referencias[x.codigo_lm] = true; unidades += Number(x.cantidad) || 0; });
+      });
+      const n = Object.keys(referencias).length;
+      return {
+        codigoLm: articulo.codigo_lm, designacion: articulo.designacion,
+        ean: articulo.ean, seccion: articulo.seccion, cantidad: seleccionados.length,
+        sscc: seleccionados.map(function (s) { return s.sscc + ' (' + s.cantidad + 'ud)'; }).join(' + '),
+        ubicacion: seleccionados.map(function (s) { return s.ubicacion; }).join(' + '),
+        paletCompleto: true,
+        resumen: n ? (n + (n === 1 ? ' referencia' : ' referencias') + ' · ' + unidades + ' ud') : '',
+      };
+    }
+
     function seleccionarArticulo(a) {
       clearTimeout(timerBuscar); seqBusqueda++;
       articuloElegido = a;
       inputBuscar.value = a.codigo_lm + ' · ' + (a.designacion || '');
       resultados.innerHTML = '';
-      if (tipo === 'refill') elegirPaletsRefill_(a); else pedirCantidad();
+      if (tipo === 'refill') elegirPaletsRefill_(a);
+      else if (tipo === 'cesion') elegirPaletsCesion_(a);
+      else pedirCantidad();
     }
 
     function pintarResultados(filas) {
@@ -2175,8 +2221,51 @@
       });
     }
 
-    function pedirCantidad() {
-      const articulo = articuloElegido;
+    /** Cesión: como en refill se eligen palets enteros (se ceden con todo lo que lleven), pero queda el botón de
+     *  pedir unidades sueltas sin elegir palet, que era la única forma hasta ahora. Si no hay ningún palet entero
+     *  libre de ese artículo, se pasa directamente a pedir unidades. */
+    function elegirPaletsCesion_(articulo) {
+      function pedirUnidades() { pedirCantidad(articulo); }
+      gas('verificarAntesDeAnadir', LDAP, articulo.codigo_lm, 1).then(function (chk) {
+        function continuar() {
+          gas('listarSsccDisponibles', LDAP, articulo.codigo_lm).then(function (candidatos) {
+            // Los palets que ya están en esta petición no se vuelven a ofrecer.
+            const yaElegidos = ssccYaElegidos_();
+            const libres = candidatos.filter(function (p) { return !yaElegidos[p.sscc]; });
+            if (!libres.length) {
+              kAlerta((candidatos.length
+                ? 'Ya has añadido en esta petición todos los palets libres de ' + escHtml(articulo.codigo_lm) + '.'
+                : 'No hay palets enteros libres de ' + escHtml(articulo.codigo_lm) + ' (sin stock en almacén o reservados por otras peticiones).') +
+                ' Indica las unidades sueltas que quieres ceder.').then(pedirUnidades);
+              return;
+            }
+            elegirPaletsModal_(libres, {
+              titulo: textoModalPaletsCesion_,
+              botonBuscar: 'Prefiero pedir unidades sueltas, sin elegir palet',
+            }).then(function (elegidos) {
+              if (elegidos === 'BUSCAR') { pedirUnidades(); return; }
+              // Se vuelve a comprobar al confirmar (mientras el selector estaba abierto pudo añadirse otro igual).
+              const ahoraElegidos = ssccYaElegidos_();
+              const seleccionados = (elegidos || []).filter(function (p) { return !ahoraElegidos[p.sscc]; });
+              if (!seleccionados.length) return;
+              lineas.push(lineaPaletsEnteros_(articulo, seleccionados));
+              inputBuscar.value = ''; articuloElegido = null;
+              pintarLineas();
+            });
+          }).catch(function (e) { kAlerta(escHtml(e.message)); });
+        }
+        if (chk.duplicados.length) {
+          kAlerta('Ya hay una petición abierta (' + (ETIQUETA_TIPO[chk.duplicados[0].tipo] || chk.duplicados[0].tipo) +
+            ') con este artículo — se añadirá de todas formas.').then(continuar);
+        } else {
+          continuar();
+        }
+      }).catch(function (e) { kAlerta(escHtml(e.message)); });
+    }
+
+    function pedirCantidad(articuloDado) {
+      const articulo = articuloDado || articuloElegido;
+      if (!articulo) return;
       // Se consulta el disponible ANTES de preguntar cantidad, para mostrarlo
       // en la propia pregunta (proactivo, no solo avisar si falla después).
       gas('verificarAntesDeAnadir', LDAP, articulo.codigo_lm, 1).then(function (chk) {

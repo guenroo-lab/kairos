@@ -302,7 +302,7 @@ function _contenidoDePalets_(tienda, ssccs) {
     _trozos_(unicos, TROZO_IDS_).forEach(function (trozo) {
       _selectTodo_('stock_fisico',
         'tienda=eq.' + encodeURIComponent(tienda) + '&sscc=in.(' + trozo.map(encodeURIComponent).join(',') + ')' +
-        '&select=id,sscc,codigo_lm,cantidad,sincronizado_en')
+        '&select=id,sscc,codigo_lm,cantidad,ubicacion,sincronizado_en')
         .forEach(function (f) { filas.push(f); });
     });
     const marcas = {};
@@ -450,11 +450,15 @@ function verificarAntesDeAnadir(ldap, codigoLm, cantidad) {
   });
 }
 
-/** Refill con palets elegidos a mano (listarSsccDisponibles): ninguno puede
- *  estar ya reservado por otra petición — mismo palet en dos refill, o un
- *  palet con unidades de un pedido cliente. Se comprueba también aquí (no
- *  solo al listar) porque pudo reservarse entre medias. */
-function _exigirPaletsLibres_(tienda, lineas) {
+/** Palets elegidos a mano (listarSsccDisponibles) que la petición se lleva
+ *  ENTEROS — refill y cesión de palet entero: ninguno puede estar ya reservado
+ *  por otra petición — mismo palet en dos refill, o un palet con unidades de un
+ *  pedido cliente. Se comprueba también aquí (no solo al listar) porque pudo
+ *  reservarse entre medias. `quien` = cómo se nombra en los errores ("el
+ *  refill" por defecto). Devuelve el contenido de esos palets (filas de
+ *  stock_fisico del mismo snapshot), por si quien llama lo necesita. */
+function _exigirPaletsLibres_(tienda, lineas, quien) {
+  quien = quien || 'el refill';
   const elegidos = [];
   const repetidos = [];
   lineas.forEach(function (l) {
@@ -465,15 +469,15 @@ function _exigirPaletsLibres_(tienda, lineas) {
     });
   });
   if (repetidos.length) {
-    throw new Error('No se ha enviado el refill: el palet ' + repetidos.join(', ') + ' está repetido en la petición. Quita la línea duplicada.');
+    throw new Error('No se ha enviado ' + quien + ': el palet ' + repetidos.join(', ') + ' está repetido en la petición. Quita la línea duplicada.');
   }
-  if (!elegidos.length) return;
+  if (!elegidos.length) return [];
 
   const contenido = _contenidoDePalets_(tienda, elegidos);
   const marca = _marcaDe_(contenido);
   const faltan = elegidos.filter(function (s) { return !contenido.some(function (f) { return f.sscc === s; }); });
   if (faltan.length) {
-    throw new Error('No se ha enviado el refill: el palet ' + faltan.join(', ') + ' ya no está en el almacén. Elige otro palet.');
+    throw new Error('No se ha enviado ' + quien + ': el palet ' + faltan.join(', ') + ' ya no está en el almacén. Elige otro palet.');
   }
 
   // 1) Que ningún palet tenga ya algo reservado (otro refill, o unidades de
@@ -481,7 +485,7 @@ function _exigirPaletsLibres_(tienda, lineas) {
   const ocupados = _paletsOcupados_(tienda, contenido, marca);
   const reservados = elegidos.filter(function (s) { return ocupados[s]; });
   if (reservados.length) {
-    throw new Error('No se ha enviado el refill: ya hay otra petición con unidades de estos palets: ' +
+    throw new Error('No se ha enviado ' + quien + ': ya hay otra petición con unidades de estos palets: ' +
       reservados.join(', ') + '. Elige otro palet.');
   }
 
@@ -503,16 +507,112 @@ function _exigirPaletsLibres_(tienda, lineas) {
     }
   });
   if (sinCubrir.length) {
-    throw new Error('No se ha enviado el refill: llevarse esos palets dejaría sin stock a otros pedidos ya aceptados: ' +
+    throw new Error('No se ha enviado ' + quien + ': llevarse esos palets dejaría sin stock a otros pedidos ya aceptados: ' +
       sinCubrir.join('; ') + '.');
   }
+  return contenido;
+}
+
+/** Una línea de cesión que la tienda marcó como "palet entero" (el selector de
+ *  palets del formulario pone `paletCompleto`). Solo vale en cesión. */
+function _esLineaPaletEntero_(linea) {
+  return !!linea && linea.paletCompleto === true;
+}
+
+function _cantidadPaletRedondeada_(n) {
+  return Math.round((Number(n) || 0) * 1000) / 1000;
+}
+
+/** Cesión de palet entero. La tienda elige palets completos (como en refill) y
+ *  cada uno se va ENTERO, con todo lo que lleve de cualquier referencia. Esa
+ *  línea se sustituye aquí por una de unidades por cada referencia del palet,
+ *  con TODAS sus unidades y el palet ya fijado ("SSCC (Xud)"). Así el resto
+ *  del sistema (operario, traspasos de stock en myISO por SSCC + cantidad,
+ *  reservas) las trata como una cesión normal y no hace falta tocarlo: los
+ *  traspasos mueven justo el contenido completo del palet y las reservas ven
+ *  cada referencia comprometida al 100% en ese palet.
+ *
+ *  Se comprueba que los palets sigan libres (_exigirPaletsLibres_, mismo
+ *  criterio que en refill) y se leen de nuevo AQUÍ, no se fía uno del contenido
+ *  que vio la tienda al elegirlos. Devuelve la lista de líneas ya resuelta,
+ *  en el mismo orden (cada línea de palet entero se sustituye por las suyas).
+ *  Debe llamarse con el lock cogido (ver crearPeticion). */
+function _resolverPaletsEnterosCesion_(tienda, lineas) {
+  const enteras = lineas.filter(_esLineaPaletEntero_);
+  if (!enteras.length) return lineas;
+  enteras.forEach(function (l) {
+    if (!_partesSscc_(l.sscc, 0).some(function (p) { return p.sscc; })) {
+      throw new Error('No se ha enviado la cesión: falta el palet de ' + (l.codigoLm || 'una línea') + '. Vuelve a elegirlo.');
+    }
+  });
+  const contenido = _exigirPaletsLibres_(tienda, enteras, 'la cesión');
+
+  // Datos de cada referencia (EAN, designación, sección): del catálogo y, si
+  // alguna no figura, lo que mandó el formulario para el artículo que buscó.
+  const codigos = [];
+  contenido.forEach(function (f) {
+    const k = String(f.codigo_lm).trim();
+    if (Number(f.cantidad) > 0 && codigos.indexOf(k) === -1) codigos.push(k);
+  });
+  const catalogo = {};
+  supaSelectIn_('catalogo', 'codigo_lm', codigos, 'select=codigo_lm,ean,designacion,seccion')
+    .forEach(function (c) { catalogo[String(c.codigo_lm).trim()] = c; });
+
+  const resultado = [];
+  lineas.forEach(function (l) {
+    if (!_esLineaPaletEntero_(l)) { resultado.push(l); return; }
+    const pedido = String(l.codigoLm || '').trim();
+    const vistos = [];
+    _partesSscc_(l.sscc, 0).forEach(function (parte) {
+      if (!parte.sscc || vistos.indexOf(parte.sscc) !== -1) return;
+      vistos.push(parte.sscc);
+      // Una referencia puede venir en varias filas del palet: se suman.
+      const porCodigo = {};
+      const orden = [];
+      var ubicacion = null;
+      contenido.forEach(function (f) {
+        if (f.sscc !== parte.sscc || !(Number(f.cantidad) > 0)) return;
+        const k = String(f.codigo_lm).trim();
+        if (!(k in porCodigo)) { porCodigo[k] = 0; orden.push(k); }
+        porCodigo[k] += Number(f.cantidad);
+        if (!ubicacion && f.ubicacion) ubicacion = f.ubicacion;
+      });
+      if (!orden.length) {
+        throw new Error('No se ha enviado la cesión: el palet ' + parte.sscc + ' ya no tiene mercancía en el almacén. Elige otro palet.');
+      }
+      // Primero lo que la tienda buscó, luego lo demás de más a menos unidades.
+      orden.sort(function (a, b) {
+        if (a === pedido) return -1;
+        if (b === pedido) return 1;
+        return (porCodigo[b] - porCodigo[a]) || (a < b ? -1 : 1);
+      });
+      orden.forEach(function (k) {
+        const cat = catalogo[k] || {};
+        const esElPedido = k === pedido;
+        const unidades = _cantidadPaletRedondeada_(porCodigo[k]);
+        resultado.push({
+          codigoLm: k,
+          cantidad: unidades,
+          ean: cat.ean || (esElPedido ? l.ean : null) || null,
+          designacion: cat.designacion || (esElPedido ? l.designacion : null) || null,
+          seccion: cat.seccion || (esElPedido ? l.seccion : null) || null,
+          sscc: parte.sscc + ' (' + unidades + 'ud)',
+          ubicacion: ubicacion,
+        });
+      });
+    });
+  });
+  return resultado;
 }
 
 /** Pedido cliente comprueba stock y refill comprueba que sus palets sigan
  *  libres al enviar: se serializa con un lock para que dos peticiones
- *  simultáneas no reserven las mismas últimas unidades / el mismo palet. */
+ *  simultáneas no reserven las mismas últimas unidades / el mismo palet. La
+ *  cesión también lo coge cuando lleva palets enteros (reserva palets como el
+ *  refill); la cesión por unidades sueltas sigue sin lock. */
 function crearPeticion(ldap, tipo, datos, lineas) {
-  if (tipo !== 'pedido_cliente' && tipo !== 'refill') return _crearPeticion_(ldap, tipo, datos, lineas);
+  const reservaPalets = tipo === 'cesion' && Array.isArray(lineas) && lineas.some(_esLineaPaletEntero_);
+  if (tipo !== 'pedido_cliente' && tipo !== 'refill' && !reservaPalets) return _crearPeticion_(ldap, tipo, datos, lineas);
   const lock = LockService.getScriptLock();
   try { lock.waitLock(20000); } catch (err) { throw new Error('El sistema está ocupado, inténtalo de nuevo en unos segundos.'); }
   try { return _crearPeticion_(ldap, tipo, datos, lineas); } finally { lock.releaseLock(); }
@@ -576,9 +676,14 @@ function _crearPeticion_(ldap, tipo, datos, lineas) {
   if (!lineas || !lineas.length) throw new Error('Añade al menos una línea.');
   // Pedido cliente: sin stock suficiente NO se puede enviar (se re-comprueba
   // aquí aunque ya se avisara al añadir el artículo — el stock pudo agotarse
-  // entretanto). Cesión y refill solo avisan al añadir, no bloquean.
+  // entretanto). Cesión por unidades solo avisa al añadir, no bloquea; refill y
+  // cesión de palet entero sí comprueban que sus palets sigan libres.
   if (tipo === 'pedido_cliente') _exigirStockPedidoCliente_(tienda, lineas);
   if (tipo === 'refill') _exigirPaletsLibres_(tienda, lineas);
+  // Cesión de palet entero: la línea de palets pasa a ser una línea de unidades
+  // por cada referencia del palet (ver _resolverPaletsEnterosCesion_). Fuera de
+  // la cesión la marca no significa nada y se ignora.
+  if (tipo === 'cesion') lineas = _resolverPaletsEnterosCesion_(tienda, lineas);
 
   const cabecera = {
     tipo: tipo,
