@@ -379,14 +379,18 @@ function listarPaletsAlternativos(lineaId) {
   const marca = _marcaDeSnapshot_(candidatos);
   const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, marca);
   const enRefill = _paletsDeRefill_(tienda, marca);
-  const actuales = _parseSsccMulti_(linea.sscc, linea.cantidad).map(function (p) { return p.sscc; });
+  const partesActuales = _parseSsccMulti_(linea.sscc, linea.cantidad);
+  const actuales = partesActuales.map(function (p) { return p.sscc; });
 
   const lista = candidatos.map(function (c) {
+    const mia = partesActuales.filter(function (p) { return p.sscc === c.sscc; })[0];
     return {
       sscc: c.sscc,
       ubicacion: c.ubicacion,
       remanente: enRefill[c.sscc] && actuales.indexOf(c.sscc) === -1 ? 0 : c.cantidad - (uso[c.sscc] || 0),
       esActual: actuales.indexOf(c.sscc) !== -1,
+      // Unidades que esta línea ya tiene apartadas en este palet (para el reparto manual).
+      cantidadActual: mia ? mia.cantidad : 0,
     };
   });
   lista.sort(function (a, b) { return b.remanente - a.remanente; });
@@ -434,4 +438,82 @@ function cambiarPaletLinea(lineaId, sscc, ubicacion) {
   });
   if (!filas.length) throw new Error('Línea no encontrada.');
   return _json_({ ok: true });
+}
+
+/** Reparto MANUAL de una línea entre varios palets: p. ej. 17 uds = 15 de un
+ *  palet pequeño (que así se vacía) + 2 de otro, en vez de 17 de uno solo.
+ *  `reparto` = [{ sscc, cantidad }]. Se guarda en el mismo formato que el reparto
+ *  automático ("sscc1 (15ud) + sscc2 (2ud)"), así que todo lo demás ya lo
+ *  entiende: la lista de palets a confirmar uno a uno, la transferencia de
+ *  stock de cada soporte en myISO y el cálculo de lo que queda libre en cada
+ *  palet para el resto de pedidos.
+ *
+ *  Nada se fía del cliente: la ubicación sale de stock_fisico, y cada palet
+ *  debe tener libres (stock menos lo ya reservado por OTRAS líneas) al menos
+ *  las unidades que se le piden. Se serializa con el mismo bloqueo que la
+ *  asignación automática, para que dos operarios no se lleven a la vez lo
+ *  mismo del mismo palet. */
+function repartirPaletsLinea(lineaId, reparto) {
+  const lock = LockService.getScriptLock();
+  try { lock.waitLock(20000); } catch (err) { throw new Error('El sistema está ocupado asignando stock, inténtalo de nuevo en unos segundos.'); }
+  try {
+    return _repartirPaletsLinea_(lineaId, reparto);
+  } finally {
+    lock.releaseLock();
+  }
+}
+
+function _repartirPaletsLinea_(lineaId, reparto) {
+  const lineaFilas = supaSelect_('lineas', 'id=eq.' + encodeURIComponent(lineaId) +
+    '&select=id,codigo_lm,cantidad,unidad_medida,estado_preparacion,peticion_id,sscc');
+  if (!lineaFilas.length) throw new Error('Línea no encontrada.');
+  const linea = lineaFilas[0];
+  if (linea.estado_preparacion === 'preparado') throw new Error('Esa línea ya está preparada: deshazla antes de cambiar sus palets.');
+  if (linea.unidad_medida === 'palet') throw new Error('Esta línea pide palets enteros: no se reparte por unidades.');
+
+  const peticionFilas = supaSelect_('peticiones', 'id=eq.' + encodeURIComponent(linea.peticion_id) + '&select=tipo,tienda_origen,estado');
+  if (!peticionFilas.length) throw new Error('Petición no encontrada.');
+  const peticion = peticionFilas[0];
+  if (peticion.tipo === 'refill') throw new Error('Un refill se lleva palets enteros: no se reparte.');
+  if (peticion.estado === 'anulada' || peticion.estado === 'cerrada') throw new Error('Esta petición ya no admite cambios.');
+
+  // Reparto limpio: unidades enteras mayores que 0, sin repetir palet.
+  const partes = [];
+  (reparto || []).forEach(function (r) {
+    const sscc = String((r && r.sscc) || '').trim();
+    const cantidad = Number(r && r.cantidad);
+    if (!sscc) throw new Error('Falta el palet en el reparto.');
+    if (!(cantidad > 0) || Math.floor(cantidad) !== cantidad) throw new Error('Las unidades de cada palet tienen que ser un número entero mayor que 0.');
+    if (partes.some(function (p) { return p.sscc === sscc; })) throw new Error('El palet ' + sscc + ' está repetido en el reparto.');
+    partes.push({ sscc: sscc, cantidad: cantidad });
+  });
+  if (!partes.length) throw new Error('Elige al menos un palet.');
+  const pedidas = Number(linea.cantidad);
+  const suma = partes.reduce(function (s, p) { return s + p.cantidad; }, 0);
+  if (suma !== pedidas) throw new Error('El reparto suma ' + suma + ' ud y la línea pide ' + pedidas + '.');
+
+  const tienda = peticion.tienda_origen;
+  const candidatos = _candidatosStock_(tienda, linea.codigo_lm);
+  const marca = _marcaDeSnapshot_(candidatos);
+  const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, marca);
+  const enRefill = _paletsDeRefill_(tienda, marca);
+  const ubicaciones = partes.map(function (p) {
+    const c = candidatos.filter(function (x) { return x.sscc === p.sscc; })[0];
+    if (!c) throw new Error('El palet ' + p.sscc + ' ya no consta con el código ' + linea.codigo_lm + ' en el edificio 05.');
+    const libres = enRefill[c.sscc] ? 0 : c.cantidad - (uso[c.sscc] || 0);
+    if (p.cantidad > libres) {
+      throw new Error('El palet ' + p.sscc + ' solo tiene ' + Math.max(0, libres) + ' ud libres' + (enRefill[c.sscc] ? ' (lo reserva un refill)' : ' (el resto está reservado por otros pedidos)') + ' y le pides ' + p.cantidad + '.');
+    }
+    return c.ubicacion;
+  });
+
+  // sscc_asignado_en como en cambiarPaletLinea (si no, el palet nuevo no contaría como reservado). El filtro por
+  // estado evita pisar una línea que otro operario acaba de marcar como preparada.
+  const filas = supaUpdate_('lineas', 'id=eq.' + encodeURIComponent(lineaId) + '&estado_preparacion=neq.preparado', {
+    sscc: partes.map(function (p) { return p.sscc + ' (' + p.cantidad + 'ud)'; }).join(' + '),
+    ubicacion: ubicaciones.join(' + '),
+    sscc_asignado_en: new Date().toISOString(),
+  });
+  if (!filas.length) throw new Error('La línea acaba de cambiar (puede que ya esté preparada). Vuelve a abrir el pedido.');
+  return _json_({ ok: true, sscc: filas[0].sscc, ubicacion: filas[0].ubicacion });
 }

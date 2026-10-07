@@ -133,6 +133,22 @@ function _estadoTextoRevisada_(r) {
   return res.ssccDistinto ? 'Revisada · localizado con otro SSCC' : 'Revisada · con diferencias';
 }
 
+/** Foto que el operario añadió al revisar un palet de ESTA tienda. El id del archivo sale de la base de datos (nunca
+ *  del cliente) y solo de una revisión de la tienda del usuario; se entrega como imagen en base64 porque el usuario
+ *  de tienda no tiene por qué tener acceso a la carpeta de Drive. */
+function obtenerFotoRevision(ldap, revisionId, indice) {
+  const u = _usuarioDe_(ldap);
+  if (u.rol === 'vendedor') throw new Error('Tu rol (Vendedor) no puede ver las revisiones de palet.');
+  const filas = supaSelect_('revisiones_palet',
+    'id=eq.' + encodeURIComponent(revisionId) + '&tienda_origen=eq.' + encodeURIComponent(u.tienda) + '&select=id,resultado');
+  if (!filas.length) throw new Error('Revisión no encontrada.');
+  const fotos = ((filas[0].resultado || {}).fotos) || [];
+  const foto = fotos[Number(indice)];
+  if (!foto || !foto.id) throw new Error('Esa foto no existe.');
+  const blob = DriveApp.getFileById(foto.id).getBlob();
+  return _json_({ mime: blob.getContentType(), datos: Utilities.base64Encode(blob.getBytes()), nombre: foto.nombre || '' });
+}
+
 function listarMisRevisiones(ldap) {
   const u = _usuarioDe_(ldap);
   if (u.rol === 'vendedor') return _json_([]);

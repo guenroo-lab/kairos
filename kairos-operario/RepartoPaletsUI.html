@@ -1,0 +1,191 @@
+<style>
+  /* ——— Repartir una línea entre varios palets (pedido cliente / cesión) ——— */
+  .rep-panel { margin-top:10px; padding:12px; border-radius:var(--radius-card); background:var(--ink-900); border:1px solid var(--ink-700); }
+  .rep-panel h4 { margin:0 0 4px; font-size:14px; }
+  .rep-panel .rep-ayuda { margin:0 0 10px; font-size:12.5px; color:var(--text-500); line-height:1.45; }
+  .rep-fila { display:grid; grid-template-columns:minmax(0,1fr) 84px auto; gap:8px; align-items:center; padding:8px 0; border-top:1px solid var(--ink-800); }
+  .rep-fila:first-of-type { border-top:0; }
+  .rep-fila .rep-sscc { grid-column:1 / -1; font-size:13.5px; font-weight:800; letter-spacing:.01em; font-variant-numeric:tabular-nums; word-break:break-all; }
+  .rep-fila .rep-sscc small { font-size:11.5px; font-weight:700; color:var(--accent); }
+  .rep-fila .rep-info b { display:block; font-size:14px; }
+  .rep-fila .rep-info span { font-size:12.5px; color:var(--text-500); }
+  .rep-fila input { margin:0; width:100%; text-align:center; font-size:18px; font-weight:800; padding:8px 4px; }
+  .rep-fila.rep-mal input { border-color:var(--danger-fg); color:var(--danger-fg); }
+  .rep-fila button { margin:0; min-height:40px; padding:6px 10px; font-size:12px; }
+  .rep-resumen { margin:10px 0 8px; padding:10px 12px; border-radius:10px; font-size:14px; font-weight:700; background:var(--ink-850); color:var(--text-300); }
+  .rep-resumen.ok { background:rgba(26,143,76,.16); color:var(--ok); }
+  .rep-resumen.mal { background:var(--danger-bg); color:var(--danger-fg); }
+  .rep-acciones { display:flex; gap:8px; flex-wrap:wrap; }
+  .rep-acciones button { margin:0; }
+</style>
+
+<script>
+// ============================ REPARTO ENTRE PALETS ============================
+// El operario puede partir una línea entre varios palets (p. ej. 17 ud = 15 de un
+// palet pequeño que así se vacía + 2 de otro). La línea se guarda en el formato
+// de siempre ("sscc1 (15ud) + sscc2 (2ud)"): la lista de palets a confirmar, las
+// transferencias de myISO por soporte y el stock libre de cada palet ya lo
+// entienden. El servidor (repartirPaletsLinea) vuelve a comprobarlo todo.
+
+var repartoPalet = {};   // lineaId -> { lista: [{sscc, ubicacion, remanente, esActual, cantidadActual}], cant: {sscc: n}, necesarias, enviando }
+
+function REP_libres_(c) { return Math.max(0, Number(c.remanente) || 0); }
+function REP_suma_(estado) { return estado.lista.reduce(function (s, c) { return s + (Number(estado.cant[c.sscc]) || 0); }, 0); }
+
+/** Empieza con lo que la línea ya tiene apartado en cada palet. */
+function REP_estadoInicial_(lista, necesarias) {
+  var cant = {};
+  lista.forEach(function (c) { cant[c.sscc] = Number(c.cantidadActual) || 0; });
+  return { lista: lista, cant: cant, necesarias: Number(necesarias) || 0, enviando: false };
+}
+
+/** Qué hay mal en el reparto: { suma, falta, errores: {sscc: 'texto'}, ok }. */
+function REP_revisar_(estado) {
+  var errores = {}, suma = 0;
+  estado.lista.forEach(function (c) {
+    var n = Number(estado.cant[c.sscc]) || 0;
+    suma += n;
+    if (n < 0 || Math.floor(n) !== n) errores[c.sscc] = 'Tiene que ser un número entero.';
+    else if (n > REP_libres_(c)) errores[c.sscc] = 'Solo hay ' + REP_libres_(c) + ' ud libres.';
+  });
+  var falta = estado.necesarias - suma;
+  return { suma: suma, falta: falta, errores: errores, ok: falta === 0 && Object.keys(errores).length === 0 && suma > 0 };
+}
+
+/** Vacía el palet `sscc` (coge de él todo lo que pueda) y completa el resto con un único palet si alguno alcanza
+ *  —el que menos tenga libre, para ir terminando palets pequeños— o, si ninguno solo alcanza, de mayor a menor. */
+function REP_sugerirVaciando_(lista, necesarias, sscc) {
+  var cant = {};
+  lista.forEach(function (c) { cant[c.sscc] = 0; });
+  var x = lista.filter(function (c) { return c.sscc === sscc; })[0];
+  if (!x) return cant;
+  cant[sscc] = Math.min(REP_libres_(x), necesarias);
+  var resto = necesarias - cant[sscc];
+  if (resto <= 0) return cant;
+  var otros = lista.filter(function (c) { return c.sscc !== sscc && REP_libres_(c) > 0; });
+  var suficientes = otros.filter(function (c) { return REP_libres_(c) >= resto; })
+    .sort(function (a, b) { return REP_libres_(a) - REP_libres_(b) || (b.esActual ? 1 : 0) - (a.esActual ? 1 : 0); });
+  if (suficientes.length) { cant[suficientes[0].sscc] = resto; return cant; }
+  otros.sort(function (a, b) { return REP_libres_(b) - REP_libres_(a); }).forEach(function (c) {
+    if (resto <= 0) return;
+    var t = Math.min(REP_libres_(c), resto);
+    cant[c.sscc] = t; resto -= t;
+  });
+  return cant;
+}
+
+function REP_esc_(t) { return (typeof escHtmlSie_ === 'function') ? escHtmlSie_(t) : String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+function REP_textoResumen_(estado) {
+  var r = REP_revisar_(estado);
+  if (r.ok) return { cls: 'ok', texto: '✓ ' + r.suma + ' de ' + estado.necesarias + ' ud: ' + estado.lista.filter(function (c) { return Number(estado.cant[c.sscc]) > 0; })
+    .map(function (c) { return estado.cant[c.sscc] + ' del palet ' + c.sscc; }).join(' + ') };
+  if (Object.keys(r.errores).length) return { cls: 'mal', texto: 'Revisa las unidades marcadas en rojo.' };
+  if (r.falta > 0) return { cls: '', texto: 'Llevas ' + r.suma + ' de ' + estado.necesarias + ' ud · faltan ' + r.falta };
+  return { cls: 'mal', texto: 'Te pasas ' + (-r.falta) + ' ud: llevas ' + r.suma + ' y la línea pide ' + estado.necesarias + '.' };
+}
+
+/** ¿Se puede repartir esta línea? Pedido cliente / cesión por unidades y aún sin preparar. */
+function repartoPermitido_(l) {
+  var p = (typeof ultimoDetalle !== 'undefined' && ultimoDetalle) ? ultimoDetalle.peticion : null;
+  return !!p && p.tipo !== 'refill' && l.unidad_medida !== 'palet' && l.estado_preparacion !== 'preparado' && Number(l.cantidad) > 1;
+}
+
+function repartoBotonHtml_(l) {
+  return '<button class="secundario" style="margin-top:8px;" onclick="abrirReparto(\'' + l.id + '\')">✂ Repartir entre palets</button>';
+}
+
+function repartoHtml_(l) {
+  var estado = repartoPalet[l.id];
+  if (estado === 'cargando') return '<div class="meta" style="margin-top:6px;">Buscando palets…</div>';
+  var visibles = estado.lista.filter(function (c) { return REP_libres_(c) > 0 || Number(estado.cant[c.sscc]) > 0; })
+    .sort(function (a, b) { return REP_libres_(a) - REP_libres_(b); });
+  var h = '<div class="rep-panel"><h4>Repartir ' + estado.necesarias + ' ud entre palets</h4>' +
+    '<p class="rep-ayuda">Indica cuántas unidades coges de cada palet. Con «Vaciar este» coges todo ese palet y el resto se completa con otro. ' +
+    'Cada palet se confirmará al cogerlo y se descontará de su propio stock.</p>';
+  visibles.forEach(function (c) {
+    var idx = estado.lista.indexOf(c);
+    h += '<div class="rep-fila" id="repf-' + l.id + '-' + idx + '">' +
+      '<div class="rep-sscc">SSCC ' + REP_esc_(c.sscc) + (c.esActual ? ' <small>· el actual</small>' : '') + '</div>' +
+      '<div class="rep-info"><b>' + REP_esc_(c.ubicacion) + '</b><span>' + REP_libres_(c) + ' ud libres</span></div>' +
+      '<input type="number" min="0" max="' + REP_libres_(c) + '" inputmode="numeric" id="rep-' + l.id + '-' + idx + '" value="' + (Number(estado.cant[c.sscc]) || 0) + '" oninput="repCambia(\'' + l.id + '\', ' + idx + ', this.value)">' +
+      '<button class="secundario" onclick="repVaciar(\'' + l.id + '\', ' + idx + ')">Vaciar este</button></div>';
+  });
+  var t = REP_textoResumen_(estado);
+  h += '<div class="rep-resumen ' + t.cls + '" id="repResumen-' + l.id + '">' + REP_esc_(t.texto) + '</div>' +
+    '<div class="rep-acciones"><button class="ok" id="repOk-' + l.id + '" ' + (REP_revisar_(estado).ok && !estado.enviando ? '' : 'disabled') + ' onclick="repConfirmar(\'' + l.id + '\')">Confirmar reparto</button>' +
+    '<button class="secundario" onclick="cerrarReparto(\'' + l.id + '\')">Cancelar</button></div></div>';
+  return h;
+}
+
+/** Carga los palets del código (con lo libre de cada uno) y abre el panel de reparto. */
+function abrirReparto(lineaId) {
+  var l = ultimoDetalle.lineas.filter(function (x) { return x.id === lineaId; })[0];
+  if (!l) return;
+  repartoPalet[lineaId] = 'cargando';
+  delete selectorPalet[lineaId];
+  renderDetalleBody_();
+  google.script.run
+    .withSuccessHandler(function (json) {
+      var lista = JSON.parse(json);
+      if (!lista.length) { delete repartoPalet[lineaId]; renderDetalleBody_(); kAlerta('No hay palets con este código en el edificio 05.'); return; }
+      repartoPalet[lineaId] = REP_estadoInicial_(lista, l.cantidad);
+      renderDetalleBody_();
+    })
+    .withFailureHandler(function (err) { delete repartoPalet[lineaId]; renderDetalleBody_(); kAlerta(err.message); })
+    .listarPaletsAlternativos(lineaId);
+}
+
+function cerrarReparto(lineaId) { delete repartoPalet[lineaId]; renderDetalleBody_(); }
+
+/** Cambio en el cuadro de unidades de un palet: solo se refresca el resumen (sin repintar, para no perder el foco). */
+function repCambia(lineaId, idx, valor) {
+  var estado = repartoPalet[lineaId];
+  if (!estado || estado === 'cargando') return;
+  var c = estado.lista[idx];
+  estado.cant[c.sscc] = valor === '' ? 0 : Number(valor);
+  repActualizar_(lineaId);
+}
+
+function repActualizar_(lineaId) {
+  var estado = repartoPalet[lineaId];
+  var r = REP_revisar_(estado), t = REP_textoResumen_(estado);
+  var resumen = document.getElementById('repResumen-' + lineaId);
+  if (resumen) { resumen.className = 'rep-resumen ' + t.cls; resumen.textContent = t.texto; }
+  var ok = document.getElementById('repOk-' + lineaId);
+  if (ok) ok.disabled = !r.ok || estado.enviando;
+  estado.lista.forEach(function (c, idx) {
+    var fila = document.getElementById('repf-' + lineaId + '-' + idx);
+    if (fila) fila.classList.toggle('rep-mal', !!r.errores[c.sscc]);
+  });
+}
+
+function repVaciar(lineaId, idx) {
+  var estado = repartoPalet[lineaId];
+  if (!estado || estado === 'cargando') return;
+  estado.cant = REP_sugerirVaciando_(estado.lista, estado.necesarias, estado.lista[idx].sscc);
+  renderDetalleBody_();
+}
+
+function repConfirmar(lineaId) {
+  var estado = repartoPalet[lineaId];
+  if (!estado || estado === 'cargando' || estado.enviando) return;
+  if (!REP_revisar_(estado).ok) return;
+  var reparto = estado.lista.filter(function (c) { return Number(estado.cant[c.sscc]) > 0; })
+    .map(function (c) { return { sscc: c.sscc, cantidad: Number(estado.cant[c.sscc]) }; })
+    .sort(function (a, b) { return b.cantidad - a.cantidad; });   // primero el palet del que más se coge
+  estado.enviando = true;
+  repActualizar_(lineaId);
+  google.script.run
+    .withSuccessHandler(function () {
+      delete repartoPalet[lineaId]; delete selectorPalet[lineaId]; delete confirmadosPalet[lineaId];
+      renderDetalle();
+    })
+    .withFailureHandler(function (err) {
+      estado.enviando = false;
+      repActualizar_(lineaId);
+      kAlerta(err.message);
+    })
+    .repartirPaletsLinea(lineaId, reparto);
+}
+</script>

@@ -8,12 +8,42 @@ function _inicioHoyRevisionesIso_() {
   return new Date(a.getFullYear(), a.getMonth(), a.getDate()).toISOString();
 }
 
+// Carpeta de Drive donde se guardan las fotos que los operarios añaden a una revisión («FotosRevisionStock»,
+// compartida con los jefes y con tienda). Las fotos las crea la cuenta que publica la app.
+const REVISION_FOTOS_CARPETA_ = '1enNoKd-PkVOHM2cBPtjsOeDkJb4oQH6x';
+const REVISION_FOTOS_MAX_ = 3;
+const REVISION_FOTO_MAX_BYTES_ = 6 * 1024 * 1024;
+const REVISION_FOTO_TIPOS_ = { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' };
+
+/** Añade el EAN de cada artículo esperado: las revisiones guardan solo código y nombre, el EAN sale del
+ *  catálogo. Si el catálogo falla, la revisión sigue funcionando sin EAN. */
+function _anadirEanRevisiones_(revisiones) {
+  const codigos = [];
+  revisiones.forEach(function (r) {
+    (r.contenido_esperado || []).forEach(function (c) {
+      if (c && c.codigo_lm && codigos.indexOf(c.codigo_lm) === -1) codigos.push(c.codigo_lm);
+    });
+  });
+  if (!codigos.length) return;
+  const ean = {};
+  try {
+    supaSelectIn_('catalogo', 'codigo_lm', codigos, 'select=codigo_lm,ean').forEach(function (f) { if (f.ean) ean[f.codigo_lm] = f.ean; });
+  } catch (err) {
+    console.error('Revisiones: no se pudo leer el EAN del catálogo: ' + err.message);
+    return;
+  }
+  revisiones.forEach(function (r) {
+    (r.contenido_esperado || []).forEach(function (c) { if (c && !c.ean && ean[c.codigo_lm]) c.ean = ean[c.codigo_lm]; });
+  });
+}
+
 /** Pendientes y en curso de una tienda — pantalla de revisión del operario. */
 function listarRevisionesTienda(tienda) {
   const filas = supaSelect_('revisiones_palet',
     'tienda_origen=eq.' + encodeURIComponent(tienda) + '&estado=in.(pendiente,en_revision)' +
     '&select=id,sscc,ubicacion_esperada,contenido_esperado,revisar,comentario,estado,creada_en,solicitante_ldap,en_curso_por,en_curso_desde' +
     '&order=creada_en.asc');
+  _anadirEanRevisiones_(filas);
   return _json_(filas);
 }
 
@@ -29,7 +59,86 @@ function tomarRevision(id, operario) {
     en_curso_desde: new Date().toISOString(),
   });
   if (!filas.length) throw new Error('Esta revisión ya está terminada.');
+  _anadirEanRevisiones_([filas[0]]);
   return _json_(filas[0]);
+}
+
+// ——— Fotos de la revisión ———
+
+function _nombreFotoRevision_(revision, operario, extension) {
+  const limpio = function (t) { return String(t || '').normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, ''); };
+  const que = revision.sscc ? 'SSCC-' + limpio(revision.sscc) : 'LM-' + limpio(((revision.contenido_esperado || [])[0] || {}).codigo_lm || 'busqueda');
+  const cuando = Utilities.formatDate(new Date(), 'Europe/Madrid', 'yyyyMMdd-HHmmss');
+  const azar = Math.floor(Math.random() * 1679616).toString(36).padStart(4, '0');
+  return 'Revision_' + limpio(revision.tienda_origen) + '_' + que + '_' + cuando + '_' + limpio(operario).slice(0, 20) + '_' + azar + '.' + extension;
+}
+
+/** Guarda una foto (ya reducida en el móvil) en la carpeta de Drive y devuelve su id. La revisión la guarda al
+ *  terminarse (completarRevisionPalet); si el operario la quita o abandona, se mueve a la papelera. */
+function subirFotoRevision(id, operario, base64, mime) {
+  operario = String(operario || '').trim();
+  if (!operario) throw new Error('Selecciona tu nombre antes de añadir una foto.');
+  mime = String(mime || '').toLowerCase();
+  const extension = REVISION_FOTO_TIPOS_[mime];
+  if (!extension) throw new Error('Formato de imagen no válido.');
+  base64 = String(base64 || '').replace(/^data:[^,]*,/, '');
+  if (!base64) throw new Error('La foto está vacía.');
+  if (base64.length > Math.ceil(REVISION_FOTO_MAX_BYTES_ * 4 / 3)) throw new Error('La foto es demasiado grande.');
+
+  const filas = supaSelect_('revisiones_palet', 'id=eq.' + encodeURIComponent(id) + '&select=id,estado,tienda_origen,sscc,contenido_esperado');
+  if (!filas.length) throw new Error('Revisión no encontrada.');
+  if (filas[0].estado === 'revisada') throw new Error('Esta revisión ya está terminada.');
+
+  const bytes = Utilities.base64Decode(base64);
+  if (!bytes.length || bytes.length > REVISION_FOTO_MAX_BYTES_) throw new Error('La foto es demasiado grande.');
+  const nombre = _nombreFotoRevision_(filas[0], operario, extension);
+  const archivo = DriveApp.getFolderById(REVISION_FOTOS_CARPETA_).createFile(Utilities.newBlob(bytes, mime, nombre));
+  archivo.setDescription('rev:' + id + ' · ' + operario);
+  return _json_({ id: archivo.getId(), nombre: nombre });
+}
+
+/** Quita (a la papelera de Drive) una foto que se acaba de subir y no se quiere. Solo vale para una foto de esta
+ *  misma revisión mientras siga sin terminar. Es un "si se puede": no bloquea nada si falla. */
+function quitarFotoRevision(id, fotoId) {
+  const filas = supaSelect_('revisiones_palet', 'id=eq.' + encodeURIComponent(id) + '&select=id,estado');
+  if (!filas.length || filas[0].estado === 'revisada') return _json_({ ok: false });
+  const archivo = DriveApp.getFileById(String(fotoId || ''));
+  if (String(archivo.getDescription() || '').indexOf('rev:' + id + ' ') !== 0) return _json_({ ok: false });
+  archivo.setTrashed(true);
+  return _json_({ ok: true });
+}
+
+/** Comprueba que cada foto existe y está en la carpeta de fotos de revisión (no se acepta un id cualquiera de Drive). */
+function _verificarFotosRevision_(ids) {
+  if (!Array.isArray(ids)) return [];
+  const fotos = [];
+  ids.slice(0, REVISION_FOTOS_MAX_).forEach(function (valor) {
+    const id = String(valor || '').trim();
+    if (!/^[A-Za-z0-9_-]{15,}$/.test(id)) throw new Error('Una de las fotos no es válida: vuelve a añadirla.');
+    if (fotos.some(function (f) { return f.id === id; })) return;
+    var archivo, enCarpeta = false;
+    try {
+      archivo = DriveApp.getFileById(id);
+      const padres = archivo.getParents();
+      while (padres.hasNext()) { if (padres.next().getId() === REVISION_FOTOS_CARPETA_) { enCarpeta = true; break; } }
+    } catch (err) {
+      throw new Error('No se ha podido comprobar una de las fotos. Inténtalo de nuevo o quítala.');
+    }
+    if (!enCarpeta) throw new Error('Una de las fotos no es válida: vuelve a añadirla.');
+    fotos.push({ id: id, nombre: archivo.getName() });
+  });
+  return fotos;
+}
+
+/** Foto de una revisión ya terminada (para el jefe de equipo): el id sale SIEMPRE de la base de datos, nunca del cliente. */
+function obtenerFotoRevision(id, indice) {
+  const filas = supaSelect_('revisiones_palet', 'id=eq.' + encodeURIComponent(id) + '&select=id,resultado');
+  if (!filas.length) throw new Error('Revisión no encontrada.');
+  const fotos = ((filas[0].resultado || {}).fotos) || [];
+  const foto = fotos[Number(indice)];
+  if (!foto || !foto.id) throw new Error('Esa foto no existe.');
+  const blob = DriveApp.getFileById(foto.id).getBlob();
+  return _json_({ mime: blob.getContentType(), datos: Utilities.base64Encode(blob.getBytes()), nombre: foto.nombre || '' });
 }
 
 // Por qué un palet no se localizó. Solo se pide cuando el sistema no le conocía
@@ -58,6 +167,8 @@ function completarRevisionPalet(id, operario, resultado) {
   if (filas[0].estado === 'revisada') throw new Error('Esta revisión ya está terminada.');
   const esperado = filas[0].contenido_esperado || [];
   const nota = String(resultado.nota || '').trim() || null;
+  // Fotos que el operario ha añadido (ya subidas a Drive): se comprueba que son de la carpeta de fotos.
+  const fotos = _verificarFotosRevision_(resultado.fotos);
   // Bug real (revisión con Codex CLI, 2026-09-22): la tienda elige qué
   // revisar (cantidad/referencias/ubicación, ver 025_revisiones_palet.sql),
   // pero esta función siempre exigía y evaluaba las tres — un palet pedido
@@ -75,6 +186,7 @@ function completarRevisionPalet(id, operario, resultado) {
     // terminara ÚLTIMO — al revés de lo que dice el comentario de arriba
     // ("gana quien termine primero"). Con el filtro, el segundo en llegar
     // ve 0 filas afectadas y se entera de que ya estaba resuelta.
+    if (fotos.length) cuerpo.fotos = fotos;
     const filas = supaUpdate_('revisiones_palet', 'id=eq.' + encodeURIComponent(id) + '&estado=neq.revisada', {
       estado: 'revisada',
       conforme: conforme,
@@ -173,6 +285,7 @@ function listarRevisionesJefe() {
   const resueltas = conformes.concat(gestionadas)
     .sort(function (a, b) { return new Date(b.revisada_en) - new Date(a.revisada_en); })
     .slice(0, 100);
+  _anadirEanRevisiones_(abiertas.concat(diferencias));
 
   const hoy = supaSelect_('revisiones_palet',
     'creada_en=gte.' + encodeURIComponent(_inicioHoyRevisionesIso_()) + '&select=tienda_origen');

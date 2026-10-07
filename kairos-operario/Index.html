@@ -1013,6 +1013,7 @@
       vistaLinea = {};
       confirmadosPalet = {};
       selectorPalet = {};
+      repartoPalet = {};
       renderDetalleBody_();
     }
 
@@ -1063,6 +1064,8 @@
      *  con lo que queda libre de cada uno. También sirve para una línea sin
      *  palet asignado (el sistema no encontró stock): elegir uno a mano. */
     function bloqueSelectorHtml_(l) {
+      // Reparto manual de la línea entre varios palets (RepartoPaletsUI.html).
+      if (repartoPalet[l.id]) return repartoHtml_(l);
       const sel = selectorPalet[l.id];
       if (sel === 'cargando') {
         return '<div class="meta" style="margin-top:6px;">Buscando palets…</div>';
@@ -1072,7 +1075,10 @@
           return '<div class="meta" style="margin-top:6px;">No se han encontrado ' + (l.sscc ? 'otros ' : '') + 'palets con este código en el edificio 05.</div>' +
             '<button class="secundario" style="margin-top:6px;" onclick="cerrarSelectorPalet(\'' + l.id + '\')">Cerrar</button>';
         }
-        return '<p class="meta" style="margin:8px 0 4px;font-weight:700;">Elige el palet:</p>' +
+        return (repartoPermitido_(l) && sel.length > 1
+            ? '<p class="meta" style="margin:8px 0 4px;">¿Un palet no llega? Coge parte de uno y el resto de otro:</p><button class="neutro" style="width:100%;margin-bottom:8px;" onclick="abrirReparto(\'' + l.id + '\')">✂ Repartir entre palets</button>'
+            : '') +
+          '<p class="meta" style="margin:8px 0 4px;font-weight:700;">Elige el palet:</p>' +
           sel.map(function (c) {
             const suficiente = c.remanente >= Number(l.cantidad || 0);
             const clase = c.esActual ? 'neutro' : (suficiente ? 'ok' : 'aviso');
@@ -1083,7 +1089,8 @@
           }).join('') +
           '<button class="secundario" onclick="cerrarSelectorPalet(\'' + l.id + '\')">Cancelar</button>';
       }
-      return '<button class="secundario" style="margin-top:8px;" onclick="abrirSelectorPalet(\'' + l.id + '\')">🔄 ' + (l.sscc ? 'Cambiar palet' : 'Buscar palet') + '</button>';
+      return '<button class="secundario" style="margin-top:8px;" onclick="abrirSelectorPalet(\'' + l.id + '\')">🔄 ' + (l.sscc ? 'Cambiar palet' : 'Buscar palet') + '</button>' +
+        (l.sscc && repartoPermitido_(l) ? ' ' + repartoBotonHtml_(l) : '');
     }
 
     function cerrarVistaLinea(lineaId) { delete vistaLinea[lineaId]; renderDetalleBody_(); }
@@ -1850,7 +1857,8 @@
       if (!contenido || !contenido.length) return 'El sistema no conoce este palet.';
       return contenido.map(function (c) {
         return '<b>' + escHtmlSie_(c.codigo_lm) + '</b> — ' + escHtmlSie_(c.designacion || '') +
-          (c.cantidad == null ? ' (cantidad sin calcular)' : ' (' + c.cantidad + ' ud)');
+          (c.cantidad == null ? ' (cantidad sin calcular)' : ' (' + c.cantidad + ' ud)') +
+          (c.ean ? '<br><span class="rev-ean">EAN <b>' + escHtmlSie_(c.ean) + '</b></span>' : '');
       }).join('<br>');
     }
 
@@ -1899,6 +1907,7 @@
       function abrir() {
         google.script.run.withSuccessHandler(function (json) {
           REVISION_ACTUAL_ = JSON.parse(json);
+          FOT_reiniciar_();
           REVISION_EXTRAS_ = [];
           REVISION_UBICACION_OK_ = true;
           VISTA = { nombre: 'revisionDetalle', peticionId: r.id };
@@ -1944,6 +1953,7 @@
       // muestra solo como placeholder, nunca como valor.
       const lineasHtml = esperado.map(function (c, i) {
         return '<div class="rev-linea"><div><b>' + escHtmlSie_(c.codigo_lm) + '</b> · ' + escHtmlSie_(c.designacion || '') +
+          (c.ean ? '<div class="rev-ean">EAN <b>' + escHtmlSie_(c.ean) + '</b></div>' : '<div class="rev-ean sin">Sin EAN en el catálogo</div>') +
           '<div class="meta">' + (c.cantidad == null ? 'Tienda no ha calculado cantidad' : 'Esperadas: ' + c.cantidad + ' ud') +
           (contadorObligatorioRev_ ? '' : ' (no pedido — opcional)') + '</div></div>' +
           '<input type="number" min="0" inputmode="numeric" id="cont-' + i + '" placeholder="' + (c.cantidad == null ? 'Contadas' : c.cantidad + ' ud') + '" value=""></div>';
@@ -1975,10 +1985,12 @@
           '<div id="extrasRev"></div>' +
           '<button type="button" class="btn-ob btn-ob-tienda" id="addExtraRev">+ Añadir referencia encontrada</button>' +
         '</div>' +
+        FOT_bloqueHtml_() +
         '<h3>Nota</h3>' +
         '<input type="text" id="notaRev" placeholder="Nota (opcional)" style="width:100%;">' +
         '<button id="terminarRev" style="width:100%;margin-top:14px;">Terminar revisión</button>';
       sincronizarPickers_();
+      FOT_conectar_(r.id);
 
       document.getElementById('volverRevisionLista').onclick = function (e) {
         e.preventDefault();
@@ -2048,6 +2060,8 @@
       document.getElementById('terminarRev').onclick = function () {
         const btn = this;
         const nota = document.getElementById('notaRev').value.trim();
+        const motivoFoto = FOT_motivoNoTerminar_();
+        if (motivoFoto) { kAlerta(motivoFoto); return; }
         var resultado;
         if (SIN_LOCALIZAR_.indexOf(estadoUbi) !== -1) {
           resultado = { localizado: false, nota: nota, motivo: estadoUbi === 'fuera' ? 'no_en_plataforma' : (estadoUbi === 'salio' ? 'ya_salio' : null) };
@@ -2075,10 +2089,12 @@
             ssccEncontrado: campoSscc ? campoSscc.value.trim() : '', lineas: lineas, extras: extras, nota: nota,
           };
         }
+        resultado.fotos = FOT_ids_();
         btn.disabled = true;
         google.script.run.withSuccessHandler(function (json) {
           const res = JSON.parse(json);
           REVISION_ACTUAL_ = null;
+          FOT_reiniciar_();
           VISTA = { nombre: 'revision', peticionId: null };
           render();
           kAlerta(res.conforme ? 'Revisión terminada: todo conforme.' : 'Revisión terminada con diferencias — el jefe de equipo las verá para gestionarlas.');
@@ -2118,7 +2134,7 @@
       if (res.localizado === false) {
         h += '<div class="meta">❌ <b>' + escHtmlSie_(textoNoLocalizado_(res.motivo)) + '</b></div>';
         if (res.nota) h += '<div class="meta">Nota: ' + escHtmlSie_(res.nota) + '</div>';
-        return h;
+        return h + fotosResumenHtml_(r);
       }
       if (res.ssccDistinto) h += '<div class="meta">🔀 <b>Localizado con otro SSCC.</b> Se pidió ' + escHtmlSie_(r.sscc || '—') + '</div>';
       if (res.ssccEncontrado) h += '<div class="meta">SSCC encontrado: <b>' + escHtmlSie_(res.ssccEncontrado) + '</b></div>';
@@ -2140,7 +2156,15 @@
         h += '<div class="meta">➕ Sin figurar en sistema: <b>' + escHtmlSie_(x.codigo_lm) + '</b> × ' + x.cantidad + '</div>';
       });
       if (res.nota) h += '<div class="meta">Nota: ' + escHtmlSie_(res.nota) + '</div>';
+      h += fotosResumenHtml_(r);
       return h;
+    }
+
+    /** «Ver N fotos» de una revisión terminada (las fotos se cargan al pedirlas). */
+    function fotosResumenHtml_(r) {
+      const n = ((r.resultado || {}).fotos || []).length;
+      if (!n) return '';
+      return '<div class="meta"><button class="secundario" onclick="event.stopPropagation();FOT_verFotos_(\'' + r.id + '\', ' + n + ', this)">📷 Ver ' + n + (n === 1 ? ' foto' : ' fotos') + '</button><div class="fot-ver"></div></div>';
     }
 
     var REV_JEFE_CACHE_ = null;
@@ -2920,5 +2944,7 @@
     document.addEventListener('DOMContentLoaded', function () { render(); });
   </script>
   <?!= incluir_('ProductividadUI') ?>
+  <?!= incluir_('RepartoPaletsUI') ?>
+  <?!= incluir_('FotosRevisionUI') ?>
 </body>
 </html>

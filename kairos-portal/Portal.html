@@ -1304,7 +1304,7 @@
             '<span class="estado">' + escHtml(r.estadoTexto) + '</span>' +
           '</div>'
         );
-        fila.onclick = function () { kAlerta(detalleRevisionHtml_(r)); };
+        fila.onclick = function () { kAlerta(detalleRevisionHtml_(r)); cargarFotosRevision_(r); };
         lista.appendChild(fila);
       });
     }
@@ -1484,7 +1484,7 @@
     if (res.localizado === false) {
       const texto = res.motivo === 'no_en_plataforma' ? 'No está en plataforma: consta en el sistema, pero físicamente no se ha encontrado aquí.'
         : (res.motivo === 'ya_salio' ? 'Ya salió: figura como enviado o cargado.' : 'No se ha localizado el palet.');
-      return h + '<br>' + escHtml(texto) + (res.nota ? '<br>Nota: ' + escHtml(res.nota) : '');
+      return h + '<br>' + escHtml(texto) + (res.nota ? '<br>Nota: ' + escHtml(res.nota) : '') + fotosRevisionHtml_(r);
     }
     if (res.ssccDistinto) h += '<br>Se ha localizado con otro SSCC distinto al pedido.';
     if (res.ssccEncontrado) h += '<br>SSCC encontrado: ' + escHtml(res.ssccEncontrado);
@@ -1500,7 +1500,29 @@
     });
     (res.extras || []).forEach(function (x) { h += '<br>Encontrada sin figurar: ' + escHtml(x.codigo_lm) + ' × ' + escHtml(String(x.cantidad)); });
     if (res.nota) h += '<br>Nota: ' + escHtml(res.nota);
-    return h;
+    return h + fotosRevisionHtml_(r);
+  }
+
+  /** Fotos que el operario añadió al revisar el palet: hueco en el detalle y carga al abrirlo (cada foto sale de Drive). */
+  function fotosRevisionHtml_(r) {
+    const n = ((r.resultado || {}).fotos || []).length;
+    return n ? '<br><br><b>📷 ' + n + (n === 1 ? ' foto' : ' fotos') + ' del operario</b><span id="fotosRevision" style="display:flex;flex-direction:column;gap:8px;margin-top:6px;"><span style="color:var(--text-500)">Cargando…</span></span>' : '';
+  }
+  function cargarFotosRevision_(r) {
+    const fotos = ((r.resultado || {}).fotos) || [];
+    const cont = document.getElementById('fotosRevision');
+    if (!fotos.length || !cont) return;
+    var i = 0;
+    cont.innerHTML = '';
+    (function siguiente() {
+      if (i >= fotos.length || !document.body.contains(cont)) return;
+      const n = i++;
+      gas('obtenerFotoRevision', LDAP, r.id, n).then(function (f) {
+        cont.insertAdjacentHTML('beforeend', '<img alt="Foto ' + (n + 1) + '" style="max-width:100%;border-radius:10px;" src="data:' + escHtml(f.mime) + ';base64,' + escHtml(f.datos) + '">');
+      }).catch(function (e) {
+        cont.insertAdjacentHTML('beforeend', '<span style="color:var(--danger-fg)">No se ha podido cargar la foto ' + (n + 1) + ': ' + escHtml(e.message) + '</span>');
+      }).then(siguiente);
+    })();
   }
 
   /** Trazabilidad = activas (algo por preparar todavía). Histórico = ya

@@ -1,0 +1,192 @@
+<style>
+  /* ——— EAN y fotos de la revisión de stock ——— */
+  .rev-ean { font-size:13px; color:var(--text-500); margin-top:2px; }
+  .rev-ean b { font-size:15px; letter-spacing:.03em; font-variant-numeric:tabular-nums; color:var(--text-100); }
+  .rev-ean.sin { font-style:italic; }
+  .fot-lista { display:flex; gap:10px; flex-wrap:wrap; margin:8px 0; }
+  .fot-item { position:relative; width:104px; border-radius:12px; overflow:hidden; background:var(--ink-900); border:1px solid var(--ink-700); }
+  .fot-item img { display:block; width:104px; height:104px; object-fit:cover; }
+  .fot-item .fot-estado { padding:5px 6px; font-size:11.5px; font-weight:700; text-align:center; color:var(--text-500); }
+  .fot-item.ok .fot-estado { color:var(--ok); }
+  .fot-item.error .fot-estado { color:var(--danger-fg); }
+  .fot-item.subiendo img { opacity:.55; }
+  .fot-item button { margin:0; width:100%; min-height:34px; padding:4px 6px; font-size:12px; border-radius:0; }
+  .fot-aviso { font-size:12.5px; color:var(--text-500); margin:4px 0; }
+  .fot-ver { display:flex; flex-direction:column; gap:8px; margin-top:8px; }
+  .fot-ver img { max-width:100%; border-radius:10px; border:1px solid var(--ink-700); }
+</style>
+
+<script>
+// ============================ FOTOS DE LA REVISIÓN ============================
+// El operario puede añadir hasta 3 fotos al revisar un palet (para que tienda lo vea). La foto se reduce en el
+// propio móvil (lado máximo 1600 px, JPEG), se sube a la carpeta de Drive FotosRevisionStock en cuanto se elige y la
+// revisión guarda solo su id al terminarse. Si una foto falla, se puede reintentar sin volver a hacerla.
+
+var REVISION_FOTOS_ = [];          // [{ n, estado: 'subiendo'|'ok'|'error', id, mini, datos, error }]
+var FOT_MAX_ = 3;
+var FOT_LADO_MAX_ = 1600;
+var FOT_CALIDAD_ = 0.72;
+var FOT_MINI_ = 208;
+var FOT_SEQ_ = 0;
+
+function FOT_esc_(t) { return (typeof escHtmlSie_ === 'function') ? escHtmlSie_(t) : String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+/** Tamaño reducido: el lado mayor no pasa de `max` y nunca se amplía. */
+function FOT_dimensiones_(ancho, alto, max) {
+  var k = Math.min(1, max / Math.max(ancho, alto, 1));
+  return { ancho: Math.max(1, Math.round(ancho * k)), alto: Math.max(1, Math.round(alto * k)) };
+}
+
+function FOT_reiniciar_() { REVISION_FOTOS_ = []; }
+function FOT_subiendo_() { return REVISION_FOTOS_.filter(function (f) { return f.estado === 'subiendo'; }).length; }
+function FOT_conError_() { return REVISION_FOTOS_.filter(function (f) { return f.estado === 'error'; }).length; }
+function FOT_ids_() { return REVISION_FOTOS_.filter(function (f) { return f.estado === 'ok' && f.id; }).map(function (f) { return f.id; }); }
+
+/** Por qué no se puede terminar todavía (o null si todo está en orden). */
+function FOT_motivoNoTerminar_() {
+  if (FOT_subiendo_()) return 'Espera a que termine de subirse la foto.';
+  if (FOT_conError_()) return 'Hay una foto que no se ha subido: pulsa «Reintentar» o quítala.';
+  return null;
+}
+
+function FOT_bloqueHtml_() {
+  return '<h3>Fotos (opcional)</h3>' +
+    '<p class="fot-aviso">Añade una foto para que tienda lo revise (máximo ' + FOT_MAX_ + ').</p>' +
+    '<div class="fot-lista" id="fotosRevLista"></div>' +
+    '<input type="file" id="fotoRevInput" accept="image/&#42;" style="display:none">' +
+    '<button type="button" class="btn-ob btn-ob-tienda" id="fotoRevBoton">📷 Hacer o elegir foto</button>' +
+    '<p class="fot-aviso" id="fotoRevMensaje"></p>';
+}
+
+function FOT_pintar_() {
+  var lista = document.getElementById('fotosRevLista');
+  if (!lista) return;
+  lista.innerHTML = REVISION_FOTOS_.map(function (f) {
+    var texto = f.estado === 'subiendo' ? 'Subiendo…' : (f.estado === 'ok' ? '✓ Subida' : 'No se subió');
+    return '<div class="fot-item ' + f.estado + '"><img src="' + FOT_esc_(f.mini) + '" alt="Foto ' + f.n + '">' +
+      '<div class="fot-estado">' + texto + '</div>' +
+      (f.estado === 'error' ? '<button type="button" class="ok" data-fot-reintentar="' + f.n + '">Reintentar</button>' : '') +
+      (f.estado !== 'subiendo' ? '<button type="button" class="secundario" data-fot-quitar="' + f.n + '">Quitar</button>' : '') + '</div>';
+  }).join('');
+  var boton = document.getElementById('fotoRevBoton');
+  if (boton) boton.disabled = REVISION_FOTOS_.length >= FOT_MAX_;
+  var mensaje = document.getElementById('fotoRevMensaje');
+  if (mensaje) mensaje.textContent = REVISION_FOTOS_.length >= FOT_MAX_ ? 'Ya tienes ' + FOT_MAX_ + ' fotos: quita alguna para añadir otra.' : '';
+}
+
+function FOT_buscar_(n) { return REVISION_FOTOS_.filter(function (f) { return f.n === Number(n); })[0]; }
+
+/** Lee la foto, la reduce y devuelve (error, { datos: base64 sin cabecera, mini: dataURL pequeño }). */
+function FOT_comprimir_(archivo, cb) {
+  var lector = new FileReader();
+  lector.onerror = function () { cb(new Error('No se ha podido leer la foto.')); };
+  lector.onload = function () {
+    var img = new Image();
+    img.onerror = function () { cb(new Error('Esa foto no se puede abrir. Prueba con otra.')); };
+    img.onload = function () {
+      try {
+        var d = FOT_dimensiones_(img.naturalWidth || img.width, img.naturalHeight || img.height, FOT_LADO_MAX_);
+        var lienzo = document.createElement('canvas');
+        lienzo.width = d.ancho; lienzo.height = d.alto;
+        lienzo.getContext('2d').drawImage(img, 0, 0, d.ancho, d.alto);
+        var grande = lienzo.toDataURL('image/jpeg', FOT_CALIDAD_);
+        var m = FOT_dimensiones_(d.ancho, d.alto, FOT_MINI_);
+        var chico = document.createElement('canvas');
+        chico.width = m.ancho; chico.height = m.alto;
+        chico.getContext('2d').drawImage(img, 0, 0, m.ancho, m.alto);
+        cb(null, { datos: grande.split(',')[1], mini: chico.toDataURL('image/jpeg', 0.6) });
+      } catch (err) { cb(err); }
+    };
+    img.src = lector.result;
+  };
+  lector.readAsDataURL(archivo);
+}
+
+function FOT_subir_(foto, revisionId) {
+  foto.estado = 'subiendo'; foto.error = '';
+  FOT_pintar_();
+  google.script.run
+    .withSuccessHandler(function (json) {
+      var r = JSON.parse(json);
+      foto.id = r.id; foto.estado = 'ok'; foto.datos = null;
+      FOT_pintar_();
+    })
+    .withFailureHandler(function (err) {
+      foto.estado = 'error'; foto.error = (err && err.message) || 'Sin conexión.';
+      FOT_pintar_();
+    })
+    .subirFotoRevision(revisionId, OPERARIO, foto.datos, 'image/jpeg');
+}
+
+function FOT_alElegir_(archivo, revisionId) {
+  if (!archivo || REVISION_FOTOS_.length >= FOT_MAX_) return;
+  var foto = { n: ++FOT_SEQ_, estado: 'subiendo', id: null, mini: '', datos: null, error: '' };
+  REVISION_FOTOS_.push(foto);
+  FOT_comprimir_(archivo, function (err, res) {
+    if (err) {
+      REVISION_FOTOS_ = REVISION_FOTOS_.filter(function (f) { return f !== foto; });
+      FOT_pintar_();
+      kAlerta(err.message);
+      return;
+    }
+    foto.mini = res.mini; foto.datos = res.datos;
+    FOT_subir_(foto, revisionId);
+  });
+  FOT_pintar_();
+}
+
+/** Quita una foto de la revisión (y, si ya estaba subida, la manda a la papelera de Drive sin esperar). */
+function FOT_quitar_(n, revisionId) {
+  var foto = FOT_buscar_(n);
+  if (!foto || foto.estado === 'subiendo') return;
+  REVISION_FOTOS_ = REVISION_FOTOS_.filter(function (f) { return f !== foto; });
+  if (foto.id) { try { google.script.run.withFailureHandler(function () {}).quitarFotoRevision(revisionId, foto.id); } catch (err) {} }
+  FOT_pintar_();
+}
+
+/** Conecta el bloque a la pantalla de la revisión `revisionId` (después de pintar FOT_bloqueHtml_). */
+function FOT_conectar_(revisionId) {
+  var boton = document.getElementById('fotoRevBoton'), campo = document.getElementById('fotoRevInput'), lista = document.getElementById('fotosRevLista');
+  if (!boton || !campo || !lista) return;
+  boton.onclick = function () { campo.click(); };
+  campo.onchange = function () {
+    var archivo = campo.files && campo.files[0];
+    campo.value = '';
+    FOT_alElegir_(archivo, revisionId);
+  };
+  lista.onclick = function (ev) {
+    var t = ev.target;
+    if (!t || !t.getAttribute) return;
+    if (t.getAttribute('data-fot-quitar')) FOT_quitar_(t.getAttribute('data-fot-quitar'), revisionId);
+    else if (t.getAttribute('data-fot-reintentar')) { var f = FOT_buscar_(t.getAttribute('data-fot-reintentar')); if (f && f.estado === 'error') FOT_subir_(f, revisionId); }
+  };
+  FOT_pintar_();
+}
+
+/** Botón «Ver fotos» de una revisión terminada (monitor del jefe): carga cada foto cuando se pide, no antes. */
+function FOT_verFotos_(revisionId, cuantas, boton) {
+  var contenedor = boton.parentNode.querySelector('.fot-ver');
+  if (!contenedor || boton.getAttribute('data-cargado')) return;
+  boton.setAttribute('data-cargado', '1');
+  boton.disabled = true;
+  contenedor.innerHTML = '<div class="meta">Cargando fotos…</div>';
+  var hechas = 0;
+  contenedor.setAttribute('data-n', cuantas);
+  function una(i) {
+    google.script.run
+      .withSuccessHandler(function (json) {
+        var r = JSON.parse(json);
+        if (i === 0) contenedor.innerHTML = '';
+        contenedor.insertAdjacentHTML('beforeend', '<img alt="Foto ' + (i + 1) + '" src="data:' + FOT_esc_(r.mime) + ';base64,' + FOT_esc_(r.datos) + '">');
+        if (++hechas < cuantas) una(hechas);
+      })
+      .withFailureHandler(function (err) {
+        if (i === 0) contenedor.innerHTML = '';
+        contenedor.insertAdjacentHTML('beforeend', '<div class="meta" style="color:var(--danger-fg);">No se ha podido cargar la foto ' + (i + 1) + ': ' + FOT_esc_((err && err.message) || 'error') + '</div>');
+        if (++hechas < cuantas) una(hechas);
+      })
+      .obtenerFotoRevision(revisionId, i);
+  }
+  una(0);
+}
+</script>
