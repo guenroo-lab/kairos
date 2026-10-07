@@ -9,7 +9,8 @@
  *  como avisadas: no se envía nada retroactivo. */
 
 const DESTINATARIOS_INCIDENCIAS_ = {
-  '014': ['pedcliente.marbella@leroymerlin.es', 'miguel-angel.gonzalez5@leroymerlin.es', 'juan-ignacio.gonzalez@leroymerlin.es'],
+  '014': ['pedcliente.marbella@leroymerlin.es', 'miguel-angel.gonzalez5@leroymerlin.es', 'juan-ignacio.gonzalez@leroymerlin.es',
+    'jose-manuel.botia@leroymerlin.es', 'jose-maria.marandino@leroymerlin.es'],
   '279': ['pedcliente.mijas@leroymerlin.es', 'carlos.fuentes@leroymerlin.es'],
 };
 const NOMBRE_TIENDA_AVISO_ = { '014': 'Marbella', '279': 'Mijas' };
