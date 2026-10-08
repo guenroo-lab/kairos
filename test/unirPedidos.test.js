@@ -415,7 +415,7 @@ function pantalla(opciones) {
   const codigo = html.match(/<script>([\s\S]*?)<\/script>/)[1];
   const cuerpo = { hijos: [], appendChild(n) { this.hijos.push(n); }, removeChild(n) { this.hijos.splice(this.hijos.indexOf(n), 1); } };
   const botones = {};
-  const trazas = { gas: [], alertas: [], colas: 0, aparte: 0 };
+  const trazas = { gas: [], alertas: [], colas: 0, aparte: 0, preguntas: 0 };
   const ctx = {
     console, JSON, Math, Number, String, Object, Array, Date, isFinite, Promise,
     LDAP: '100',
@@ -553,6 +553,8 @@ test('pantalla: cada botón de la pregunta resuelve lo suyo y la quita de la pan
   assert.strictEqual((await promesa).accion, 'aparte');
 });
 
+const REPETIDAS = [{ codigoLm: 'A', cantidad: 1, designacion: 'Pintura' }];   // A ya está en ABIERTO()
+
 function envio(p, abiertos, eleccion, opciones) {
   opciones = opciones || {};
   const trazas = p.trazas;
@@ -562,15 +564,18 @@ function envio(p, abiertos, eleccion, opciones) {
     if (fn === 'anadirLineasAPedido') return opciones.falloUnir ? Promise.reject(new Error(opciones.falloUnir)) : Promise.resolve({ ok: true, numPedido: '986436', anadidas: 1, totalLineas: 2, aviso: null });
     throw new Error('llamada inesperada ' + fn);
   };
-  p.ctx.UNI_pregunta_ = () => Promise.resolve({ accion: eleccion, id: 'pc1' });
+  p.ctx.UNI_pregunta_ = () => { trazas.preguntas++; return Promise.resolve({ accion: eleccion, id: 'pc1' }); };
   const crearAparte = () => { trazas.aparte++; return Promise.resolve('creado'); };
-  return p.ctx.UNI_enviarPedidoCliente_({ numPedido: '986436', transporte: true, comentario: 'c' }, NUEVAS, crearAparte);
+  return p.ctx.UNI_enviarPedidoCliente_({ numPedido: '986436', transporte: true, comentario: 'c' }, opciones.lineas || NUEVAS, crearAparte);
 }
+
+const sinUnir = (p) => !p.trazas.gas.some((g) => g[0] === 'anadirLineasAPedido');
 
 test('envío: sin otro pedido abierto se crea como siempre, sin preguntar', async () => {
   const p = pantalla();
   assert.strictEqual(await envio(p, [], null), 'creado');
   assert.strictEqual(p.trazas.aparte, 1);
+  assert.strictEqual(p.trazas.preguntas, 0);
   assert.deepStrictEqual(p.trazas.gas, [['buscarPedidoAbiertoMismoNumero', '100', '986436', true]]);
   assert.strictEqual(p.trazas.alertas.length, 0);
 });
@@ -581,46 +586,88 @@ test('envío: si la búsqueda falla, se crea como siempre (la búsqueda solo avi
   assert.strictEqual(p.trazas.aparte, 1);
 });
 
-test('envío: «crear aparte» crea el pedido sin tocar el abierto', async () => {
+test('envío: un trozo más del mismo pedido (artículos distintos) se une SOLO, sin preguntar, y se confirma', async () => {
   const p = pantalla();
-  assert.strictEqual(await envio(p, [ABIERTO()], 'aparte'), 'creado');
-  assert.strictEqual(p.trazas.aparte, 1);
-  assert.ok(!p.trazas.gas.some((g) => g[0] === 'anadirLineasAPedido'));
-});
-
-test('envío: cancelar no hace nada y avisa de que se ha cancelado', async () => {
-  const p = pantalla();
-  assert.strictEqual(await envio(p, [ABIERTO()], null), 'cancelado');
-  assert.strictEqual(p.trazas.aparte, 0);
-  assert.strictEqual(p.trazas.colas, 0);
-  assert.ok(!p.trazas.gas.some((g) => g[0] === 'anadirLineasAPedido'));
-});
-
-test('envío: añadir manda al servidor el pedido elegido, los datos y las líneas, lo confirma y vuelve a la lista', async () => {
-  const p = pantalla();
-  await envio(p, [ABIERTO()], 'unir');
+  await envio(p, [ABIERTO()], null);
+  assert.strictEqual(p.trazas.preguntas, 0, 'no pregunta');
   const unir = p.trazas.gas.find((g) => g[0] === 'anadirLineasAPedido');
   assert.deepStrictEqual(JSON.parse(JSON.stringify(unir)), ['anadirLineasAPedido', '100', 'pc1', { numPedido: '986436', transporte: true, comentario: 'c' }, NUEVAS]);
   assert.strictEqual(p.trazas.aparte, 0, 'no se crea otro pedido');
   assert.strictEqual(p.trazas.alertas.length, 1);
-  assert.match(p.trazas.alertas[0], /Hecho: 1 línea añadida al pedido 986436, que ahora tiene 2 líneas\. Almacén lo verá marcado como modificado\./);
+  assert.strictEqual(p.trazas.alertas[0], 'El pedido 986436 ya estaba abierto, así que se ha añadido a él 1 línea y ahora tiene 2 líneas. Almacén lo verá marcado como modificado.');
+  assert.strictEqual(p.trazas.colas, 1, 'vuelve a la lista');
+});
+
+test('envío: con varios abiertos se une solo al más antiguo que lo admite', async () => {
+  const p = pantalla();
+  await envio(p, [ABIERTO({ id: 'a', puedeUnirse: false, motivo: 'x' }), ABIERTO({ id: 'b' }), ABIERTO({ id: 'c' })], null);
+  assert.strictEqual(p.trazas.preguntas, 0);
+  assert.strictEqual(p.trazas.gas.find((g) => g[0] === 'anadirLineasAPedido')[2], 'b');
+});
+
+test('envío: si lo que se envía repite un artículo del pedido abierto, pregunta (¿se pide dos veces?) y no une todavía', async () => {
+  const p = pantalla();
+  assert.strictEqual(await envio(p, [ABIERTO()], null, { lineas: REPETIDAS }), 'cancelado');
+  assert.strictEqual(p.trazas.preguntas, 1);
+  assert.ok(sinUnir(p));
+  assert.strictEqual(p.trazas.aparte, 0);
+  assert.strictEqual(p.trazas.colas, 0);
+});
+
+test('envío: si el pedido abierto no admite más líneas, pregunta; crear aparte crea el pedido', async () => {
+  const p = pantalla();
+  assert.strictEqual(await envio(p, [ABIERTO({ puedeUnirse: false, motivo: 'Ana lo tiene abierto' })], 'aparte'), 'creado');
+  assert.strictEqual(p.trazas.preguntas, 1);
+  assert.strictEqual(p.trazas.aparte, 1);
+  assert.ok(sinUnir(p));
+});
+
+test('envío: «crear aparte» desde la pregunta crea el pedido sin tocar el abierto', async () => {
+  const p = pantalla();
+  assert.strictEqual(await envio(p, [ABIERTO()], 'aparte', { lineas: REPETIDAS }), 'creado');
+  assert.strictEqual(p.trazas.aparte, 1);
+  assert.ok(sinUnir(p));
+});
+
+test('envío: cancelar la pregunta no hace nada', async () => {
+  const p = pantalla();
+  assert.strictEqual(await envio(p, [ABIERTO({ puedeUnirse: false, motivo: 'x' })], null), 'cancelado');
+  assert.strictEqual(p.trazas.aparte, 0);
+  assert.strictEqual(p.trazas.colas, 0);
+  assert.ok(sinUnir(p));
+});
+
+test('envío: añadir desde la pregunta manda el pedido elegido y lo confirma con «Hecho»', async () => {
+  const p = pantalla();
+  await envio(p, [ABIERTO()], 'unir', { lineas: REPETIDAS });
+  assert.strictEqual(p.trazas.preguntas, 1);
+  const unir = p.trazas.gas.find((g) => g[0] === 'anadirLineasAPedido');
+  assert.deepStrictEqual(JSON.parse(JSON.stringify(unir)), ['anadirLineasAPedido', '100', 'pc1', { numPedido: '986436', transporte: true, comentario: 'c' }, REPETIDAS]);
+  assert.strictEqual(p.trazas.aparte, 0);
+  assert.match(p.trazas.alertas[0], /^Hecho: 1 línea añadida al pedido 986436, que ahora tiene 2 líneas\. Almacén lo verá marcado como modificado\.$/);
   assert.strictEqual(p.trazas.colas, 1);
 });
 
-test('envío: si el servidor rechaza añadir, el error llega a la pantalla del formulario y no se crea nada', async () => {
-  const p = pantalla();
-  await assert.rejects(envio(p, [ABIERTO()], 'unir', { falloUnir: 'Ana lo tiene abierto en almacén' }), /Ana lo tiene abierto/);
-  assert.strictEqual(p.trazas.aparte, 0);
-  assert.strictEqual(p.trazas.colas, 0);
-  assert.strictEqual(p.trazas.alertas.length, 0);
+test('envío: si el servidor rechaza añadir (solo o desde la pregunta), el error llega al formulario y no se crea nada', async () => {
+  for (const [opciones, eleccion] of [[{ falloUnir: 'Ana lo tiene abierto en almacén' }, null], [{ falloUnir: 'Ana lo tiene abierto en almacén', lineas: REPETIDAS }, 'unir']]) {
+    const p = pantalla();
+    await assert.rejects(envio(p, [ABIERTO()], eleccion, opciones), /Ana lo tiene abierto/);
+    assert.strictEqual(p.trazas.aparte, 0);
+    assert.strictEqual(p.trazas.colas, 0);
+    assert.strictEqual(p.trazas.alertas.length, 0);
+  }
 });
 
 test('mensaje de «hecho»: singular, plural, aviso del servidor y todo escapado', () => {
   const { ctx } = pantalla();
-  assert.strictEqual(ctx.UNI_mensajeHecho_({ anadidas: 3, numPedido: '<9>', totalLineas: 4, aviso: null }),
+  assert.strictEqual(ctx.UNI_mensajeHecho_({ anadidas: 3, numPedido: '<9>', totalLineas: 4, aviso: null }, false),
     'Hecho: 3 líneas añadidas al pedido &lt;9&gt;, que ahora tiene 4 líneas. Almacén lo verá marcado como modificado.');
-  assert.match(ctx.UNI_mensajeHecho_({ anadidas: 1, numPedido: '9', totalLineas: 1, aviso: 'Ojo <b>' }), /1 línea añadida.*1 línea\. .*<br><br>Ojo &lt;b&gt;$/);
-  assert.doesNotMatch(ctx.UNI_mensajeHecho_({ anadidas: 1, numPedido: '9' }), /que ahora tiene/);
+  assert.strictEqual(ctx.UNI_mensajeHecho_({ anadidas: 3, numPedido: '<9>', totalLineas: 4, aviso: null }, true),
+    'El pedido &lt;9&gt; ya estaba abierto, así que se han añadido a él 3 líneas y ahora tiene 4 líneas. Almacén lo verá marcado como modificado.');
+  assert.match(ctx.UNI_mensajeHecho_({ anadidas: 1, numPedido: '9', totalLineas: 1, aviso: 'Ojo <b>' }, false), /1 línea añadida.*1 línea\. .*<br><br>Ojo &lt;b&gt;$/);
+  assert.match(ctx.UNI_mensajeHecho_({ anadidas: 1, numPedido: '9', totalLineas: 1, aviso: 'Ojo <b>' }, true), /se ha añadido a él 1 línea y ahora tiene 1 línea\. .*<br><br>Ojo &lt;b&gt;$/);
+  assert.doesNotMatch(ctx.UNI_mensajeHecho_({ anadidas: 1, numPedido: '9' }, false), /que ahora tiene/);
+  assert.doesNotMatch(ctx.UNI_mensajeHecho_({ anadidas: 1, numPedido: '9' }, true), /ahora tiene/);
 });
 
 // ——— Enganche en el portal ———

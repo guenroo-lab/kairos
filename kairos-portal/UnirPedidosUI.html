@@ -12,9 +12,11 @@
 
 <script>
 // ============================ UNIR UN PEDIDO CON OTRO ABIERTO ============================
-// Al enviar un pedido cliente, si ya hay otro ABIERTO con el mismo número (la tienda lo manda a trozos), se pregunta si
-// se añaden las líneas a ese pedido en vez de crear otro. Crear aparte sigue siendo posible. El servidor
-// (buscarPedidoAbiertoMismoNumero / anadirLineasAPedido, UnirPedidos.js) decide y vuelve a comprobarlo todo.
+// Al enviar un pedido cliente, si ya hay otro ABIERTO con el mismo número (la tienda lo manda a trozos), las líneas se
+// añaden SOLAS a ese pedido en vez de crear otro. Solo se pregunta (con la opción de crear aparte) cuando no está
+// claro: el pedido abierto no admite más líneas (otro transporte, un operario lo tiene abierto) o lo que se envía
+// repite artículos que ya lleva (¿se pide dos veces?). El servidor (buscarPedidoAbiertoMismoNumero /
+// anadirLineasAPedido, UnirPedidos.js) decide y vuelve a comprobarlo todo.
 
 function UNI_esc_(t) { return (typeof escHtml === 'function') ? escHtml(t) : String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
 
@@ -105,30 +107,42 @@ function UNI_pregunta_(coincidencias, nuevas, numPedido) {
   });
 }
 
-/** Mensaje tras unir (HTML ya escapado: lo pinta kAlerta tal cual). */
-function UNI_mensajeHecho_(res) {
+/** Mensaje tras unir (HTML ya escapado: lo pinta kAlerta tal cual). `automatico` = se unió sin preguntar. */
+function UNI_mensajeHecho_(res, automatico) {
   var n = Number(res.anadidas) || 0;
-  var t = 'Hecho: ' + UNI_plural_(n, 'línea añadida', 'líneas añadidas') + ' al pedido ' + UNI_esc_(res.numPedido) +
-    (res.totalLineas ? ', que ahora tiene ' + UNI_plural_(Number(res.totalLineas), 'línea', 'líneas') : '') +
-    '. Almacén lo verá marcado como modificado.';
+  var total = Number(res.totalLineas) || 0;
+  var t = automatico
+    ? 'El pedido ' + UNI_esc_(res.numPedido) + ' ya estaba abierto, así que ' + (n === 1 ? 'se ha añadido a él ' : 'se han añadido a él ') + UNI_plural_(n, 'línea', 'líneas') +
+      (total ? ' y ahora tiene ' + UNI_plural_(total, 'línea', 'líneas') : '') + '.'
+    : 'Hecho: ' + UNI_plural_(n, 'línea añadida', 'líneas añadidas') + ' al pedido ' + UNI_esc_(res.numPedido) +
+      (total ? ', que ahora tiene ' + UNI_plural_(total, 'línea', 'líneas') : '') + '.';
+  t += ' Almacén lo verá marcado como modificado.';
   if (res.aviso) t += '<br><br>' + UNI_esc_(res.aviso);
   return t;
 }
 
-/** Envío de un pedido cliente: busca si hay otro abierto con el mismo número y pregunta. `crearAparte()` es el envío de
- *  siempre. Resuelve 'cancelado' si la tienda cancela; si no, lo que resuelva el envío elegido. */
+/** Añade las líneas al pedido abierto, lo confirma y vuelve a la lista. */
+function UNI_unir_(id, datos, lineas, automatico) {
+  return gas('anadirLineasAPedido', LDAP, id, datos, lineas).then(function (res) {
+    return kAlerta(UNI_mensajeHecho_(res, automatico)).then(function () { renderCola(); });
+  });
+}
+
+/** Envío de un pedido cliente: busca si hay otro abierto con el mismo número. Si lo hay y se puede unir con
+ *  artículos distintos de los que ya lleva (un trozo más del mismo pedido), se une solo; si no está claro, pregunta.
+ *  `crearAparte()` es el envío de siempre. Resuelve 'cancelado' si la tienda cancela; si no, lo que resuelva el envío. */
 function UNI_enviarPedidoCliente_(datos, lineas, crearAparte) {
   return gas('buscarPedidoAbiertoMismoNumero', LDAP, datos.numPedido, datos.transporte)
     // La búsqueda solo avisa: si falla (sin conexión, servidor ocupado) se envía como siempre.
     .catch(function () { return []; })
     .then(function (coincidencias) {
       if (!coincidencias || !coincidencias.length) return crearAparte();
+      var elegido = UNI_elegido_(coincidencias);
+      if (elegido && !UNI_repetidos_(elegido, lineas).length) return UNI_unir_(elegido.id, datos, lineas, true);
       return UNI_pregunta_(coincidencias, lineas, datos.numPedido).then(function (r) {
         if (r.accion === 'aparte') return crearAparte();
         if (r.accion !== 'unir') return 'cancelado';
-        return gas('anadirLineasAPedido', LDAP, r.id, datos, lineas).then(function (res) {
-          return kAlerta(UNI_mensajeHecho_(res)).then(function () { renderCola(); });
-        });
+        return UNI_unir_(r.id, datos, lineas, false);
       });
     });
 }
