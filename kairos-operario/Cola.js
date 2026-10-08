@@ -1,5 +1,5 @@
 function listarCola(filtroTienda, filtroTipo) {
-  const camposBase = 'id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,motivo,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap,fecha_entrega';
+  const camposBase = 'id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,motivo,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap,fecha_entrega,comentario';
   function consulta(campos) {
     var q = 'estado=in.(pendiente,en_preparacion)' +
       '&visible_desde=lte.' + _hoyMadridIso_() +

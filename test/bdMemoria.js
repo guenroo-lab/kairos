@@ -13,6 +13,7 @@ function predicadoDe(clave, valor) {
   else if (v.startsWith('in.(')) { const xs = v.slice(4, -1).split(',').map(decodeURIComponent); fn = (r) => r[clave] != null && xs.indexOf(String(r[clave])) !== -1; }
   else if (v.startsWith('gte.')) { const x = decodeURIComponent(v.slice(4)); fn = (r) => r[clave] != null && String(r[clave]) >= x; }
   else if (v.startsWith('gt.')) { const x = decodeURIComponent(v.slice(3)); fn = (r) => r[clave] != null && String(r[clave]) > x; }
+  else if (v.startsWith('lte.')) { const x = decodeURIComponent(v.slice(4)); fn = (r) => r[clave] != null && String(r[clave]) <= x; }
   else if (v.startsWith('lt.')) { const x = decodeURIComponent(v.slice(3)); fn = (r) => r[clave] != null && String(r[clave]) < x; }
   else throw new Error('filtro no soportado en la BD de pruebas: ' + clave + '=' + valor);
   return negar ? (r) => !fn(r) : fn;

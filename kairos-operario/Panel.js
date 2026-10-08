@@ -19,7 +19,7 @@ function _necesitaHodos_(p, lineas) {
  *  artículos+cantidades, quién las está preparando (en_curso_por) y la
  *  fecha de creación (para el contador de urgencia, calculado en cliente). */
 function listarTodasPeticiones() {
-  const campos = '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,estado,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap,fecha_entrega,ubicacion_consolidacion';
+  const campos = '&select=id,tipo,tienda_origen,tienda_destino,num_pedido,num_cesion,transporte,estado,cola_individual,creada_en,en_curso_por,en_curso_desde,solicitante_ldap,fecha_entrega,ubicacion_consolidacion,comentario';
   // Activas (de cualquier antigüedad) + cerradas de los últimos 3 días: antes
   // eran las 300 más antiguas de todas, y con el histórico creciendo las
   // peticiones nuevas dejaban de salir en el panel.

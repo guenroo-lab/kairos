@@ -1,0 +1,30 @@
+<style>
+  /* ——— Comentario que la tienda deja en un pedido, una cesión, un refill o una revisión de stock ——— */
+  .nota-tienda { margin:8px 0; padding:10px 12px; border-radius:var(--radius-btn); background:var(--accent-dim); border:1px solid var(--accent-line); color:var(--text-100); font-size:14px; line-height:1.45; white-space:pre-wrap; overflow-wrap:anywhere; }
+  .nota-tienda b { display:block; margin-bottom:2px; font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-300); white-space:normal; }
+  .nota-tienda.compacta { margin:6px 0 0; padding:7px 10px; font-size:13px; }
+</style>
+
+<script>
+// ============================ COMENTARIO DE LA TIENDA ============================
+// La tienda puede escribir un comentario al pedir un pedido cliente, una cesión, un refill o una revisión de stock
+// (peticiones.comentario / revisiones_palet.comentario). El operario lo tiene que ver al preparar: en la cola y el panel
+// del jefe aparece corto (si es muy largo se recorta con "…"), y en el detalle siempre completo y bien visible.
+
+var CTI_LISTA_MAX_ = 280;   // caracteres que se enseñan en las listas; el detalle lo muestra entero
+
+function CTI_texto_(t) { return String(t == null ? '' : t).replace(/\r\n?/g, '\n').trim(); }
+
+function CTI_esc_(t) { return (typeof escHtmlSie_ === 'function') ? escHtmlSie_(t) : String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+/** Recuadro con el comentario, o '' si no hay. opciones: { compacta: true } para listas, { de: 'ldap' } para decir quién lo escribió. */
+function CTI_html_(texto, opciones) {
+  var t = CTI_texto_(texto);
+  if (!t) return '';
+  opciones = opciones || {};
+  var compacta = !!opciones.compacta;
+  if (compacta && t.length > CTI_LISTA_MAX_) t = t.slice(0, CTI_LISTA_MAX_).replace(/\s+$/, '') + '…';
+  var de = CTI_texto_(opciones.de);
+  return '<div class="nota-tienda' + (compacta ? ' compacta' : '') + '"><b>💬 Comentario de la tienda' + (de ? ' · ' + CTI_esc_(de) : '') + '</b>' + CTI_esc_(t) + '</div>';
+}
+</script>

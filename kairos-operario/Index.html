@@ -968,6 +968,7 @@
           '<div class="meta">' + escHtmlSie_(p.tiendaNombre) + ' · ' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · pide: ' + escHtmlSie_(p.solicitante_ldap || '—') + '</div>' +
           '<div class="articulo"><span class="uds-grande uds-cola">' + p.totalUnidades + ' ' + escHtmlSie_(p.unidadTexto) + '</span>' + articuloTexto + '</div>' +
           (p.articuloLm ? '<div class="meta">LM ' + escHtmlSie_(p.articuloLm) + (p.articuloEan ? ' · EAN ' + escHtmlSie_(p.articuloEan) : '') + '</div>' : '') +
+          CTI_html_(p.comentario, { compacta: true }) +
           (ubicacionesHtml || (p.sinStockPrevisto ? '<div class="ubicacion" style="color:var(--warn-fg);">⚠ Sin stock en edificio 05</div>' : '')) +
           enCurso +
           (chips ? '<div class="chips">' + chips + '</div>' : '') +
@@ -1026,6 +1027,7 @@
         html += '<p class="meta" style="color:var(--warn-fg);background:var(--warn-bg);border:1px solid var(--warn-line);border-radius:var(--radius-btn);padding:8px 10px;margin:8px 0;">⚠ ' +
           escHtmlSie_(ultimoDetalle.otroEnCurso.operario) + ' también está en este pedido (' + tiempoDesde_(ultimoDetalle.otroEnCurso.desde) + ')</p>';
       }
+      html += CTI_html_(p.comentario, { de: p.solicitante_ldap });
       const histCambios = Array.isArray(p.historial_cambios) ? p.historial_cambios : [];
       if (histCambios.length) {
         const ult = histCambios[histCambios.length - 1];
@@ -1893,7 +1895,7 @@
             '<div class="tipo"><span>' + escHtmlSie_(etiquetaRevisionOp_(r)) + '</span><span class="fecha">' + tiempoDesde_(r.creada_en) + '</span></div>' +
             '<div class="meta">📍 ' + escHtmlSie_(r.ubicacion_esperada || 'sin ubicación conocida') + ' · revisar: ' + textoQueRevisar_(r.revisar) + '</div>' +
             '<div class="meta">' + contenidoEsperadoHtml_(r.contenido_esperado) + '</div>' +
-            (r.comentario ? '<div class="meta">Comentario: ' + escHtmlSie_(r.comentario) + '</div>' : '') +
+            CTI_html_(r.comentario, { compacta: true }) +
             '<div class="meta">Pide: ' + escHtmlSie_(r.solicitante_ldap || '—') + '</div>' + enCurso +
             '</div>';
         }).join('');
@@ -1961,8 +1963,8 @@
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
         '<div class="volver"><a href="#" id="volverRevisionLista">← Revisiones</a></div>' +
         '<h1>' + escHtmlSie_(etiquetaRevisionOp_(r)) + '</h1>' +
-        '<p class="meta">Pide: ' + escHtmlSie_(r.solicitante_ldap || '—') + ' · revisar: ' + textoQueRevisar_(r.revisar) +
-          (r.comentario ? '<br>Comentario: ' + escHtmlSie_(r.comentario) : '') + '</p>' +
+        '<p class="meta">Pide: ' + escHtmlSie_(r.solicitante_ldap || '—') + ' · revisar: ' + textoQueRevisar_(r.revisar) + '</p>' +
+        CTI_html_(r.comentario) +
         (conUbicacion ? '' : '<p class="meta" style="color:var(--warn-fg);">El sistema no tiene ubicación de este palet en la plataforma' +
           (r.sscc ? ' (no figura o está a 0). Puede constar en myISO y no estar aquí: indica qué has encontrado.' : ' — hay que localizar uno.') + '</p>') +
         '<h3>' + (conUbicacion ? 'Ubicación' : '¿Qué has encontrado?') + '</h3>' +
@@ -2236,7 +2238,7 @@
               '<div class="tipo"><span>' + escHtmlSie_(etiquetaRevisionOp_(r)) + '</span>' + estado + '</div>' +
               '<div class="meta">📍 ' + escHtmlSie_(r.ubicacion_esperada || 'sin ubicación conocida') + ' · revisar: ' + textoQueRevisar_(r.revisar) + '</div>' +
               '<div class="meta">' + contenidoEsperadoHtml_(r.contenido_esperado) + '</div>' +
-              (r.comentario ? '<div class="meta">Comentario: ' + escHtmlSie_(r.comentario) + '</div>' : '') +
+              CTI_html_(r.comentario, { compacta: true }) +
               '<div class="meta">Pide: ' + escHtmlSie_(r.solicitante_ldap || '—') + ' · ' + tiempoDesde_(r.creada_en) + '</div></div>';
           }).join('') : '<p class="meta">Nada pendiente.</p>';
         }
@@ -2403,6 +2405,7 @@
         '<div class="tipo">' + etiquetaTipo + ' ' + urgencia + '</div>' +
         '<div class="meta">' + p.lineasPreparadas + '/' + p.totalLineas + ' líneas · ' + textoEstado + (p.cola_individual ? ' · individual' : '') + preparando + '</div>' +
         (articulosTexto ? '<div class="meta">' + articulosTexto + '</div>' : '') +
+        CTI_html_(p.comentario, { compacta: true }) +
         '<div class="meta">' + botonReintentar + botonIndividual + '</div></div>';
     }
 
@@ -2943,6 +2946,7 @@
 
     document.addEventListener('DOMContentLoaded', function () { render(); });
   </script>
+  <?!= incluir_('ComentariosTiendaUI') ?>
   <?!= incluir_('ProductividadUI') ?>
   <?!= incluir_('RepartoPaletsUI') ?>
   <?!= incluir_('FotosRevisionUI') ?>
