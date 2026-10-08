@@ -79,6 +79,27 @@ function crearBD(datos) {
       log.patches.push({ tabla, query, payload, filas: filas.length });
       return JSON.parse(JSON.stringify(filas.map((f) => f.fila)));
     }
+    if (metodo === 'POST') {
+      // Como la BD de verdad: ids y estados por defecto; las filas nuevas se guardan tal cual llegan.
+      const lista = Array.isArray(payload) ? payload : [payload];
+      const creadas = lista.map((f) => {
+        log.contador = (log.contador || 0) + 1;
+        const base = tabla === 'peticiones'
+          ? { id: 'PET-' + log.contador, estado: 'pendiente', creada_en: new Date().toISOString() }
+          : tabla === 'lineas' ? { id: 'LIN-' + String(log.contador).padStart(3, '0'), estado_preparacion: 'pendiente' } : { id: tabla + '-' + log.contador };
+        const fila = Object.assign(base, JSON.parse(JSON.stringify(f)));
+        (db[tabla] = db[tabla] || []).push(fila);
+        return fila;
+      });
+      log.inserts = (log.inserts || []).concat([{ tabla, filas: creadas }]);
+      return JSON.parse(JSON.stringify(creadas));
+    }
+    if (metodo === 'DELETE') {
+      const { filas } = filtrar(tabla, query);
+      const ids = filas.map((f) => f.fila.id);
+      db[tabla] = db[tabla].filter((r) => ids.indexOf(r.id) === -1);
+      return JSON.parse(JSON.stringify(filas.map((f) => f.fila)));
+    }
     throw new Error('método no soportado en la BD de pruebas: ' + metodo);
   }
   return { db, log, transporte };

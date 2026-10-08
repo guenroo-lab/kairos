@@ -659,6 +659,32 @@ function _bloquearSiDuplicadoReciente_(tienda, ldap, tipo, cabecera, lineasPaylo
   }
 }
 
+/** Líneas tal y como se guardan en la base de datos. Las comparten crear una
+ *  petición y unir líneas a un pedido ya abierto (UnirPedidos.js): las dos
+ *  tienen que guardar exactamente lo mismo. */
+function _lineasParaGuardar_(lineas, unidadMedida) {
+  return lineas.map(function (l) {
+    if (!l.codigoLm || !l.cantidad) throw new Error('Línea incompleta.');
+    const payload = {
+      codigo_lm: String(l.codigoLm).trim(),
+      cantidad: Number(l.cantidad),
+      unidad_medida: unidadMedida,
+      ean: l.ean || null,
+      designacion: l.designacion || null,
+      seccion: l.seccion || null,
+    };
+    // Palet(es) elegidos a mano por quien pide (ver listarSsccDisponibles) —
+    // si no eligió ninguno, se queda sin sscc y el almacén lo asigna solo
+    // al preparar (asignarSsccSiFalta_ en kairos-operario).
+    if (l.sscc) {
+      payload.sscc = l.sscc;
+      payload.ubicacion = l.ubicacion || null;
+      payload.sscc_asignado_en = new Date().toISOString();
+    }
+    return payload;
+  });
+}
+
 function _crearPeticion_(ldap, tipo, datos, lineas) {
   const u = _usuarioDe_(ldap);
   const tienda = u.tienda;
@@ -730,26 +756,7 @@ function _crearPeticion_(ldap, tipo, datos, lineas) {
   // LUEGO se validaba, así que una línea mala dejaba una petición fantasma,
   // pendiente para siempre, sin nada que preparar).
   const unidadMedida = tipo === 'refill' ? 'palet' : 'ud';
-  const lineasPayload = lineas.map(function (l) {
-    if (!l.codigoLm || !l.cantidad) throw new Error('Línea incompleta.');
-    const payload = {
-      codigo_lm: String(l.codigoLm).trim(),
-      cantidad: Number(l.cantidad),
-      unidad_medida: unidadMedida,
-      ean: l.ean || null,
-      designacion: l.designacion || null,
-      seccion: l.seccion || null,
-    };
-    // Palet(es) elegidos a mano por quien pide (ver listarSsccDisponibles) —
-    // si no eligió ninguno, se queda sin sscc y el almacén lo asigna solo
-    // al preparar (asignarSsccSiFalta_ en kairos-operario).
-    if (l.sscc) {
-      payload.sscc = l.sscc;
-      payload.ubicacion = l.ubicacion || null;
-      payload.sscc_asignado_en = new Date().toISOString();
-    }
-    return payload;
-  });
+  const lineasPayload = _lineasParaGuardar_(lineas, unidadMedida);
 
   _bloquearSiDuplicadoReciente_(tienda, ldap, tipo, cabecera, lineasPayload);
 

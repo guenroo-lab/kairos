@@ -2362,8 +2362,14 @@
       // pedido creado dos veces) — el guardado real en el servidor bloquea
       // igual si esto fallara, pero así ni se intenta.
       btnEnviar.disabled = true; btnEnviar.textContent = 'Enviando…';
-      gas('crearPeticion', LDAP, tipo, datos, lineas).then(function () {
-        renderCola();
+      function crearAparte() {
+        return gas('crearPeticion', LDAP, tipo, datos, lineas).then(function () {
+          renderCola();
+        });
+      }
+      // Pedido cliente: si ya hay otro abierto con el mismo número se pregunta si se añaden a él (UnirPedidosUI.html).
+      (tipo === 'pedido_cliente' ? UNI_enviarPedidoCliente_(datos, lineas, crearAparte) : crearAparte()).then(function (r) {
+        if (r === 'cancelado') { btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar petición'; }
       }).catch(function (e) {
         btnEnviar.disabled = false; btnEnviar.textContent = 'Enviar petición';
         err.style.whiteSpace = 'pre-line';
@@ -2773,3 +2779,4 @@
     cargar();
   }
 </script>
+<?!= incluir_('UnirPedidosUI') ?>

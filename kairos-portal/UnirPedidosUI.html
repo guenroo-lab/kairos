@@ -1,0 +1,135 @@
+<style>
+  /* ——— Aviso «ya hay un pedido abierto con este número» al enviar un pedido cliente ——— */
+  .kmodal.uni-modal { max-width:460px; }
+  .uni-modal h3 { margin:0 0 6px; font-size:16px; line-height:1.3; }
+  .uni-modal .uni-sub { margin:0 0 12px; font-size:13px; color:var(--text-500); }
+  .uni-modal .uni-bloque { margin:0 0 10px; padding:9px 11px; border-radius:10px; background:var(--ink-850); border:1px solid var(--ink-800); }
+  .uni-modal .uni-bloque b { display:block; margin-bottom:4px; font-size:11.5px; font-weight:800; text-transform:uppercase; letter-spacing:.06em; color:var(--text-500); }
+  .uni-modal .uni-bloque ul { margin:0; padding:0 0 0 18px; font-size:13.5px; line-height:1.45; }
+  .uni-modal .uni-alerta { margin:0 0 10px; padding:9px 11px; border-radius:10px; font-size:13px; line-height:1.4; background:var(--warn-bg); color:var(--warn-fg); border:1px solid var(--warn-line); }
+  .uni-modal .uni-nota { margin:0 0 4px; font-size:13px; color:var(--text-300); }
+</style>
+
+<script>
+// ============================ UNIR UN PEDIDO CON OTRO ABIERTO ============================
+// Al enviar un pedido cliente, si ya hay otro ABIERTO con el mismo número (la tienda lo manda a trozos), se pregunta si
+// se añaden las líneas a ese pedido en vez de crear otro. Crear aparte sigue siendo posible. El servidor
+// (buscarPedidoAbiertoMismoNumero / anadirLineasAPedido, UnirPedidos.js) decide y vuelve a comprobarlo todo.
+
+function UNI_esc_(t) { return (typeof escHtml === 'function') ? escHtml(t) : String(t == null ? '' : t).replace(/[&<>"']/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]; }); }
+
+function UNI_plural_(n, uno, varios) { return n + ' ' + (n === 1 ? uno : varios); }
+
+/** El pedido abierto al que se añadiría: el más antiguo de los que admiten unir (el servidor los manda ordenados). */
+function UNI_elegido_(coincidencias) {
+  for (var i = 0; i < coincidencias.length; i++) if (coincidencias[i].puedeUnirse) return coincidencias[i];
+  return null;
+}
+
+/** Artículos de lo que se envía que ya están en el pedido abierto: [{ codigo, enPedido }] (enPedido = unidades que ya lleva). */
+function UNI_repetidos_(abierto, nuevas) {
+  var enPedido = {};
+  (abierto.lineas || []).forEach(function (l) { enPedido[l.codigo_lm] = (enPedido[l.codigo_lm] || 0) + (Number(l.cantidad) || 0); });
+  var vistos = {}, res = [];
+  (nuevas || []).forEach(function (l) {
+    var codigo = String(l.codigoLm || '').trim();
+    if (enPedido[codigo] !== undefined && !vistos[codigo]) { vistos[codigo] = true; res.push({ codigo: codigo, enPedido: enPedido[codigo] }); }
+  });
+  return res;
+}
+
+/** «hoy a las 22:49» / «el 07/10 a las 22:49» (siempre con ceros, sin depender del idioma del navegador) */
+function UNI_cuando_(iso, ahora) {
+  var d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  function dos(n) { return (n < 10 ? '0' : '') + n; }
+  var hora = dos(d.getHours()) + ':' + dos(d.getMinutes());
+  var hoy = ahora || new Date();
+  if (d.getFullYear() === hoy.getFullYear() && d.getMonth() === hoy.getMonth() && d.getDate() === hoy.getDate()) return 'hoy a las ' + hora;
+  return 'el ' + dos(d.getDate()) + '/' + dos(d.getMonth() + 1) + ' a las ' + hora;
+}
+
+function UNI_lineaHtml_(codigo, designacion, cantidad, unidad) {
+  return '<li><strong>' + UNI_esc_(codigo) + '</strong>' +
+    (designacion ? ' · ' + UNI_esc_(designacion) : '') + ' × ' + UNI_esc_(cantidad) + (unidad === 'palet' ? ' palets' : ' ud') + '</li>';
+}
+
+/** Contenido de la pregunta: { html, elegidoId } (elegidoId = null si no se puede unir a ninguno). */
+function UNI_html_(coincidencias, nuevas, numPedido, ahora) {
+  var elegido = UNI_elegido_(coincidencias);
+  var mostrado = elegido || coincidencias[0];
+  var h = '<div class="kmodal uni-modal">' +
+    '<h3>Ya hay un pedido abierto con el nº ' + UNI_esc_(numPedido) + '</h3>' +
+    '<p class="uni-sub">Enviado ' + UNI_esc_(UNI_cuando_(mostrado.creada_en, ahora)) +
+      (mostrado.solicitante_ldap ? ' por ' + UNI_esc_(mostrado.solicitante_ldap) : '') + ' · ' + UNI_esc_(mostrado.estadoTexto || mostrado.estado) + '</p>' +
+    '<div class="uni-bloque"><b>Ya lleva ' + UNI_plural_((mostrado.lineas || []).length, 'línea', 'líneas') + '</b><ul>' +
+      (mostrado.lineas || []).map(function (l) { return UNI_lineaHtml_(l.codigo_lm, l.designacion, l.cantidad, l.unidad_medida); }).join('') + '</ul></div>' +
+    '<div class="uni-bloque"><b>Ahora envías ' + UNI_plural_(nuevas.length, 'línea', 'líneas') + '</b><ul>' +
+      nuevas.map(function (l) { return UNI_lineaHtml_(l.codigoLm, l.designacion, l.cantidad, 'ud'); }).join('') + '</ul></div>';
+  if (elegido) {
+    var rep = UNI_repetidos_(elegido, nuevas);
+    if (rep.length) {
+      h += '<p class="uni-alerta">⚠ Ya está en el pedido abierto: ' +
+        rep.map(function (r) { return UNI_esc_(r.codigo) + ' (' + UNI_esc_(r.enPedido) + ' ud)'; }).join(', ') +
+        '. Si lo añades, quedará como otra línea: revisa que no lo estés pidiendo dos veces.</p>';
+    }
+    h += '<p class="uni-nota">Si las añades, almacén verá un solo pedido con todas las líneas.</p>';
+  } else {
+    h += '<p class="uni-alerta">No se pueden añadir a ese pedido porque ' + UNI_esc_(mostrado.motivo || 'no admite más líneas') + '.</p>';
+  }
+  var otros = coincidencias.length - 1;
+  if (otros > 0) h += '<p class="uni-nota">Hay ' + UNI_plural_(otros, 'otro pedido abierto', 'otros pedidos abiertos') + ' con este número' + (elegido ? '; se añade al más antiguo.' : '.') + '</p>';
+  h += '<div class="fila-botones">' +
+    '<button type="button" class="btn btn-ghost" id="uniCancelar">Cancelar</button>' +
+    '<button type="button" class="btn btn-ghost" id="uniAparte">Crear pedido aparte</button>' +
+    (elegido ? '<button type="button" class="btn btn-primary" id="uniUnir">Añadir al pedido abierto</button>' : '') +
+    '</div></div>';
+  return { html: h, elegidoId: elegido ? elegido.id : null };
+}
+
+/** Pregunta a la tienda. Resuelve { accion: 'unir' | 'aparte' | null (cancelado), id }. */
+function UNI_pregunta_(coincidencias, nuevas, numPedido) {
+  return new Promise(function (resolve) {
+    var vista = UNI_html_(coincidencias, nuevas, numPedido, new Date());
+    var overlay = document.createElement('div');
+    overlay.className = 'koverlay';
+    overlay.innerHTML = vista.html;
+    document.body.appendChild(overlay);
+    function cerrar(accion) { document.body.removeChild(overlay); resolve({ accion: accion, id: vista.elegidoId }); }
+    var unir = overlay.querySelector('#uniUnir');
+    if (unir) unir.onclick = function () { cerrar('unir'); };
+    overlay.querySelector('#uniAparte').onclick = function () { cerrar('aparte'); };
+    overlay.querySelector('#uniCancelar').onclick = function () { cerrar(null); };
+    var primero = unir || overlay.querySelector('#uniAparte');
+    if (primero && primero.focus) primero.focus();
+  });
+}
+
+/** Mensaje tras unir (HTML ya escapado: lo pinta kAlerta tal cual). */
+function UNI_mensajeHecho_(res) {
+  var n = Number(res.anadidas) || 0;
+  var t = 'Hecho: ' + UNI_plural_(n, 'línea añadida', 'líneas añadidas') + ' al pedido ' + UNI_esc_(res.numPedido) +
+    (res.totalLineas ? ', que ahora tiene ' + UNI_plural_(Number(res.totalLineas), 'línea', 'líneas') : '') +
+    '. Almacén lo verá marcado como modificado.';
+  if (res.aviso) t += '<br><br>' + UNI_esc_(res.aviso);
+  return t;
+}
+
+/** Envío de un pedido cliente: busca si hay otro abierto con el mismo número y pregunta. `crearAparte()` es el envío de
+ *  siempre. Resuelve 'cancelado' si la tienda cancela; si no, lo que resuelva el envío elegido. */
+function UNI_enviarPedidoCliente_(datos, lineas, crearAparte) {
+  return gas('buscarPedidoAbiertoMismoNumero', LDAP, datos.numPedido, datos.transporte)
+    // La búsqueda solo avisa: si falla (sin conexión, servidor ocupado) se envía como siempre.
+    .catch(function () { return []; })
+    .then(function (coincidencias) {
+      if (!coincidencias || !coincidencias.length) return crearAparte();
+      return UNI_pregunta_(coincidencias, lineas, datos.numPedido).then(function (r) {
+        if (r.accion === 'aparte') return crearAparte();
+        if (r.accion !== 'unir') return 'cancelado';
+        return gas('anadirLineasAPedido', LDAP, r.id, datos, lineas).then(function (res) {
+          return kAlerta(UNI_mensajeHecho_(res)).then(function () { renderCola(); });
+        });
+      });
+    });
+}
+</script>
