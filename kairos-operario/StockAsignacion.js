@@ -1,7 +1,9 @@
-/** Asignación automática de SSCC — replica el algoritmo de
- *  PreparacionPedidosPC/SSCC y Ubicacion.js (buscarYAsignarSSCC_) contra
- *  preparacion.stock_fisico (ya sincronizado) en vez de leer el Excel en
- *  vivo. El operario nunca elige el palet a mano — se calcula solo. */
+/** Asignación automática de SSCC contra preparacion.stock_fisico (ya
+ *  sincronizado) en vez de leer el Excel en vivo. Nació como réplica del
+ *  algoritmo de PreparacionPedidosPC/SSCC y Ubicacion.js (buscarYAsignarSSCC_),
+ *  pero desde 2026-10-15 el reparto de pedido cliente / cesión vacía primero
+ *  los palets con menos unidades (_elegirPaletsDeLinea_). El operario puede
+ *  cambiarlo a mano (Cambiar palet / Repartir entre palets). */
 
 function _candidatosStock_(tienda, codigoLm) {
   return supaSelect_('stock_fisico',
@@ -240,6 +242,145 @@ function _ssccUsadosEnPeticion_(peticionId, lineaIdExcluir) {
   return set;
 }
 
+// Máximo de palets distintos que se buscan A PROPÓSITO para una línea. Cada palet es una parada y una transferencia
+// más en myISO: pasado este número solo se usan los palets imprescindibles (ver _elegirPaletsDeLinea_).
+const MAX_PALETS_POR_LINEA_ = 3;
+
+function _compararTexto_(a, b) {
+  a = String(a == null ? '' : a);
+  b = String(b == null ? '' : b);
+  return a < b ? -1 : a > b ? 1 : 0;
+}
+
+/** Reparto "de mayor a menor": los menos palets posibles. Es lo que se hace cuando ni con el máximo de palets
+ *  por línea llega (la línea pide mucho y los palets son pequeños). */
+function _repartoDeMayorAMenor_(lista, pedidas) {
+  var restante = pedidas;
+  const reparto = [];
+  for (var k = lista.length - 1; k >= 0 && restante > 0; k--) {
+    const tomar = Math.min(lista[k].libre, restante);
+    reparto.push({ sscc: lista[k].sscc, ubicacion: lista[k].ubicacion, cantidad: tomar });
+    restante -= tomar;
+  }
+  return reparto;
+}
+
+/** De qué palets se coge una línea para que queden los MENOS palets con picking.
+ *
+ *  Regla (pedida por Pedro, 2026-10-15): se vacían primero los palets con menos unidades y lo que falte sale de otro
+ *  palet. Con 3 unidades y palets de 1 y de 30: la 1 del palet pequeño (que así desaparece) y las 2 que faltan del
+ *  grande — antes salían las 3 del grande y el pequeño se quedaba para siempre con su unidad.
+ *
+ *  Entre todas las formas de reunir `necesarias` unidades con como mucho `maxPalets` palets se elige, por este orden:
+ *   1. la que deja MÁS palets vacíos;
+ *   2. la que usa MENOS palets (si un palet tiene justo lo que piden, se coge ese entero antes que 1 + el resto de otro:
+ *      deja lo mismo en el almacén con una parada menos);
+ *   3. la que rompe el palet más PEQUEÑO para lo que falta (así los palets grandes se quedan enteros);
+ *   4. la que visita menos palets nuevos para el pedido (`usados` = palets que otras líneas del mismo pedido ya visitan);
+ *   5. el orden de la lista (menos unidades, luego ubicación y SSCC), para que el resultado no dependa del orden en
+ *      que llegue el stock.
+ *  Si ni con `maxPalets` llega (hacen falta más palets), se usan los menos posibles, de mayor a menor.
+ *
+ *  candidatos: [{ sscc, ubicacion, remanente }] — remanente = lo que queda libre en el palet (stock menos lo que ya
+ *  tienen apartado otras líneas; 0 si se lo lleva un refill). Los de remanente <= 0 se ignoran.
+ *  opciones: { usados: { sscc: true }, maxPalets }.
+ *  Devuelve [{ sscc, ubicacion, cantidad }] — primero los palets que se vacían (de menos a más unidades) y al final el
+ *  que queda a medias —, o null si entre todos no hay `necesarias` unidades. Función pura: la usan la asignación real
+ *  (_repartirEntreCandidatos_) y la previsión de la cola (_ubicacionesPrevistas_), así que nunca pueden discrepar. */
+function _elegirPaletsDeLinea_(candidatos, necesarias, opciones) {
+  opciones = opciones || {};
+  const usados = opciones.usados || {};
+  const maxPalets = Number(opciones.maxPalets) > 0 ? Number(opciones.maxPalets) : MAX_PALETS_POR_LINEA_;
+  const pedidas = Number(necesarias);
+  if (!(pedidas > 0)) return [];
+
+  const lista = candidatos
+    .map(function (c) { return { sscc: c.sscc, ubicacion: c.ubicacion, libre: Number(c.remanente) || 0 }; })
+    .filter(function (c) { return c.libre > 0; })
+    .sort(function (a, b) {
+      return (a.libre - b.libre) || ((usados[b.sscc] ? 1 : 0) - (usados[a.sscc] ? 1 : 0)) ||
+        _compararTexto_(a.ubicacion, b.ubicacion) || _compararTexto_(a.sscc, b.sscc);
+    });
+  const hay = lista.reduce(function (s, c) { return s + c.libre; }, 0);
+  if (hay < pedidas) return null;
+
+  // Palets que harían falta como mínimo (empezando por los más grandes).
+  var minimo = 0;
+  var cubierto = 0;
+  for (var i = lista.length - 1; i >= 0 && cubierto < pedidas; i--) { cubierto += lista[i].libre; minimo++; }
+  if (minimo > maxPalets) return _repartoDeMayorAMenor_(lista, pedidas);
+
+  const m = lista.length;
+  var mejor = null;
+
+  function visitasNuevas(indices) {
+    var n = 0;
+    indices.forEach(function (idx) { if (!usados[lista[idx].sscc]) n++; });
+    return n;
+  }
+  function ordenIndices(a, b) {
+    for (var x = 0; x < a.length && x < b.length; x++) if (a[x] !== b[x]) return a[x] - b[x];
+    return a.length - b.length;
+  }
+  function mejorQue(a, b) {
+    if (!b) return true;
+    if (a.vaciados.length !== b.vaciados.length) return a.vaciados.length > b.vaciados.length;
+    if (a.paradas !== b.paradas) return a.paradas < b.paradas;
+    if (a.tamParcial !== b.tamParcial) return a.tamParcial < b.tamParcial;
+    if (a.nuevos !== b.nuevos) return a.nuevos < b.nuevos;
+    return ordenIndices(a.indices, b.indices) < 0;
+  }
+  function proponer(vaciados, parcial, falta) {
+    const indices = parcial >= 0 ? vaciados.concat([parcial]) : vaciados.slice();
+    const cand = {
+      vaciados: vaciados.slice(), parcial: parcial, falta: falta, indices: indices, paradas: indices.length,
+      tamParcial: parcial >= 0 ? lista[parcial].libre : 0, nuevos: visitasNuevas(indices),
+    };
+    if (mejorQue(cand, mejor)) mejor = cand;
+  }
+  // `vaciados` = palets que se cogen enteros (índices de menor a mayor); lo que falte sale de UN palet más,
+  // el más pequeño de los demás al que le sobre algo.
+  function recorrer(desde, vaciados, suma) {
+    const falta = pedidas - suma;
+    if (falta === 0) {
+      if (vaciados.length) proponer(vaciados, -1, 0);
+      return;
+    }
+    if (vaciados.length + 1 <= maxPalets) {
+      for (var j = 0; j < m; j++) {
+        if (vaciados.indexOf(j) === -1 && lista[j].libre > falta) { proponer(vaciados, j, falta); break; }
+      }
+    }
+    if (vaciados.length >= maxPalets) return;
+    for (var x = desde; x < m; x++) {
+      if (suma + lista[x].libre > pedidas) break; // la lista va de menos a más: los siguientes tampoco caben
+      vaciados.push(x);
+      recorrer(x + 1, vaciados, suma + lista[x].libre);
+      vaciados.pop();
+    }
+  }
+  recorrer(0, [], 0);
+  if (!mejor) return _repartoDeMayorAMenor_(lista, pedidas); // no debería pasar: con `minimo` palets siempre hay solución
+
+  const reparto = mejor.vaciados.map(function (idx) {
+    return { sscc: lista[idx].sscc, ubicacion: lista[idx].ubicacion, cantidad: lista[idx].libre };
+  });
+  if (mejor.parcial >= 0) {
+    reparto.push({ sscc: lista[mejor.parcial].sscc, ubicacion: lista[mejor.parcial].ubicacion, cantidad: mejor.falta });
+  }
+  return reparto;
+}
+
+/** Cómo se guarda un reparto en la línea: un solo palet = su SSCC suelto (se lleva toda la línea); varios =
+ *  "sscc1 (15ud) + sscc2 (2ud)" con las ubicaciones en el mismo orden. */
+function _textoDeReparto_(reparto) {
+  if (reparto.length === 1) return { sscc: reparto[0].sscc, ubicacion: reparto[0].ubicacion };
+  return {
+    sscc: reparto.map(function (r) { return r.sscc + ' (' + r.cantidad + 'ud)'; }).join(' + '),
+    ubicacion: reparto.map(function (r) { return r.ubicacion; }).join(' + '),
+  };
+}
+
 function _repartirEntreCandidatos_(tienda, linea, candidatos) {
   const marca = _marcaDeSnapshot_(candidatos);
   const uso = _usoComprometidoPorSscc_(tienda, linea.codigo_lm, linea.id, marca);
@@ -248,39 +389,20 @@ function _repartirEntreCandidatos_(tienda, linea, candidatos) {
   function remanente(c) { return enRefill[c.sscc] ? 0 : c.cantidad - (uso[c.sscc] || 0); }
   const necesarias = Number(linea.cantidad);
 
-  const usadosEnPeticion = _ssccUsadosEnPeticion_(linea.peticion_id, linea.id);
-  for (var i = 0; i < candidatos.length; i++) {
-    if (usadosEnPeticion.indexOf(candidatos[i].sscc) === -1) continue;
-    if (remanente(candidatos[i]) >= necesarias) {
-      return { sscc: candidatos[i].sscc, ubicacion: candidatos[i].ubicacion };
-    }
-  }
-  for (var j = 0; j < candidatos.length; j++) {
-    if (remanente(candidatos[j]) >= necesarias) {
-      return { sscc: candidatos[j].sscc, ubicacion: candidatos[j].ubicacion };
-    }
-  }
+  // Palets que otras líneas de este mismo pedido ya visitan: a igualdad de todo lo demás, mejor ir a uno de esos.
+  const usados = {};
+  _ssccUsadosEnPeticion_(linea.peticion_id, linea.id).forEach(function (s) { usados[s] = true; });
 
-  const disponibles = candidatos
-    .map(function (c) { return { sscc: c.sscc, ubicacion: c.ubicacion, remanente: remanente(c) }; })
-    .filter(function (c) { return c.remanente > 0; })
-    .sort(function (a, b) { return b.remanente - a.remanente; });
-
-  var restante = necesarias;
-  const reparto = [];
-  for (var k = 0; k < disponibles.length && restante > 0; k++) {
-    const tomar = Math.min(disponibles[k].remanente, restante);
-    reparto.push({ sscc: disponibles[k].sscc, ubicacion: disponibles[k].ubicacion, cantidad: tomar });
-    restante -= tomar;
-  }
-  if (restante > 0) {
+  const reparto = _elegirPaletsDeLinea_(
+    candidatos.map(function (c) { return { sscc: c.sscc, ubicacion: c.ubicacion, remanente: remanente(c) }; }),
+    necesarias, { usados: usados });
+  if (!reparto) {
+    var hay = 0;
+    candidatos.forEach(function (c) { hay += Math.max(0, remanente(c)); });
     throw new Error('Ni repartiendo entre todos los palets del edificio 05 hay ' +
-      necesarias + ' uds del código ' + linea.codigo_lm + ' (faltan ' + restante + ').');
+      necesarias + ' uds del código ' + linea.codigo_lm + ' (faltan ' + (necesarias - hay) + ').');
   }
-  return {
-    sscc: reparto.map(function (r) { return r.sscc + ' (' + r.cantidad + 'ud)'; }).join(' + '),
-    ubicacion: reparto.map(function (r) { return r.ubicacion; }).join(' + '),
-  };
+  return _textoDeReparto_(reparto);
 }
 
 /** Punto de entrada. Si la línea ya tiene sscc, no hace nada (devuelve

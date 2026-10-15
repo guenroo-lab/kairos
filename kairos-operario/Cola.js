@@ -67,10 +67,10 @@ function listarCola(filtroTienda, filtroTipo) {
 
 /** Dirección PREVISTA de las líneas que aún no tienen palet asignado (el
  *  palet real se asigna al abrir el pedido, ver asignarSsccSiFalta_). Solo
- *  lectura: no reserva ni escribe nada. Misma lógica que
- *  _repartirEntreCandidatos_ pero en lote para toda la cola, simulando el
- *  reparto en orden de creación para que dos líneas del mismo código no
- *  apunten al mismo palet. Devuelve {lineaId: 'dir' | 'dir1 + dir2' | null};
+ *  lectura: no reserva ni escribe nada. Misma elección que
+ *  _repartirEntreCandidatos_ (comparten _elegirPaletsDeLinea_) pero en lote
+ *  para toda la cola, simulando el reparto en orden de creación para que dos
+ *  líneas del mismo código no apunten al mismo palet. Devuelve {lineaId: 'dir' | 'dir1 + dir2' | null};
  *  null = no hay stock suficiente. Si falla, la cola sigue sin previsión. */
 function _ubicacionesPrevistas_(peticiones, lineas) {
   const previstas = {};
@@ -122,33 +122,14 @@ function _ubicacionesPrevistas_(peticiones, lineas) {
         function remanente(c) { return enRefill[c.sscc] ? 0 : Number(c.cantidad) - (uso[l.codigo_lm + '|' + c.sscc] || 0); }
         const necesarias = Number(l.cantidad);
         const mios = usadosEnPeticion[l.peticion_id] || (usadosEnPeticion[l.peticion_id] = []);
+        const usados = {};
+        mios.forEach(function (s) { usados[s] = true; });
 
-        var tomados = null; // [{sscc, ubicacion, cantidad}]
-        for (var i = 0; i < candidatos.length && !tomados; i++) {
-          if (mios.indexOf(candidatos[i].sscc) !== -1 && remanente(candidatos[i]) >= necesarias) {
-            tomados = [{ sscc: candidatos[i].sscc, ubicacion: candidatos[i].ubicacion, cantidad: necesarias }];
-          }
-        }
-        for (var j = 0; j < candidatos.length && !tomados; j++) {
-          if (remanente(candidatos[j]) >= necesarias) {
-            tomados = [{ sscc: candidatos[j].sscc, ubicacion: candidatos[j].ubicacion, cantidad: necesarias }];
-          }
-        }
-        if (!tomados) {
-          const disponibles = candidatos
-            .map(function (c) { return { sscc: c.sscc, ubicacion: c.ubicacion, remanente: remanente(c) }; })
-            .filter(function (c) { return c.remanente > 0; })
-            .sort(function (a, b) { return b.remanente - a.remanente; });
-          var restante = necesarias;
-          const reparto = [];
-          for (var k = 0; k < disponibles.length && restante > 0; k++) {
-            const tomar = Math.min(disponibles[k].remanente, restante);
-            reparto.push({ sscc: disponibles[k].sscc, ubicacion: disponibles[k].ubicacion, cantidad: tomar });
-            restante -= tomar;
-          }
-          if (restante > 0) { previstas[l.id] = null; return; }
-          tomados = reparto;
-        }
+        // La MISMA elección que la asignación real (_elegirPaletsDeLinea_): primero se vacían los palets pequeños.
+        const tomados = _elegirPaletsDeLinea_(
+          candidatos.map(function (c) { return { sscc: c.sscc, ubicacion: c.ubicacion, remanente: remanente(c) }; }),
+          necesarias, { usados: usados }); // [{sscc, ubicacion, cantidad}] o null si no hay stock
+        if (!tomados) { previstas[l.id] = null; return; }
 
         tomados.forEach(function (t) {
           const key = l.codigo_lm + '|' + t.sscc;

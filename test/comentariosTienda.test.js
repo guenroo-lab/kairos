@@ -35,7 +35,7 @@ function semilla() {
       pet('rf1', 'refill', { motivo: 'Reposición', comentario: 'Dejar en el pasillo 4' }),
       pet('pc2', 'pedido_cliente', { num_pedido: 'PC2', transporte: true }),
       pet('pc3', 'pedido_cliente', { num_pedido: 'PC3', transporte: false, comentario: '   ' }),
-      pet('pc4', 'pedido_cliente', { num_pedido: 'PC4', transporte: false, estado: 'cerrada', cerrada_en: '2026-10-08T08:00:00.000Z', comentario: 'Ya entregado, solo consulta' }),
+      pet('pc4', 'pedido_cliente', { num_pedido: 'PC4', transporte: false, estado: 'cerrada', cerrada_en: new Date(Date.now() - 3600000).toISOString() /* hace 1 h: el panel enseña las cerradas de los últimos 3 días */, comentario: 'Ya entregado, solo consulta' }),
     ],
     lineas: [
       linea('l1', 'pc1'), linea('l2', 'ce1'), linea('l3', 'rf1'), linea('l4', 'pc2'), linea('l5', 'pc3'), linea('l6', 'pc4', { estado_preparacion: 'preparado', estado_negocio: 'Preparado' }),
