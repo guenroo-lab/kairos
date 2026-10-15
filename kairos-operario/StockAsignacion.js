@@ -245,6 +245,10 @@ function _ssccUsadosEnPeticion_(peticionId, lineaIdExcluir) {
 // Máximo de palets distintos que se buscan A PROPÓSITO para una línea. Cada palet es una parada y una transferencia
 // más en myISO: pasado este número solo se usan los palets imprescindibles (ver _elegirPaletsDeLinea_).
 const MAX_PALETS_POR_LINEA_ = 3;
+// Con más palets libres que estos de un mismo código no se prueban combinaciones: el coste crece con el número de
+// palets elevado a MAX_PALETS_POR_LINEA_ y esto se calcula por cada línea de la cola. Con 3 palets por línea y 80 palets
+// son ~3 ms; con 5 serían ~1 s. No subir el máximo de palets por línea sin revisar este tope. Se reparte de mayor a menor.
+const MAX_PALETS_A_COMBINAR_ = 80;
 
 function _compararTexto_(a, b) {
   a = String(a == null ? '' : a);
@@ -253,7 +257,7 @@ function _compararTexto_(a, b) {
 }
 
 /** Reparto "de mayor a menor": los menos palets posibles. Es lo que se hace cuando ni con el máximo de palets
- *  por línea llega (la línea pide mucho y los palets son pequeños). */
+ *  por línea llega (la línea pide mucho y los palets son pequeños) o cuando hay demasiados palets para combinarlos. */
 function _repartoDeMayorAMenor_(lista, pedidas) {
   var restante = pedidas;
   const reparto = [];
@@ -273,13 +277,14 @@ function _repartoDeMayorAMenor_(lista, pedidas) {
  *
  *  Entre todas las formas de reunir `necesarias` unidades con como mucho `maxPalets` palets se elige, por este orden:
  *   1. la que deja MÁS palets vacíos;
- *   2. la que usa MENOS palets (si un palet tiene justo lo que piden, se coge ese entero antes que 1 + el resto de otro:
- *      deja lo mismo en el almacén con una parada menos);
- *   3. la que rompe el palet más PEQUEÑO para lo que falta (así los palets grandes se quedan enteros);
- *   4. la que visita menos palets nuevos para el pedido (`usados` = palets que otras líneas del mismo pedido ya visitan);
- *   5. el orden de la lista (menos unidades, luego ubicación y SSCC), para que el resultado no dependa del orden en
- *      que llegue el stock.
- *  Si ni con `maxPalets` llega (hacen falta más palets), se usan los menos posibles, de mayor a menor.
+ *   2. la que rompe el palet más PEQUEÑO para lo que falta, así los grandes se quedan enteros. Si los palets que se
+ *      vacían suman justo lo pedido no se rompe ninguno, y eso gana a romper uno: con 3 unidades y palets de 1, 3 y 30
+ *      se coge el de 3 entero, que deja lo mismo en el almacén que 1 + 2 con una parada menos;
+ *   3. la que visita menos palets nuevos para el pedido (`usados` = palets que otras líneas del mismo pedido ya visitan);
+ *   4. la primera según el orden de la lista (menos unidades, luego ubicación y SSCC), para que el resultado no
+ *      dependa del orden en que llegue el stock.
+ *  Si ni con `maxPalets` llega (hacen falta más palets) o hay demasiados palets para combinarlos
+ *  (MAX_PALETS_A_COMBINAR_), se usan los menos posibles, de mayor a menor.
  *
  *  candidatos: [{ sscc, ubicacion, remanente }] — remanente = lo que queda libre en el palet (stock menos lo que ya
  *  tienen apartado otras líneas; 0 si se lo lleva un refill). Los de remanente <= 0 se ignoran.
@@ -304,48 +309,33 @@ function _elegirPaletsDeLinea_(candidatos, necesarias, opciones) {
   const hay = lista.reduce(function (s, c) { return s + c.libre; }, 0);
   if (hay < pedidas) return null;
 
-  // Palets que harían falta como mínimo (empezando por los más grandes).
-  var minimo = 0;
-  var cubierto = 0;
-  for (var i = lista.length - 1; i >= 0 && cubierto < pedidas; i--) { cubierto += lista[i].libre; minimo++; }
-  if (minimo > maxPalets) return _repartoDeMayorAMenor_(lista, pedidas);
+  if (lista.length > MAX_PALETS_A_COMBINAR_) return _repartoDeMayorAMenor_(lista, pedidas);
 
   const m = lista.length;
   var mejor = null;
 
-  function visitasNuevas(indices) {
-    var n = 0;
-    indices.forEach(function (idx) { if (!usados[lista[idx].sscc]) n++; });
-    return n;
-  }
-  function ordenIndices(a, b) {
-    for (var x = 0; x < a.length && x < b.length; x++) if (a[x] !== b[x]) return a[x] - b[x];
-    return a.length - b.length;
-  }
+  // Un reparto = los palets que se vacían (`vaciados`, índices de la lista) y, si no suman justo lo pedido, UN palet
+  // más del que sale lo que falta (`parcial`, -1 si no hay). Se guarda el primero que sea estrictamente mejor: a
+  // igualdad total gana el que se encontró antes, que es el primero según el orden de la lista.
   function mejorQue(a, b) {
-    if (!b) return true;
     if (a.vaciados.length !== b.vaciados.length) return a.vaciados.length > b.vaciados.length;
-    if (a.paradas !== b.paradas) return a.paradas < b.paradas;
-    if (a.tamParcial !== b.tamParcial) return a.tamParcial < b.tamParcial;
-    if (a.nuevos !== b.nuevos) return a.nuevos < b.nuevos;
-    return ordenIndices(a.indices, b.indices) < 0;
+    if (a.tamParcial !== b.tamParcial) return a.tamParcial < b.tamParcial; // sin palet roto (0) gana a romper uno
+    return a.nuevos < b.nuevos;
   }
   function proponer(vaciados, parcial, falta) {
-    const indices = parcial >= 0 ? vaciados.concat([parcial]) : vaciados.slice();
+    const palets = parcial >= 0 ? vaciados.concat([parcial]) : vaciados;
     const cand = {
-      vaciados: vaciados.slice(), parcial: parcial, falta: falta, indices: indices, paradas: indices.length,
-      tamParcial: parcial >= 0 ? lista[parcial].libre : 0, nuevos: visitasNuevas(indices),
+      vaciados: vaciados.slice(), parcial: parcial, falta: falta,
+      tamParcial: parcial >= 0 ? lista[parcial].libre : 0,
+      nuevos: palets.filter(function (idx) { return !usados[lista[idx].sscc]; }).length,
     };
-    if (mejorQue(cand, mejor)) mejor = cand;
+    if (!mejor || mejorQue(cand, mejor)) mejor = cand;
   }
   // `vaciados` = palets que se cogen enteros (índices de menor a mayor); lo que falte sale de UN palet más,
   // el más pequeño de los demás al que le sobre algo.
   function recorrer(desde, vaciados, suma) {
     const falta = pedidas - suma;
-    if (falta === 0) {
-      if (vaciados.length) proponer(vaciados, -1, 0);
-      return;
-    }
+    if (falta === 0) { proponer(vaciados, -1, 0); return; }
     if (vaciados.length + 1 <= maxPalets) {
       for (var j = 0; j < m; j++) {
         if (vaciados.indexOf(j) === -1 && lista[j].libre > falta) { proponer(vaciados, j, falta); break; }
@@ -360,7 +350,7 @@ function _elegirPaletsDeLinea_(candidatos, necesarias, opciones) {
     }
   }
   recorrer(0, [], 0);
-  if (!mejor) return _repartoDeMayorAMenor_(lista, pedidas); // no debería pasar: con `minimo` palets siempre hay solución
+  if (!mejor) return _repartoDeMayorAMenor_(lista, pedidas); // ni con `maxPalets` palets llega
 
   const reparto = mejor.vaciados.map(function (idx) {
     return { sscc: lista[idx].sscc, ubicacion: lista[idx].ubicacion, cantidad: lista[idx].libre };

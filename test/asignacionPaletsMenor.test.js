@@ -94,6 +94,44 @@ test('a igualdad de todo lo demás, se prefiere un palet que el pedido ya visita
   assert.deepStrictEqual(elegir([pal('pequeno', 5), pal('visitado', 30)], 3, { usados: { visitado: true } }), [['pequeno', 3]]);
 });
 
+test('entre dos formas de vaciar lo mismo se rompe el palet más pequeño (los grandes se quedan enteros)', () => {
+  // 5 uds: o se vacía el de 3 y se rompe el de 4 (le quedan 2), o se vacía el de 4 y se rompe el de 3 (le quedan 2)
+  assert.deepStrictEqual(elegir([pal('tres', 3), pal('cuatro', 4), pal('veinte', 20)], 5), [['cuatro', 4], ['tres', 1]]);
+  assert.deepStrictEqual(elegir([pal('cuatro', 4), pal('veinte', 20), pal('tres', 3)], 5), [['cuatro', 4], ['tres', 1]], 'da igual el orden de llegada');
+});
+
+test('a igualdad de todo lo demás, se prefiere vaciar los palets que el pedido ya visita; sin visitas, los primeros de la lista', () => {
+  const cuatro = [pal('u1', 1), pal('t1', 3), pal('t2', 3), pal('u5', 5)];
+  // 6 uds: 1 + 5 o 3 + 3 — las dos formas vacían dos palets y no rompen ninguno
+  assert.deepStrictEqual(elegir(cuatro, 6), [['u1', 1], ['u5', 5]], 'sin visitas: los primeros de la lista');
+  assert.deepStrictEqual(elegir(cuatro, 6, { usados: { t1: true, t2: true } }), [['t1', 3], ['t2', 3]], 'el pedido ya visita los dos de 3');
+  assert.deepStrictEqual(elegir(cuatro, 6, { usados: { t1: true } }), [['t1', 3], ['t2', 3]], 'con que visite uno de los dos de 3 ya son menos palets nuevos');
+  assert.deepStrictEqual(elegir(cuatro, 6, { usados: { u1: true, u5: true } }), [['u1', 1], ['u5', 5]]);
+});
+
+test('con más de 80 palets de un mismo código no se prueban combinaciones: se reparte de mayor a menor', () => {
+  const grandes = (cuantos) => Array.from({ length: cuantos }, (_, i) => pal('g' + String(i).padStart(2, '0'), 30));
+  // 80 palets: la regla de siempre (la 1 del pequeño y las 2 que faltan del primero de los grandes)
+  assert.deepStrictEqual(elegir([pal('chico', 1)].concat(grandes(79)), 3), [['chico', 1], ['g00', 2]]);
+  // 81 palets: de mayor a menor (el último de la lista, que entre iguales es el de mayor ubicación)
+  assert.deepStrictEqual(elegir([pal('chico', 1)].concat(grandes(80)), 3), [['g79', 3]]);
+  assert.strictEqual(elegir(grandes(81), 81 * 30 + 1), null, 'sin stock suficiente sigue dando null');
+  const r = elegir(grandes(100), 95);
+  assert.deepStrictEqual(r.map((x) => x[1]), [30, 30, 30, 5], 'los menos palets posibles');
+});
+
+// Si este test no termina enseguida, alguien ha quitado el límite de palets por línea: sin él se prueban TODOS los
+// subconjuntos de 80 palets y no acaba nunca.
+test('con 80 palets pequeños y un pedido que ni con 3 palets llega, termina enseguida (reparto de mayor a menor)', () => {
+  const pequenos = Array.from({ length: 80 }, (_, i) => pal('q' + String(i).padStart(2, '0'), 1 + (i % 9)));
+  const inicio = Date.now();
+  const reparto = elegir(pequenos, 200);
+  assert.ok(Date.now() - inicio < 2000, 'tardó ' + (Date.now() - inicio) + ' ms');
+  assert.strictEqual(reparto.reduce((s, x) => s + x[1], 0), 200);
+  assert.ok(reparto.every((x) => x[1] <= 9));
+  assert.deepStrictEqual(reparto.slice(0, 3).map((x) => x[1]), [9, 9, 9], 'empieza por los más grandes');
+});
+
 test('sin stock suficiente devuelve null; lo que no está libre (0 o negativo) no cuenta', () => {
   assert.strictEqual(elegir([pal('a', 1), pal('b', 2)], 4), null);
   assert.strictEqual(elegir([], 1), null);
@@ -118,20 +156,32 @@ test('los palets iguales se eligen siempre en el mismo orden (ubicación y SSCC)
   assert.deepStrictEqual(elegir(a, 3), [['S1', 3]]);
   assert.deepStrictEqual(elegir(a.slice().reverse(), 3), [['S1', 3]]);
   assert.deepStrictEqual(elegir([{ sscc: 'S9', ubicacion: '05-A', remanente: 3 }, { sscc: 'S3', ubicacion: '05-A', remanente: 3 }], 3), [['S3', 3]]);
+  // la ubicación manda sobre el SSCC
+  assert.deepStrictEqual(elegir([{ sscc: 'S1', ubicacion: '05-B', remanente: 3 }, { sscc: 'S2', ubicacion: '05-A', remanente: 3 }], 3), [['S2', 3]]);
 });
 
 // Búsqueda exhaustiva independiente: prueba TODOS los repartos posibles (cuántas unidades de cada palet) y se queda con
-// el que deja más palets vacíos y, a igualdad, usa menos palets — con el mismo máximo de palets.
-function oraculo(libres, n, max) {
+// el mejor según la regla, por este orden: más palets vacíos, menos paradas, palet roto lo más pequeño posible y menos
+// palets nuevos para el pedido (`visitados[k]` = el pedido ya va al palet k) — con el mismo máximo de palets.
+function oraculo(libres, n, max, visitados) {
   let mejor = null;
   const x = new Array(libres.length).fill(0);
+  const mejorQue = (a, b) => (a.vaciados !== b.vaciados ? a.vaciados > b.vaciados
+    : a.paradas !== b.paradas ? a.paradas < b.paradas
+      : a.tamParcial !== b.tamParcial ? a.tamParcial < b.tamParcial
+        : a.nuevos < b.nuevos);
   (function rec(i, resto) {
     if (i === libres.length) {
       if (resto !== 0) return;
       const paradas = x.filter((v) => v > 0).length;
       if (paradas > max) return;
       const vaciados = x.filter((v, k) => v > 0 && v === libres[k]).length;
-      if (!mejor || vaciados > mejor.vaciados || (vaciados === mejor.vaciados && paradas < mejor.paradas)) mejor = { vaciados, paradas };
+      const rotos = libres.filter((l, k) => x[k] > 0 && x[k] < l);
+      // Dos palets rotos nunca es lo mejor (se pasan unidades de uno a otro): si alguna vez ganara, el test lo vería.
+      const tamParcial = rotos.length > 1 ? Infinity : rotos.length ? rotos[0] : 0;
+      const nuevos = x.filter((v, k) => v > 0 && !(visitados && visitados[k])).length;
+      const candidato = { vaciados, paradas, tamParcial, nuevos };
+      if (!mejor || mejorQue(candidato, mejor)) mejor = candidato;
       return;
     }
     for (let v = 0; v <= Math.min(libres[i], resto); v++) { x[i] = v; rec(i + 1, resto - v); }
@@ -145,7 +195,7 @@ function aleatorio(semilla) {
   return () => { s = (s * 1664525 + 1013904223) % 4294967296; return s / 4294967296; };
 }
 
-test('contra una búsqueda exhaustiva: siempre deja los máximos palets vacíos con las menos paradas (1500 casos al azar)', () => {
+test('contra una búsqueda exhaustiva: palets vacíos, paradas, palet roto y palets nuevos para el pedido son siempre los mejores (1500 casos al azar)', () => {
   const azar = aleatorio(20261015);
   let comprobados = 0;
   let conFallback = 0;
@@ -156,7 +206,10 @@ test('contra una búsqueda exhaustiva: siempre deja los máximos palets vacíos 
     const n = 1 + Math.floor(azar() * Math.min(total, 14));
     const max = 1 + Math.floor(azar() * 4);
     const cand = libres.map((v, i) => pal('p' + i, v));
-    const r = puro._elegirPaletsDeLinea_(cand, n, { maxPalets: max });
+    const visitados = libres.map(() => azar() < 0.4);   // palets a los que el pedido ya va con otras líneas
+    const usados = {};
+    visitados.forEach((v, i) => { if (v) usados['p' + i] = true; });
+    const r = puro._elegirPaletsDeLinea_(cand, n, { maxPalets: max, usados });
     assert.ok(r, 'hay stock de sobra: ' + JSON.stringify({ libres, n, max }));
     // Invariantes
     assert.strictEqual(r.reduce((s, p) => s + p.cantidad, 0), n, 'suma justo lo pedido ' + JSON.stringify({ libres, n, max, r }));
@@ -168,10 +221,17 @@ test('contra una búsqueda exhaustiva: siempre deja los máximos palets vacíos 
       assert.strictEqual(r.length, minimo, 'si no llega con el máximo, usa los mínimos posibles ' + JSON.stringify({ libres, n, max, r }));
       continue;
     }
-    // Óptimo
-    const o = oraculo(libres, n, max);
-    const vaciados = r.filter((p) => p.cantidad === libres[Number(p.sscc.slice(1))]).length;
-    assert.deepStrictEqual({ vaciados, paradas: r.length }, o, 'no es el óptimo ' + JSON.stringify({ libres, n, max, r }));
+    // Óptimo: lo que se vacía, las paradas, el palet que se rompe y los palets nuevos para el pedido
+    const o = oraculo(libres, n, max, visitados);
+    const idx = (p) => Number(p.sscc.slice(1));
+    const rotos = r.filter((p) => p.cantidad < libres[idx(p)]);
+    const obtenido = {
+      vaciados: r.filter((p) => p.cantidad === libres[idx(p)]).length,
+      paradas: r.length,
+      tamParcial: rotos.length ? libres[idx(rotos[0])] : 0,
+      nuevos: r.filter((p) => !visitados[idx(p)]).length,
+    };
+    assert.deepStrictEqual(obtenido, o, 'no es el óptimo ' + JSON.stringify({ libres, visitados, n, max, r }));
     assert.ok(r.length <= max);
     // A lo sumo UN palet queda a medias, y va el último
     const aMedias = r.filter((p) => p.cantidad < libres[Number(p.sscc.slice(1))]);
@@ -352,6 +412,72 @@ test('la previsión marca «sin stock» cuando no hay unidades de sobra', () => 
   const e = entorno((d) => { d.peticiones.push(pet('pc1')); d.lineas.push(lin('L1', 'pc1', 'X', 99)); });
   const cola = JSON.parse(e.ctx.listarCola('014', ''));
   assert.strictEqual(cola[0].sinStockPrevisto, true);
+});
+
+// ——— Palets mixtos (un mismo SSCC con varios códigos), refills y palets que el pedido ya visita ———
+
+// El palet P(1) lleva además 7 uds del código Y y un refill de la Y se lo lleva ENTERO (con la X que lleva dentro).
+function conRefillSobrePaletMixto(d) {
+  d.stock_fisico.push({ id: 's5', tienda: '014', sscc: P(1), codigo_lm: 'Y', cantidad: 7, ubicacion: '05-A-1-1', sincronizado_en: T0 });
+  d.peticiones.push(pet('pc1'), pet('rf1', { tipo: 'refill', num_pedido: null, transporte: null, motivo: 'hueco' }));
+  d.lineas.push(lin('L1', 'pc1', 'X', 3),
+    lin('LR', 'rf1', 'Y', 1, { unidad_medida: 'palet', sscc: P(1) + ' (7ud)', ubicacion: '05-A-1-1' }));
+}
+
+// Dos palets de 5 uds del código W; el segundo es MIXTO: lleva además 9 uds del código Y.
+function paletsWyY(d) {
+  d.stock_fisico.push(
+    { id: 's20', tienda: '014', sscc: P(20), codigo_lm: 'W', cantidad: 5, ubicacion: '05-E-1-1', sincronizado_en: T0 },
+    { id: 's21', tienda: '014', sscc: P(21), codigo_lm: 'W', cantidad: 5, ubicacion: '05-E-1-2', sincronizado_en: T0 },
+    { id: 's22', tienda: '014', sscc: P(21), codigo_lm: 'Y', cantidad: 9, ubicacion: '05-E-1-2', sincronizado_en: T0 });
+}
+
+test('de punta a punta: un refill de OTRO código que se lleva el mismo palet (palet mixto) también lo aparta', () => {
+  const e = entorno(conRefillSobrePaletMixto);
+  e.asignar('pc1');
+  assert.strictEqual(e.linea('L1').sscc, P(30), 'el palet de 1 de la X se va entero con el refill de la Y: las 3 salen del grande');
+  assert.strictEqual(e.linea('L1').ubicacion, '05-B-2-2');
+});
+
+test('la previsión de la cola tampoco cuenta un palet mixto que se lleva un refill de otro código', () => {
+  const e = entorno(conRefillSobrePaletMixto);
+  assert.deepStrictEqual(e.previstas().pc1, ['05-B-2-2']);
+  e.asignar('pc1');
+  assert.strictEqual(e.linea('L1').ubicacion, '05-B-2-2', 'y es lo que luego se asigna');
+});
+
+test('la previsión de la cola: a igualdad, el palet al que el pedido ya va con otra línea ya asignada', () => {
+  const e = entorno((d) => {
+    paletsWyY(d);
+    d.peticiones.push(pet('pc1'));
+    d.lineas.push(lin('LY', 'pc1', 'Y', 2, { sscc: P(21), ubicacion: '05-E-1-2' }), lin('LW', 'pc1', 'W', 3));
+  });
+  assert.deepStrictEqual(e.previstas().pc1, ['05-E-1-2'], 'el pedido ya va al palet 21 a por la Y');
+  e.asignar('pc1');
+  assert.strictEqual(e.linea('LW').ubicacion, '05-E-1-2', 'y es lo que luego se asigna');
+});
+
+test('la previsión de la cola: lo que prevé para una línea cuenta como palet visitado para las siguientes del mismo pedido', () => {
+  const e = entorno((d) => {
+    paletsWyY(d);
+    d.peticiones.push(pet('pc1'));
+    d.lineas.push(lin('L1', 'pc1', 'Y', 2), lin('L2', 'pc1', 'W', 3));   // la Y solo está en el palet 21
+  });
+  assert.deepStrictEqual(e.previstas().pc1, ['05-E-1-2'], 'la W va al palet 21, donde ya va la Y');
+  e.asignar('pc1');
+  assert.strictEqual(e.linea('L1').ubicacion, '05-E-1-2');
+  assert.strictEqual(e.linea('L2').ubicacion, '05-E-1-2', 'y es lo que luego se asigna');
+});
+
+test('el aviso «faltan N» no cuenta como stock un palet con más apartado que existencias (remanente negativo)', () => {
+  const e = entorno((d) => {
+    d.peticiones.push(pet('pc0'), pet('pc1'));
+    // otro pedido tiene apartadas 35 uds del palet de 30 (el stock bajó después de asignarlo): le quedan −5
+    d.lineas.push(lin('Lprev', 'pc0', 'X', 35, { sscc: P(30) + ' (35ud)', ubicacion: '05-B-2-2' }), lin('L1', 'pc1', 'X', 40));
+  });
+  const r = e.asignar('pc1');
+  assert.strictEqual(e.linea('L1').sscc, null);
+  assert.strictEqual(r.lineas[0].avisoStock, 'Ni repartiendo entre todos los palets del edificio 05 hay 40 uds del código X (faltan 39).');
 });
 
 test('código fuente: la asignación real y la previsión de la cola usan la MISMA función', () => {
