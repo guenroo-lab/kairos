@@ -1,6 +1,6 @@
 # Ocupación SIE dentro de Kairos y Centinela — diseño
 
-Fecha: 2026-10-16 · Pedido por Pedro Gil · Estado: **código preparado, SIN desplegar**
+Fecha: 2026-10-16 · Pedido por Pedro Gil · Estado: **motor @27 y Kairos operario v83 desplegados el 16/10; Centinela preparado, sin desplegar**
 
 ## Qué se quiere
 
