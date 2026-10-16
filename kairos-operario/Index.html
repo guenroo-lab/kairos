@@ -386,6 +386,7 @@
       sie: '<svg viewBox="0 0 24 24"><path d="M20 12V8H6a2 2 0 0 1-2-2c0-1.1.9-2 2-2h12v4M4 6v12c0 1.1.9 2 2 2h14v-4M18 12a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/></svg>',
       incidencias: '<svg viewBox="0 0 24 24"><path d="M12 2 22 20H2Z"/><path d="M12 9v4"/><path d="M12 16.5h.01"/></svg>',
       revisiones: '<svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>',
+      ocupacion: '<svg viewBox="0 0 24 24"><path d="M3 21h18M5 21V9l7-5 7 5v12M9 21v-6h6v6"/></svg>',
     };
     var ICONO_TEMA = '<svg viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></svg>';
     var ICONO_REFRESCAR = '<svg viewBox="0 0 24 24"><path d="M21 12a9 9 0 1 1-2.64-6.36M21 3v6h-6"/></svg>';
@@ -517,6 +518,7 @@
         if (VISTA.nombre === 'operarios') return renderOperariosGestion();
         if (VISTA.nombre === 'historial') return renderHistorialHoy();
         if (VISTA.nombre === 'sie') return renderSiePorUbicar();
+        if (VISTA.nombre === 'ocupacion') return renderOcupacionJefe();
         if (VISTA.nombre === 'incidencias') return renderIncidencias();
         if (VISTA.nombre === 'revisiones') return renderRevisionesJefe();
         if (VISTA.nombre === 'detalle') return renderDetalle();
@@ -528,6 +530,7 @@
       if (VISTA.nombre === 'menu') return renderMenuFlujos();
       if (VISTA.nombre === 'cola') return renderCola();
       if (VISTA.nombre === 'revision') return renderRevisionesOperario();
+      if (VISTA.nombre === 'ocupacion') return renderOcupacionOperario();
       if (VISTA.nombre === 'revisionDetalle') return renderRevisionDetalle();
       if (VISTA.nombre === 'historial') return renderHistorialHoy();
       if (VISTA.nombre === 'detalle') return renderDetalle();
@@ -545,6 +548,7 @@
           { nombre: 'revisiones', label: 'Revisiones' },
           { nombre: 'hodos', label: 'HODOS' },
           { nombre: 'sie', label: 'SIE por ubicar' },
+          { nombre: 'ocupacion', label: 'Ocupación SIE' },
           { nombre: 'operarios', label: 'Operarios' },
           { nombre: 'volumenes', label: 'Productividad' },
         ];
@@ -729,6 +733,7 @@
     var FLUJO_ACTUAL_ = localStorage.getItem('kairos_flujo_actual') === 'refill' ? 'refill' : 'pedidos';
     function entrarFlujo_(flujo) {
       if (flujo === 'revision') { VISTA = { nombre: 'revision', peticionId: null }; render(); return; }
+      if (flujo === 'ocupacion') { OCU_reiniciar_(); VISTA = { nombre: 'ocupacion', peticionId: null }; render(); return; }
       FLUJO_ACTUAL_ = flujo;
       PEDIDOS_PESTANA_ = 'cola';
       try { localStorage.setItem('kairos_flujo_actual', flujo); } catch (e) {}
@@ -748,6 +753,7 @@
           boton('pedidos', '📦', 'Pedidos', 'flujoPedidos') +
           boton('refill', '🔄', 'Refill', 'flujoRefill') +
           boton('revision', '🔍', 'Revisión de stock', 'flujoRevision') +
+          boton('ocupacion', '📊', 'Ocupación SIE', 'flujoOcupacion') +
         '</div>' +
         '<div id="operarioBar"><div class="ob-acciones">' +
           '<button class="btn-ob btn-ob-tienda" id="verHistorial" type="button">📋 Historial de hoy</button>' +
@@ -759,6 +765,7 @@
       document.getElementById('flujoPedidos').onclick = function () { entrarFlujo_('pedidos'); };
       document.getElementById('flujoRefill').onclick = function () { entrarFlujo_('refill'); };
       document.getElementById('flujoRevision').onclick = function () { entrarFlujo_('revision'); };
+      document.getElementById('flujoOcupacion').onclick = function () { entrarFlujo_('ocupacion'); };
       document.getElementById('verHistorial').onclick = function () { VISTA = { nombre: 'historial', peticionId: null }; render(); };
       document.getElementById('cambiarTienda').onclick = function () { VISTA = { nombre: 'elegirTienda', peticionId: null }; render(); };
       document.getElementById('cambiarOperario').onclick = function () {
@@ -784,6 +791,8 @@
         const c = document.getElementById('cont-flujoRevision');
         if (c) c.textContent = n + (n === 1 ? ' pendiente' : ' pendientes');
       }).listarRevisionesTienda(TIENDA_ACTIVA);
+      // Si esta pantalla fallara, el menú sigue funcionando: solo se quedaría sin el rótulo «Último registro».
+      try { OCU_contadorMenu_(); } catch (e) { console.warn('Ocupación SIE: ' + e); }
     }
 
     function renderCola() {
@@ -2950,5 +2959,6 @@
   <?!= incluir_('ProductividadUI') ?>
   <?!= incluir_('RepartoPaletsUI') ?>
   <?!= incluir_('FotosRevisionUI') ?>
+  <?!= incluir_('OcupacionSieUI') ?>
 </body>
 </html>

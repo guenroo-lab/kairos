@@ -1,0 +1,498 @@
+<style>
+  /* ——— Ocupación SIE (operario: registrar · jefe de equipo: ver) ——— */
+  .btn-flujo.ocupacion { background:linear-gradient(155deg,#ece6ff,#b9a8ff); }
+  .contador-tienda.toca { background:#b45309; color:#fff; }
+  .ocu-aviso { margin:8px 0 12px; padding:10px 12px; border-radius:var(--radius-btn); background:var(--warn-bg); color:var(--warn-fg); border:1px solid var(--warn-line); font-size:13px; line-height:1.4; }
+  .ocu-aviso.peligro { background:var(--danger-bg); color:var(--danger-fg); border-color:var(--danger-line); }
+  .ocu-ultimo { margin:8px 0 14px; padding:10px 12px; border-radius:var(--radius-btn); background:var(--ink-850); border:1px solid var(--ink-800); font-size:13px; line-height:1.5; color:var(--text-300); }
+  .ocu-ultimo b { color:var(--text-100); }
+  .ocu-campo { margin:14px 0; }
+  .ocu-campo label { display:flex; align-items:center; gap:8px; font-size:14px; font-weight:800; }
+  .ocu-campo label small { font-weight:600; color:var(--text-500); font-size:12px; }
+  .ocu-campo input { width:100%; margin:6px 0 2px; font-size:26px; font-weight:800; text-align:center; padding:12px 8px; font-variant-numeric:tabular-nums; }
+  .ocu-campo input.mal { border-color:var(--danger-fg); color:var(--danger-fg); }
+  .ocu-err { min-height:18px; font-size:12.5px; font-weight:700; color:var(--danger-fg); }
+  .ocu-acciones { display:flex; flex-direction:column; gap:10px; margin-top:14px; }
+  .ocu-acciones button { margin:0; width:100%; }
+  .ocu-card { background:linear-gradient(160deg, var(--ink-850) 0%, var(--ink-900) 100%); border:1px solid var(--ink-800); border-left:5px solid var(--ink-700); border-radius:var(--radius-card); padding:14px 16px; margin-bottom:12px; box-shadow:var(--shadow-card); }
+  .ocu-cab { display:flex; align-items:center; gap:8px; font-size:15px; font-weight:800; }
+  .ocu-cab .punto { width:10px; height:10px; border-radius:50%; display:inline-block; }
+  .ocu-pct { font-size:42px; font-weight:800; line-height:1.1; margin:6px 0 4px; letter-spacing:-.02em; font-variant-numeric:tabular-nums; }
+  .ocu-barra { position:relative; height:10px; border-radius:999px; background:var(--ink-800); overflow:hidden; margin:6px 0 8px; }
+  .ocu-barra > div { height:100%; border-radius:999px; }
+  .ocu-barra > div.bajo, .ocu-barra > div.normal { background:var(--ok); }
+  .ocu-barra > div.alto { background:#f0a020; }
+  .ocu-barra > div.critico { background:#dc1a23; }
+  .ocu-barra > i { position:absolute; top:0; bottom:0; width:2px; background:var(--text-600); opacity:.7; }
+  .ocu-datos { font-size:13.5px; color:var(--text-300); font-weight:600; }
+  .ocu-var { font-size:12.5px; color:var(--text-500); margin-top:5px; line-height:1.5; }
+  .ocu-var b.sube { color:var(--warn-fg); }
+  .ocu-var b.baja { color:var(--ok); }
+  .ocu-meta { font-size:12px; color:var(--text-500); margin-top:6px; }
+  .ocu-ok { margin:6px 0 10px; font-size:22px; font-weight:800; color:var(--ok); }
+  .ocu-grafico { margin:14px 0 6px; padding:12px; background:var(--ink-900); border:1px solid var(--ink-800); border-radius:var(--radius-card); }
+  .ocu-grafico svg { width:100%; height:auto; display:block; }
+  .ocu-leyenda { display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--text-500); font-weight:700; margin-top:6px; }
+  .ocu-leyenda .punto { width:9px; height:9px; border-radius:50%; display:inline-block; margin-right:5px; }
+  .ocu-tabla-caja { overflow-x:auto; margin-top:8px; }
+  table.ocu-tabla { width:100%; border-collapse:collapse; font-size:13px; font-variant-numeric:tabular-nums; }
+  table.ocu-tabla th { text-align:left; font-size:11px; font-weight:800; letter-spacing:.05em; text-transform:uppercase; color:var(--text-500); padding:6px 8px; border-bottom:1px solid var(--ink-700); white-space:nowrap; }
+  table.ocu-tabla td { padding:8px; border-bottom:1px solid var(--ink-800); color:var(--text-300); white-space:nowrap; }
+  table.ocu-tabla td.num, table.ocu-tabla th.num { text-align:right; }
+  table.ocu-tabla td b { color:var(--text-100); }
+</style>
+
+<script>
+// ============================ OCUPACIÓN SIE ============================
+// Operario: apunta los huecos LIBRES de Mijas y Marbella (revisa → guarda → corrige mientras los informes siguen
+// en cola). Jefe de equipo: ve % de ocupación, evolución e historial. Los datos y los 3 correos viven en la app
+// «Ocupación Tiendas SIE» (el motor); el servidor de Kairos (Ocupacion.js) solo le habla. Sin diálogos nativos.
+
+var OCU_TIENDAS_ = [
+  { nombre: 'Mijas',    libres: 'libresMijas',    ocupados: 'ocupadosMijas',    pct: 'pctMijas',    nivel: 'nivelMijas',    capacidad: 'totalMijas',    color: 'var(--tienda-mijas)' },
+  { nombre: 'Marbella', libres: 'libresMarbella', ocupados: 'ocupadosMarbella', pct: 'pctMarbella', nivel: 'nivelMarbella', capacidad: 'totalMarbella', color: 'var(--tienda-marbella)' }
+];
+var OCU_NIVELES_ = {
+  bajo:    { txt: 'Baja',    cls: 'ok' },
+  normal:  { txt: 'Normal',  cls: 'ok' },
+  alto:    { txt: 'Alta',    cls: 'aviso' },
+  critico: { txt: 'Crítica', cls: 'peligro' }
+};
+var OCU_DIAS_AVISO_ = 4;      // desde aquí el botón del menú avisa «toca registrar»
+var OCU_POLL_ = null;
+var OCU_OP_ = null;           // estado de la pantalla del operario
+
+// ——— Cálculos (los mismos que usa el motor para los correos) ———
+function OCU_pct_(total, libres) {
+  if (!total || total <= 0) return 0;
+  return Math.min(Math.max((total - libres) / total * 100, 0), 100);
+}
+function OCU_nivel_(pct) {
+  pct = Math.round(pct);
+  if (pct >= 90) return 'critico';
+  if (pct >= 70) return 'alto';
+  if (pct >= 40) return 'normal';
+  return 'bajo';
+}
+function OCU_fmtPct_(p) { return (Math.round(p * 10) / 10).toFixed(1).replace('.', ',') + ' %'; }
+function OCU_fmtNum_(n) { return String(Math.round(Number(n) || 0)).replace(/\B(?=(\d{3})+(?!\d))/g, '.'); }
+function OCU_fmtPp_(v) {
+  var r = Math.round(v * 10) / 10;
+  var txt = (r > 0 ? '+' : '') + r.toFixed(1).replace('.', ',') + ' pp';
+  var cls = r > 0.4 ? 'sube' : (r < -0.4 ? 'baja' : '');
+  return '<b class="' + cls + '">' + (r > 0.4 ? '▲ ' : (r < -0.4 ? '▼ ' : '= ')) + txt + '</b>';
+}
+function OCU_ultimo_(d) { return d && d.historial && d.historial.length ? d.historial[d.historial.length - 1] : null; }
+function OCU_nuevoId_() {
+  var r = '';
+  for (var i = 0; i < 3; i++) r += Math.random().toString(36).slice(2, 8);
+  return 'k' + Date.now().toString(36) + r;
+}
+// Días de calendario entre dos fechas dd/MM/yyyy (las dos de la hora de Madrid del servidor).
+function OCU_diasEntre_(desde, hasta) {
+  var a = String(desde || '').split('/'), b = String(hasta || '').split('/');
+  if (a.length !== 3 || b.length !== 3) return 0;
+  return Math.round((Date.UTC(+b[2], +b[1] - 1, +b[0]) - Date.UTC(+a[2], +a[1] - 1, +a[0])) / 86400000);
+}
+// El último registro de HOY que sigue vivo (en cola o enviado), si lo hay.
+function OCU_registroDeHoy_(d) {
+  if (!d || !d.historial) return null;
+  for (var i = d.historial.length - 1; i >= 0; i--) {
+    var h = d.historial[i];
+    if (h.fecha === d.hoy && (h.estado === 'PENDIENTE' || h.estado === 'ENVIADO')) return h;
+  }
+  return null;
+}
+function OCU_textoEstado_(estado) {
+  if (estado === 'ENVIADO')   return { txt: 'Informes enviados', cls: 'ok' };
+  if (estado === 'PENDIENTE') return { txt: 'En cola · salen en unos minutos', cls: 'aviso' };
+  if (estado === 'ERROR')     return { txt: 'Falló el envío · avisa a Pedro', cls: 'peligro' };
+  if (estado === 'CADUCADO')  return { txt: 'Caducado sin enviar', cls: 'peligro' };
+  return { txt: estado || '—', cls: '' };
+}
+
+// ——— Carga ———
+function OCU_cargar_(forzar, callback) {
+  google.script.run
+    .withSuccessHandler(function (json) {
+      var d;
+      try { d = JSON.parse(json); } catch (e) { d = { ok: false, error: 'Respuesta no válida del servidor.' }; }
+      callback(d);
+    })
+    .withFailureHandler(function (err) {
+      callback({ ok: false, error: (err && err.message) ? err.message : 'No se pudo conectar con el servidor.' });
+    })
+    .obtenerOcupacionSie(!!forzar);
+}
+function OCU_htmlError_(texto) {
+  return '<div class="ocu-aviso peligro">No se han podido leer los datos de ocupación: ' + escHtmlSie_(texto || 'error desconocido') + '</div>';
+}
+function OCU_htmlModoPruebas_(d) {
+  return d && d.modoTest
+    ? '<div class="ocu-aviso">🧪 <b>Modo pruebas</b> en la app de Ocupación: los informes solo le llegan a Pedro, no a los responsables.</div>'
+    : '';
+}
+function OCU_detenerPolling_() { if (OCU_POLL_) { clearInterval(OCU_POLL_); OCU_POLL_ = null; } }
+function OCU_iniciarPolling_(cadaMs, tarea) {
+  OCU_detenerPolling_();
+  OCU_POLL_ = setInterval(function () {
+    if (VISTA.nombre !== 'ocupacion') { OCU_detenerPolling_(); return; }
+    tarea();
+  }, cadaMs);
+}
+
+// ——— Piezas de pantalla comunes (jefe y operario) ———
+function OCU_tarjeta_(d, t, fila, anterior, hace4) {
+  var pct = fila[t.pct], nivel = fila[t.nivel], niv = OCU_NIVELES_[nivel] || OCU_NIVELES_.normal;
+  var capacidad = d.config[t.capacidad];
+  var vars = '';
+  if (anterior) vars += 'Frente al registro anterior: ' + OCU_fmtPp_(pct - anterior[t.pct]);
+  if (hace4) vars += (vars ? '<br>' : '') + 'Frente a 4 registros atrás: ' + OCU_fmtPp_(pct - hace4[t.pct]);
+  return '<div class="ocu-card" style="border-left-color:' + t.color + ';">' +
+    '<div class="ocu-cab"><span class="punto" style="background:' + t.color + ';"></span>' + escHtmlSie_(t.nombre) +
+      ' <span class="chip-urgencia ' + niv.cls + '">' + escHtmlSie_(niv.txt) + '</span></div>' +
+    '<div class="ocu-pct">' + OCU_fmtPct_(pct) + '</div>' +
+    '<div class="ocu-barra"><div class="' + nivel + '" style="width:' + Math.max(0, Math.min(100, pct)) + '%;"></div><i style="left:70%;"></i><i style="left:90%;"></i></div>' +
+    '<div class="ocu-datos">' + OCU_fmtNum_(fila[t.ocupados]) + ' ocupados · ' + OCU_fmtNum_(fila[t.libres]) + ' libres · de ' + OCU_fmtNum_(capacidad) + ' huecos</div>' +
+    (vars ? '<div class="ocu-var">' + vars + '</div>' : '') +
+  '</div>';
+}
+
+// `ancho` = píxeles disponibles: el dibujo se hace a tamaño real para que los números midan siempre lo mismo
+// (escalar un dibujo de 600 de ancho a un móvil de 350 deja el texto ilegible).
+function OCU_grafico_(d, ancho) {
+  var h = d.historial.slice(-26);
+  if (h.length < 2) return '<p class="meta">La gráfica aparece cuando hay al menos dos registros.</p>';
+  var W = Math.max(280, Math.min(1100, Math.round(Number(ancho) || 600))), H = 200, izq = 30, der = 12, arriba = 14, abajo = 26;
+  var x = function (i) { return izq + i * (W - izq - der) / (h.length - 1); };
+  var y = function (p) { return arriba + (100 - p) * (H - arriba - abajo) / 100; };
+  var lineas = '', puntas = '';
+  OCU_TIENDAS_.forEach(function (t) {
+    var pts = h.map(function (f, i) { return x(i).toFixed(1) + ',' + y(f[t.pct]).toFixed(1); }).join(' ');
+    lineas += '<polyline points="' + pts + '" fill="none" style="stroke:' + t.color + ';" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>';
+    var u = h[h.length - 1];
+    puntas += '<circle cx="' + x(h.length - 1).toFixed(1) + '" cy="' + y(u[t.pct]).toFixed(1) + '" r="4.5" style="fill:' + t.color + ';"/>';
+  });
+  var guias = [0, 40, 70, 90, 100].map(function (p) {
+    var marca = (p === 70 || p === 90);
+    return '<line x1="' + izq + '" x2="' + (W - der) + '" y1="' + y(p) + '" y2="' + y(p) + '" style="stroke:var(--ink-700);" stroke-width="1"' + (marca ? ' stroke-dasharray="5 4"' : '') + '/>' +
+      '<text x="' + (izq - 6) + '" y="' + (y(p) + 4) + '" text-anchor="end" font-size="11" style="fill:var(--text-500);">' + p + '</text>';
+  }).join('');
+  var ejeX = '<text x="' + izq + '" y="' + (H - 6) + '" font-size="11" style="fill:var(--text-500);">' + escHtmlSie_((h[0].fecha || '').slice(0, 5)) + '</text>' +
+    '<text x="' + (W - der) + '" y="' + (H - 6) + '" text-anchor="end" font-size="11" style="fill:var(--text-500);">' + escHtmlSie_((h[h.length - 1].fecha || '').slice(0, 5)) + '</text>';
+  return '<div class="ocu-grafico"><svg viewBox="0 0 ' + W + ' ' + H + '" width="' + W + '" height="' + H + '" role="img" aria-label="Evolución del porcentaje de ocupación de Mijas y Marbella">' +
+    guias + lineas + puntas + ejeX + '</svg>' +
+    '<div class="ocu-leyenda">' + OCU_TIENDAS_.map(function (t) { return '<span><span class="punto" style="background:' + t.color + ';"></span>' + escHtmlSie_(t.nombre) + '</span>'; }).join('') +
+    '<span>- - 70 % y 90 %: umbrales de alerta</span></div></div>';
+}
+
+function OCU_tabla_(d) {
+  var filas = d.historial.slice(-12).reverse();
+  return '<div class="ocu-tabla-caja"><table class="ocu-tabla"><thead><tr><th>Fecha</th><th>Quién</th>' +
+    '<th class="num">Mijas</th><th class="num">Marbella</th><th>Informes</th></tr></thead><tbody>' +
+    filas.map(function (f) {
+      var est = OCU_textoEstado_(f.estado);
+      return '<tr><td>' + escHtmlSie_(f.fecha) + ' ' + escHtmlSie_(f.hora) + '</td>' +
+        '<td>' + escHtmlSie_(f.registradoPor || '—') + '</td>' +
+        '<td class="num"><b>' + OCU_fmtPct_(f.pctMijas) + '</b> · ' + OCU_fmtNum_(f.libresMijas) + ' libres</td>' +
+        '<td class="num"><b>' + OCU_fmtPct_(f.pctMarbella) + '</b> · ' + OCU_fmtNum_(f.libresMarbella) + ' libres</td>' +
+        '<td><span class="chip-urgencia ' + est.cls + '">' + escHtmlSie_(est.txt) + '</span></td></tr>';
+    }).join('') + '</tbody></table></div>';
+}
+
+// ============================ JEFE DE EQUIPO (solo lectura) ============================
+function OCU_htmlVisor_(d, ancho) {
+  var h = d.historial, n = h.length;
+  var html = OCU_htmlModoPruebas_(d);
+  if (!n) return html + '<p class="meta">Todavía no hay registros de ocupación.</p>';
+  var ult = h[n - 1], ant = n > 1 ? h[n - 2] : null, h4 = n > 4 ? h[n - 5] : null;
+  html += '<div class="panel-tiendas-grid">' + OCU_TIENDAS_.map(function (t) { return OCU_tarjeta_(d, t, ult, ant, h4); }).join('') + '</div>';
+  var est = OCU_textoEstado_(ult.estado);
+  html += '<p class="ocu-meta">Último registro: <b>' + escHtmlSie_(ult.fecha) + ' ' + escHtmlSie_(ult.hora) + '</b> · ' + escHtmlSie_(ult.registradoPor || 'sin nombre') +
+    ' · <span class="chip-urgencia ' + est.cls + '">' + escHtmlSie_(est.txt) + '</span></p>';
+  html += '<h3>Evolución</h3>' + OCU_grafico_(d, ancho);
+  html += '<h3>Últimos registros</h3>' + OCU_tabla_(d);
+  html += '<p class="ocu-meta">Leído el ' + escHtmlSie_(d.ahora) + '. Los registros los hacen los operarios desde el menú de Kairos (Ocupación SIE).</p>';
+  return html;
+}
+
+function OCU_cargarJefe_() {
+  OCU_cargar_(true, function (d) {
+    var cont = document.getElementById('ocuCuerpo');
+    if (!cont) return;
+    // 26 px = relleno y borde de la caja de la gráfica
+    cont.innerHTML = d.ok ? OCU_htmlVisor_(d, (cont.clientWidth || 0) - 26) : OCU_htmlError_(d.error);
+  });
+}
+
+function renderOcupacionJefe() {
+  document.getElementById('app').innerHTML = renderBrandHeaderHtml_() + renderTabsBar_() +
+    '<h1>Ocupación SIE</h1>' +
+    '<p class="meta">Huecos del almacén SIE de Mijas y Marbella según el último registro de los operarios. Solo lectura; se refresca sola cada 5 minutos.</p>' +
+    '<div id="ocuCuerpo"><p class="meta">Cargando…</p></div>';
+  sincronizarPickers_();
+  OCU_cargarJefe_();
+  OCU_iniciarPolling_(300000, OCU_cargarJefe_);
+}
+
+// ============================ OPERARIO (registrar) ============================
+function OCU_reiniciar_() {
+  OCU_OP_ = { paso: 'form', mijas: '', marbella: '', datos: null, id: '', firmaId: '', registro: null, corrigiendo: false, enviando: false, error: '' };
+}
+
+function renderOcupacionOperario() {
+  if (!OCU_OP_) OCU_reiniciar_();
+  document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
+    '<div class="volver"><a href="#" id="ocuVolver">← Menú</a></div>' +
+    '<h1>📊 Ocupación SIE</h1>' +
+    '<div id="ocuOp"><p class="meta">Cargando…</p></div>';
+  sincronizarPickers_();
+  document.getElementById('ocuVolver').onclick = function (e) {
+    e.preventDefault();
+    OCU_detenerPolling_();
+    VISTA = { nombre: 'menu', peticionId: null };
+    render();
+  };
+  OCU_cargar_(true, function (d) {
+    OCU_OP_.datos = d;
+    OCU_pintarOperario_();
+    if (OCU_OP_.paso === 'enviado') OCU_vigilarEstado_();
+  });
+}
+
+function OCU_pintarOperario_() {
+  var cont = document.getElementById('ocuOp');
+  if (!cont) return;
+  var d = OCU_OP_.datos;
+  if (!d || !d.ok) {
+    cont.innerHTML = OCU_htmlError_(d && d.error) +
+      '<div class="ocu-acciones"><button type="button" class="secundario" id="ocuReintentarCarga">Reintentar</button></div>';
+    document.getElementById('ocuReintentarCarga').onclick = function () { renderOcupacionOperario(); };
+    return;
+  }
+  if (OCU_OP_.paso === 'confirmar') return OCU_pintarConfirmar_(cont, d);
+  if (OCU_OP_.paso === 'enviado') return OCU_pintarEnviado_(cont, d);
+  return OCU_pintarForm_(cont, d);
+}
+
+function OCU_pintarForm_(cont, d) {
+  var ult = OCU_ultimo_(d), cap = d.config;
+  var capOk = cap.totalMijas >= 50 && cap.totalMarbella >= 50;
+  var html = OCU_htmlModoPruebas_(d);
+  if (!capOk) {
+    html += '<div class="ocu-aviso peligro">La capacidad configurada en la hoja de Ocupación no es válida. Avisa a Pedro antes de registrar.</div>';
+  }
+  html += OCU_OP_.corrigiendo
+    ? '<div class="ocu-aviso">✏️ Estás <b>corrigiendo</b> el registro que acabas de hacer. Mientras los informes sigan en cola, se mandarán con los números nuevos.</div>'
+    : '<p class="meta">Cuenta los huecos <b>libres</b> de cada almacén SIE y apúntalos. Al guardar salen los informes a los responsables de Mijas, Marbella y plataforma.</p>';
+  if (ult && !OCU_OP_.corrigiendo) {
+    html += '<div class="ocu-ultimo">Último registro: <b>' + escHtmlSie_(ult.fecha) + ' ' + escHtmlSie_(ult.hora) + '</b> · ' + escHtmlSie_(ult.registradoPor || 'sin nombre') + '<br>' +
+      'Mijas <b>' + OCU_fmtNum_(ult.libresMijas) + '</b> libres (' + OCU_fmtPct_(ult.pctMijas) + ') · Marbella <b>' + OCU_fmtNum_(ult.libresMarbella) + '</b> libres (' + OCU_fmtPct_(ult.pctMarbella) + ')</div>';
+  }
+  OCU_TIENDAS_.forEach(function (t) {
+    var id = 'ocu' + t.nombre;
+    html += '<div class="ocu-campo"><label for="' + id + '"><span class="punto" style="background:' + t.color + ';width:10px;height:10px;border-radius:50%;display:inline-block;"></span>' +
+      escHtmlSie_(t.nombre) + ' · huecos libres <small>(capacidad ' + OCU_fmtNum_(cap[t.capacidad]) + ')</small></label>' +
+      '<input id="' + id + '" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" maxlength="5" value="' + escHtmlSie_(OCU_OP_[t.nombre === 'Mijas' ? 'mijas' : 'marbella']) + '">' +
+      '<div class="ocu-err" id="' + id + 'Err"></div></div>';
+  });
+  html += '<div class="ocu-acciones"><button type="button" id="ocuRevisar"' + (capOk ? '' : ' disabled') + '>Revisar</button></div>';
+  cont.innerHTML = html;
+
+  document.getElementById('ocuRevisar').onclick = OCU_revisar_;
+  // El teclado numérico sale solo en el primer campo vacío: el operario solo tiene que teclear.
+  var primero = !document.getElementById('ocuMijas').value ? 'ocuMijas' : (!document.getElementById('ocuMarbella').value ? 'ocuMarbella' : '');
+  if (primero) { try { document.getElementById(primero).focus(); } catch (e) { /* sin foco no pasa nada */ } }
+  OCU_TIENDAS_.forEach(function (t) {
+    var el = document.getElementById('ocu' + t.nombre);
+    el.addEventListener('input', function () {
+      OCU_OP_[t.nombre === 'Mijas' ? 'mijas' : 'marbella'] = el.value;   // por si la pantalla se repinta (botón Actualizar)
+      el.classList.remove('mal');
+      document.getElementById('ocu' + t.nombre + 'Err').textContent = '';
+    });
+    el.addEventListener('keydown', function (ev) { if (ev.key === 'Enter') { ev.preventDefault(); OCU_revisar_(); } });
+  });
+}
+
+// Lee y valida los dos campos. Devuelve {ok, mijas, marbella}; pinta el motivo bajo el campo que falla.
+function OCU_leerCampos_() {
+  var d = OCU_OP_.datos, res = { ok: true };
+  OCU_TIENDAS_.forEach(function (t) {
+    var el = document.getElementById('ocu' + t.nombre), err = document.getElementById('ocu' + t.nombre + 'Err');
+    var txt = String(el.value || '').replace(/\s+/g, '');
+    var msg = '';
+    if (!txt) msg = 'Escribe cuántos huecos libres hay.';
+    else if (!/^\d+$/.test(txt)) msg = 'Solo números enteros, sin puntos ni comas.';
+    else if (Number(txt) > d.config[t.capacidad]) msg = 'No puede haber más de ' + OCU_fmtNum_(d.config[t.capacidad]) + ' huecos libres.';
+    el.classList.toggle('mal', !!msg);
+    err.textContent = msg;
+    if (msg) res.ok = false; else res[t.nombre === 'Mijas' ? 'mijas' : 'marbella'] = Number(txt);
+  });
+  return res;
+}
+
+function OCU_revisar_() {
+  var r = OCU_leerCampos_();
+  if (!r.ok) return;
+  OCU_OP_.mijas = String(r.mijas);
+  OCU_OP_.marbella = String(r.marbella);
+  OCU_OP_.error = '';
+  OCU_OP_.paso = 'confirmar';
+  OCU_pintarOperario_();
+}
+
+function OCU_pintarConfirmar_(cont, d) {
+  var m = Number(OCU_OP_.mijas), b = Number(OCU_OP_.marbella);
+  var ult = OCU_OP_.corrigiendo ? null : OCU_ultimo_(d);
+  var simulada = { libresMijas: m, libresMarbella: b };
+  OCU_TIENDAS_.forEach(function (t) {
+    var libres = simulada[t.libres], p = OCU_pct_(d.config[t.capacidad], libres);
+    simulada[t.pct] = p;
+    simulada[t.nivel] = OCU_nivel_(p);
+    simulada[t.ocupados] = Math.max(d.config[t.capacidad] - libres, 0);
+  });
+  var html = OCU_htmlModoPruebas_(d) + '<h3>Revisa antes de guardar</h3>';
+  html += '<div class="panel-tiendas-grid">' + OCU_TIENDAS_.map(function (t) { return OCU_tarjeta_(d, t, simulada, ult, null); }).join('') + '</div>';
+  var hoy = OCU_OP_.corrigiendo ? null : OCU_registroDeHoy_(d);
+  if (hoy) {
+    html += '<div class="ocu-aviso peligro">⚠ <b>Hoy ya hay un registro</b> (' + escHtmlSie_(hoy.hora) + ' · ' + escHtmlSie_(hoy.registradoPor || 'sin nombre') +
+      '). Si guardas, saldrán otros 3 informes. Si solo te has equivocado en un número, vuelve atrás y corrígelo.</div>';
+  }
+  if (simulada.nivelMijas === 'critico' || simulada.nivelMarbella === 'critico') {
+    html += '<div class="ocu-aviso peligro">🔴 Ocupación <b>crítica</b> (90 % o más): los informes saldrán marcados como alerta de saturación. Comprueba que los números son correctos.</div>';
+  }
+  if (OCU_OP_.error) html += '<div class="ocu-aviso peligro">' + escHtmlSie_(OCU_OP_.error) + '</div>';
+  html += '<p class="meta">' + (OCU_OP_.corrigiendo
+    ? 'Se cambiarán los números del registro que está en cola.'
+    : 'Al guardar se enviarán 3 informes (Mijas, Marbella y plataforma) en unos minutos.') + '</p>';
+  html += '<div class="ocu-acciones"><button type="button" class="ok" id="ocuGuardar">' + (OCU_OP_.corrigiendo ? 'Guardar corrección' : 'Guardar y enviar informes') + '</button>' +
+    '<button type="button" class="secundario" id="ocuAtras">← Cambiar números</button></div>';
+  cont.innerHTML = html;
+  document.getElementById('ocuAtras').onclick = function () { OCU_OP_.paso = 'form'; OCU_OP_.error = ''; OCU_pintarOperario_(); };
+  document.getElementById('ocuGuardar').onclick = OCU_guardar_;
+}
+
+function OCU_guardar_() {
+  if (OCU_OP_.enviando) return;
+  var boton = document.getElementById('ocuGuardar');
+  OCU_OP_.enviando = true;
+  OCU_OP_.error = '';
+  if (boton) { boton.disabled = true; boton.textContent = 'Guardando…'; }
+  var corrigiendo = OCU_OP_.corrigiendo, id;
+  if (corrigiendo) {
+    id = OCU_OP_.registro.id;
+  } else {
+    // Mismo id al reintentar los mismos números (no se duplica); números distintos → registro distinto.
+    var firma = OCU_OP_.mijas + '/' + OCU_OP_.marbella;
+    if (!OCU_OP_.id || OCU_OP_.firmaId !== firma) { OCU_OP_.id = OCU_nuevoId_(); OCU_OP_.firmaId = firma; }
+    id = OCU_OP_.id;
+  }
+  var m = Number(OCU_OP_.mijas), b = Number(OCU_OP_.marbella);
+
+  function alVolver(json) {
+    OCU_OP_.enviando = false;
+    var r;
+    try { r = JSON.parse(json); } catch (e) { r = { ok: false, error: 'Respuesta no válida del servidor.' }; }
+    if (r.ok) {
+      OCU_OP_.registro = { id: id, fila: r.fila, mijas: m, marbella: b };
+      OCU_OP_.corrigiendo = false;
+      OCU_OP_.paso = 'enviado';
+      OCU_cargar_(true, function (d) { OCU_OP_.datos = d.ok ? d : OCU_OP_.datos; OCU_pintarOperario_(); OCU_vigilarEstado_(); });
+      return;
+    }
+    if (r.motivo === 'ya_enviado' || r.motivo === 'no_pendiente' || r.motivo === 'no_encontrado') {
+      // No se puede corregir: se enseña en qué ha quedado.
+      OCU_OP_.corrigiendo = false;
+      OCU_OP_.paso = 'enviado';
+      OCU_OP_.error = r.error || 'Ese registro ya no se puede corregir.';
+      OCU_cargar_(true, function (d) { OCU_OP_.datos = d.ok ? d : OCU_OP_.datos; OCU_pintarOperario_(); });
+      return;
+    }
+    OCU_OP_.error = r.error || 'No se ha podido guardar.';
+    OCU_pintarOperario_();
+  }
+  function alFallar(err) {
+    OCU_OP_.enviando = false;
+    OCU_OP_.error = 'No se ha podido confirmar si se guardó (' + ((err && err.message) || 'sin conexión') + '). Pulsa de nuevo para reintentar: si ya se había guardado, no se duplica.';
+    OCU_cargar_(true, function (d) { if (d.ok) OCU_OP_.datos = d; OCU_pintarOperario_(); });
+  }
+  var runner = google.script.run.withSuccessHandler(alVolver).withFailureHandler(alFallar);
+  if (corrigiendo) runner.corregirOcupacionSie(OPERARIO, m, b, id);
+  else runner.registrarOcupacionSie(OPERARIO, m, b, id);
+}
+
+function OCU_filaRegistrada_(d) {
+  var reg = OCU_OP_.registro;
+  if (!reg || !d || !d.historial) return null;
+  for (var i = d.historial.length - 1; i >= 0; i--) if (d.historial[i].fila === reg.fila) return d.historial[i];
+  return null;
+}
+
+function OCU_pintarEnviado_(cont, d) {
+  var reg = OCU_OP_.registro;
+  var fila = OCU_filaRegistrada_(d);
+  var estado = fila ? fila.estado : '';
+  var est = OCU_textoEstado_(estado);
+  var html = OCU_htmlModoPruebas_(d);
+  if (OCU_OP_.error) html += '<div class="ocu-aviso peligro">' + escHtmlSie_(OCU_OP_.error) + '</div>';
+  html += '<div class="ocu-ok">✅ Registrado</div>';
+  if (fila) {
+    html += '<div class="panel-tiendas-grid">' + OCU_TIENDAS_.map(function (t) { return OCU_tarjeta_(d, t, fila, null, null); }).join('') + '</div>';
+  } else if (reg) {
+    html += '<p class="meta">Mijas ' + OCU_fmtNum_(reg.mijas) + ' libres · Marbella ' + OCU_fmtNum_(reg.marbella) + ' libres.</p>';
+  }
+  if (fila) html += '<p class="ocu-meta"><span class="chip-urgencia ' + est.cls + '">' + escHtmlSie_(est.txt) + '</span></p>';
+  html += '<div class="ocu-acciones">';
+  if (fila && estado === 'PENDIENTE') html += '<button type="button" class="secundario" id="ocuCorregir">✏️ Corregir los números</button>';
+  html += '<button type="button" id="ocuHecho">Hecho</button></div>';
+  cont.innerHTML = html;
+  var bc = document.getElementById('ocuCorregir');
+  if (bc) bc.onclick = function () {
+    OCU_OP_.corrigiendo = true;
+    OCU_OP_.mijas = String(reg.mijas);
+    OCU_OP_.marbella = String(reg.marbella);
+    OCU_OP_.error = '';
+    OCU_OP_.paso = 'form';
+    OCU_pintarOperario_();
+  };
+  document.getElementById('ocuHecho').onclick = function () {
+    OCU_detenerPolling_();
+    OCU_reiniciar_();
+    VISTA = { nombre: 'menu', peticionId: null };
+    render();
+  };
+}
+
+// Mientras los informes están en cola, se vuelve a mirar cada 20 s hasta que salen (o hasta 20 minutos).
+function OCU_vigilarEstado_() {
+  var fila = OCU_filaRegistrada_(OCU_OP_.datos);
+  if (!fila || fila.estado !== 'PENDIENTE') { OCU_detenerPolling_(); return; }
+  var desde = Date.now();
+  OCU_iniciarPolling_(20000, function () {
+    if (OCU_OP_.paso !== 'enviado' || Date.now() - desde > 1200000) { OCU_detenerPolling_(); return; }
+    OCU_cargar_(true, function (d) {
+      if (!d.ok) return;
+      OCU_OP_.datos = d;
+      if (OCU_OP_.paso === 'enviado') OCU_pintarOperario_();
+      var f = OCU_filaRegistrada_(d);
+      if (!f || f.estado !== 'PENDIENTE') OCU_detenerPolling_();
+    });
+  });
+}
+
+// ——— Botón del menú del operario ———
+function OCU_contadorMenu_() {
+  OCU_cargar_(false, function (d) {
+    var el = document.getElementById('cont-flujoOcupacion');
+    if (!el) return;
+    el.classList.remove('toca');
+    if (!d.ok) { el.textContent = 'Sin conexión'; return; }
+    var u = OCU_ultimo_(d);
+    if (!u) { el.textContent = 'Sin registros todavía'; el.classList.add('toca'); return; }
+    var dias = OCU_diasEntre_(u.fecha, d.hoy);
+    if (dias <= 0) { el.textContent = 'Registrado hoy'; return; }
+    el.textContent = dias === 1 ? 'Último registro: ayer' : 'Último registro: hace ' + dias + ' días';
+    if (dias >= OCU_DIAS_AVISO_) { el.textContent += ' · toca registrar'; el.classList.add('toca'); }
+  });
+}
+</script>
