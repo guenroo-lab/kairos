@@ -753,8 +753,6 @@
         return '<button class="btn-flujo ' + clase + '" id="' + id + '"><span class="avatar">' + icono + '</span>' +
           '<span class="flujo-info"><span>' + titulo + '</span><span class="contador-tienda" id="cont-' + id + '">…</span></span></button>';
       }
-      var ocuBoton = '';
-      try { ocuBoton = OCU_botonMenu_(); } catch (e) { console.warn('Ocupación SIE: ' + e); }
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
         '<h1>Kairos · Operario</h1>' +
         '<p class="meta">' + escHtmlSie_(OPERARIO) + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) + ' — ¿qué vas a hacer?</p>' +
@@ -762,7 +760,6 @@
           boton('pedidos', '📦', 'Pedidos', 'flujoPedidos') +
           boton('refill', '🔄', 'Refill', 'flujoRefill') +
           boton('revision', '🔍', 'Revisión de stock', 'flujoRevision') +
-          ocuBoton +
         '</div>' +
         '<div id="operarioBar"><div class="ob-acciones">' +
           '<button class="btn-ob btn-ob-tienda" id="verHistorial" type="button">📋 Historial de hoy</button>' +
@@ -799,8 +796,6 @@
         const c = document.getElementById('cont-flujoRevision');
         if (c) c.textContent = n + (n === 1 ? ' pendiente' : ' pendientes');
       }).listarRevisionesTienda(TIENDA_ACTIVA);
-      // Si esta pantalla fallara, el menú sigue funcionando: solo se quedaría sin el botón o sin el rótulo «Último registro».
-      try { OCU_enlazarBoton_(); } catch (e) { console.warn('Ocupación SIE: ' + e); }
     }
 
     function renderCola() {

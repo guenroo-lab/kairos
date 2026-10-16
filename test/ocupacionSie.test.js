@@ -340,7 +340,7 @@ function cuerpo(idx, desde, hasta) {
   return idx.slice(a, b);
 }
 
-test('el botón «Ocupación SIE» sale en la pantalla de elegir tienda (sin entrar en ninguna) y en el menú de cada tienda', () => {
+test('el botón «Ocupación SIE» sale SOLO en la pantalla de elegir tienda (sin entrar en ninguna), no dentro de cada tienda', () => {
   const idx = leer('Index.html');
   const elegir = cuerpo(idx, 'function renderElegirTienda()', 'function elegirTienda_(');
   assert.match(elegir, /try \{ ocuBoton = OCU_botonMenu_\(\); \} catch/, 'se pinta sin poder romper la elección de tienda');
@@ -348,9 +348,22 @@ test('el botón «Ocupación SIE» sale en la pantalla de elegir tienda (sin ent
   assert.match(elegir, /try \{ OCU_enlazarBoton_\(\); \} catch/);
   assert.ok(elegir.indexOf('ocuBoton') < elegir.indexOf("getElementById('app').innerHTML"), 'el botón se prepara antes de pintar');
   const menu = cuerpo(idx, 'function renderMenuFlujos()', 'function renderCola()');
-  assert.match(menu, /try \{ ocuBoton = OCU_botonMenu_\(\); \} catch/);
-  assert.match(menu, /ocuBoton \+\s*'<\/div>'/, 'va dentro de la rejilla de flujos');
-  assert.match(menu, /try \{ OCU_enlazarBoton_\(\); \} catch/);
+  assert.doesNotMatch(menu, /ocupaci|OCU_|ocuBoton/i, 'el menú de la tienda ya no lleva el botón');
+  assert.match(menu, /boton\('pedidos'/); assert.match(menu, /boton\('refill'/); assert.match(menu, /boton\('revision'/);
+  // en ningún otro sitio del operario se pinta el botón
+  assert.strictEqual((idx.match(/OCU_botonMenu_\(\)/g) || []).length, 1);
+});
+
+test('el botón de Ocupación es amarillo', () => {
+  const ui = leer('OcupacionSieUI.html');
+  const css = ui.match(/\.btn-flujo\.ocupacion \{ background:linear-gradient\(155deg,(#[0-9a-f]{6}),(#[0-9a-f]{6})\); \}/i);
+  assert.ok(css, 'regla de color del botón');
+  const [r1, g1, b1] = [1, 3, 5].map((i) => parseInt(css[1].slice(i, i + 2), 16));
+  const [r2, g2, b2] = [1, 3, 5].map((i) => parseInt(css[2].slice(i, i + 2), 16));
+  for (const [r, g, b] of [[r1, g1, b1], [r2, g2, b2]]) {
+    assert.ok(r >= 230 && g >= 190 && b <= 170, 'amarillo: mucho rojo, mucho verde y poco azul (' + [r, g, b] + ')');
+  }
+  assert.ok(g2 < g1 || r2 < r1 || b2 < b1, 'degradado de claro a más intenso como los demás botones');
 });
 
 test('la ocupación se abre aunque todavía no haya tienda elegida (se comprueba antes que «¿qué tienda?»)', () => {
@@ -377,7 +390,7 @@ test('Index.html: pestaña de jefe, rutas de pantalla e include', () => {
   assert.ok(idx.indexOf("nombre: 'sie', label") < idx.indexOf("nombre: 'ocupacion', label"));
 });
 
-test('el botón grande: mismo id y rótulo en las dos pantallas, clic hacia la ocupación y vuelta según haya tienda o no', () => {
+test('el botón grande: id y rótulo, clic hacia la ocupación y la flecha de vuelta lleva a la pantalla principal', () => {
   const p = pantalla();
   const b = p.OCU_botonMenu_();
   assert.match(b, /class="btn-flujo ocupacion" id="flujoOcupacion"/);
@@ -385,7 +398,9 @@ test('el botón grande: mismo id y rótulo en las dos pantallas, clic hacia la o
   assert.match(b, /id="cont-flujoOcupacion"/, 'aquí se escribe «Último registro…»');
   const ui = leer('OcupacionSieUI.html');
   assert.match(ui, /b\.onclick = function \(\) \{ entrarFlujo_\('ocupacion'\); \}/);
-  assert.match(ui, /\(TIENDA_ACTIVA \? 'Menú' : 'Inicio'\)/, 'sin tienda, la flecha vuelve al inicio');
+  assert.match(ui, /id="ocuVolver">← Inicio</);
+  assert.strictEqual((ui.match(/VISTA = \{ nombre: 'elegirTienda', peticionId: null \}/g) || []).length, 2, 'la flecha y «Hecho» vuelven a la pantalla principal');
+  assert.doesNotMatch(ui, /VISTA = \{ nombre: 'menu'/, 'ya no se vuelve al menú de una tienda');
 });
 
 test('el servidor y la pantalla exponen las funciones que se llaman desde el navegador', () => {

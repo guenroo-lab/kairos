@@ -1,6 +1,6 @@
 <style>
   /* ——— Ocupación SIE (operario: registrar · jefe de equipo: ver) ——— */
-  .btn-flujo.ocupacion { background:linear-gradient(155deg,#ece6ff,#b9a8ff); }
+  .btn-flujo.ocupacion { background:linear-gradient(155deg,#fff59d,#ffd600); }
   .contador-tienda.toca { background:#b45309; color:#fff; }
   .ocu-aviso { margin:8px 0 12px; padding:10px 12px; border-radius:var(--radius-btn); background:var(--warn-bg); color:var(--warn-fg); border:1px solid var(--warn-line); font-size:13px; line-height:1.4; }
   .ocu-aviso.peligro { background:var(--danger-bg); color:var(--danger-fg); border-color:var(--danger-line); }
@@ -243,14 +243,14 @@ function OCU_reiniciar_() {
 function renderOcupacionOperario() {
   if (!OCU_OP_) OCU_reiniciar_();
   document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
-    '<div class="volver"><a href="#" id="ocuVolver">← ' + (TIENDA_ACTIVA ? 'Menú' : 'Inicio') + '</a></div>' +
+    '<div class="volver"><a href="#" id="ocuVolver">← Inicio</a></div>' +
     '<h1>📊 Ocupación SIE</h1>' +
     '<div id="ocuOp"><p class="meta">Cargando…</p></div>';
   sincronizarPickers_();
   document.getElementById('ocuVolver').onclick = function (e) {
     e.preventDefault();
     OCU_detenerPolling_();
-    VISTA = { nombre: 'menu', peticionId: null };
+    VISTA = { nombre: 'elegirTienda', peticionId: null };   // la pantalla principal, donde está el botón
     render();
   };
   OCU_cargar_(true, function (d) {
@@ -458,7 +458,7 @@ function OCU_pintarEnviado_(cont, d) {
   document.getElementById('ocuHecho').onclick = function () {
     OCU_detenerPolling_();
     OCU_reiniciar_();
-    VISTA = { nombre: 'menu', peticionId: null };
+    VISTA = { nombre: 'elegirTienda', peticionId: null };
     render();
   };
 }
@@ -481,7 +481,7 @@ function OCU_vigilarEstado_() {
 }
 
 // ——— Botón grande «Ocupación SIE» ———
-// Sale en la pantalla de elegir tienda (para entrar sin elegir ninguna) y en el menú de cada tienda.
+// Sale SOLO en la pantalla de elegir tienda (para entrar sin elegir ninguna); dentro de cada tienda ya no está.
 function OCU_botonMenu_() {
   return '<button class="btn-flujo ocupacion" id="flujoOcupacion" type="button"><span class="avatar">📊</span>' +
     '<span class="flujo-info"><span>Ocupación SIE</span><span class="contador-tienda" id="cont-flujoOcupacion">…</span></span></button>';
