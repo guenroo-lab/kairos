@@ -243,7 +243,7 @@ function OCU_reiniciar_() {
 function renderOcupacionOperario() {
   if (!OCU_OP_) OCU_reiniciar_();
   document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
-    '<div class="volver"><a href="#" id="ocuVolver">← Menú</a></div>' +
+    '<div class="volver"><a href="#" id="ocuVolver">← ' + (TIENDA_ACTIVA ? 'Menú' : 'Inicio') + '</a></div>' +
     '<h1>📊 Ocupación SIE</h1>' +
     '<div id="ocuOp"><p class="meta">Cargando…</p></div>';
   sincronizarPickers_();
@@ -480,7 +480,19 @@ function OCU_vigilarEstado_() {
   });
 }
 
-// ——— Botón del menú del operario ———
+// ——— Botón grande «Ocupación SIE» ———
+// Sale en la pantalla de elegir tienda (para entrar sin elegir ninguna) y en el menú de cada tienda.
+function OCU_botonMenu_() {
+  return '<button class="btn-flujo ocupacion" id="flujoOcupacion" type="button"><span class="avatar">📊</span>' +
+    '<span class="flujo-info"><span>Ocupación SIE</span><span class="contador-tienda" id="cont-flujoOcupacion">…</span></span></button>';
+}
+// Engancha el clic y rellena el rótulo «Último registro…». Se llama justo después de pintar la pantalla.
+function OCU_enlazarBoton_() {
+  var b = document.getElementById('flujoOcupacion');
+  if (b) b.onclick = function () { entrarFlujo_('ocupacion'); };
+  OCU_contadorMenu_();
+}
+
 function OCU_contadorMenu_() {
   OCU_cargar_(false, function (d) {
     var el = document.getElementById('cont-flujoOcupacion');

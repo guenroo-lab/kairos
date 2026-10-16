@@ -333,21 +333,59 @@ test('la gráfica solo coge los últimos 26 registros', () => {
 });
 
 // ───────────────────────── Enganche en Index.html ─────────────────────────
-test('Index.html: botón del menú, pestaña de jefe, rutas de pantalla e include', () => {
+// El texto de una función de Index.html, desde su cabecera hasta la cabecera de la siguiente.
+function cuerpo(idx, desde, hasta) {
+  const a = idx.indexOf(desde), b = idx.indexOf(hasta, a + 1);
+  assert.ok(a >= 0 && b > a, 'no encuentro ' + desde);
+  return idx.slice(a, b);
+}
+
+test('el botón «Ocupación SIE» sale en la pantalla de elegir tienda (sin entrar en ninguna) y en el menú de cada tienda', () => {
   const idx = leer('Index.html');
-  assert.match(idx, /boton\('ocupacion', '📊', 'Ocupación SIE', 'flujoOcupacion'\)/);
-  assert.match(idx, /getElementById\('flujoOcupacion'\)\.onclick = function \(\) \{ entrarFlujo_\('ocupacion'\); \}/);
+  const elegir = cuerpo(idx, 'function renderElegirTienda()', 'function elegirTienda_(');
+  assert.match(elegir, /try \{ ocuBoton = OCU_botonMenu_\(\); \} catch/, 'se pinta sin poder romper la elección de tienda');
+  assert.match(elegir, /Sin elegir tienda/);
+  assert.match(elegir, /try \{ OCU_enlazarBoton_\(\); \} catch/);
+  assert.ok(elegir.indexOf('ocuBoton') < elegir.indexOf("getElementById('app').innerHTML"), 'el botón se prepara antes de pintar');
+  const menu = cuerpo(idx, 'function renderMenuFlujos()', 'function renderCola()');
+  assert.match(menu, /try \{ ocuBoton = OCU_botonMenu_\(\); \} catch/);
+  assert.match(menu, /ocuBoton \+\s*'<\/div>'/, 'va dentro de la rejilla de flujos');
+  assert.match(menu, /try \{ OCU_enlazarBoton_\(\); \} catch/);
+});
+
+test('la ocupación se abre aunque todavía no haya tienda elegida (se comprueba antes que «¿qué tienda?»)', () => {
+  const idx = leer('Index.html');
+  const render = cuerpo(idx, 'function render()', 'function renderTabsBar_()');
+  const iOperario = render.indexOf('if (!OPERARIO) return renderElegirOperarios();');
+  const iOcupacion = render.indexOf("if (VISTA.nombre === 'ocupacion') return renderOcupacionOperario();");
+  const iTienda = render.indexOf('if (!TIENDA_ACTIVA) return renderElegirTienda();');
+  assert.ok(iOperario >= 0 && iOcupacion > iOperario, 'hace falta saber quién es el operario (queda anotado en el registro)');
+  assert.ok(iTienda > iOcupacion, 'la ocupación va antes de exigir tienda');
+});
+
+test('Index.html: pestaña de jefe, rutas de pantalla e include', () => {
+  const idx = leer('Index.html');
   assert.match(idx, /if \(flujo === 'ocupacion'\) \{ OCU_reiniciar_\(\);/);
   assert.match(idx, /\{ nombre: 'ocupacion', label: 'Ocupación SIE' \}/);
   assert.match(idx, /ocupacion: '<svg/, 'icono de la pestaña');
   assert.match(idx, /if \(VISTA\.nombre === 'ocupacion'\) return renderOcupacionJefe\(\);/);
   assert.match(idx, /if \(VISTA\.nombre === 'ocupacion'\) return renderOcupacionOperario\(\);/);
+  assert.strictEqual((idx.match(/return renderOcupacionOperario\(\)/g) || []).length, 1, 'una sola ruta');
   assert.match(idx, /<\?!= incluir_\('OcupacionSieUI'\) \?>/);
   assert.ok(fs.existsSync(path.join(OPERARIO, 'OcupacionSieUI.html')));
   // la pestaña de jefe va justo detrás de «SIE por ubicar»
   assert.ok(idx.indexOf("nombre: 'sie', label") < idx.indexOf("nombre: 'ocupacion', label"));
-  // el rótulo del menú nunca puede romper el resto del menú
-  assert.match(idx, /try \{ OCU_contadorMenu_\(\); \} catch/);
+});
+
+test('el botón grande: mismo id y rótulo en las dos pantallas, clic hacia la ocupación y vuelta según haya tienda o no', () => {
+  const p = pantalla();
+  const b = p.OCU_botonMenu_();
+  assert.match(b, /class="btn-flujo ocupacion" id="flujoOcupacion"/);
+  assert.match(b, /Ocupación SIE/);
+  assert.match(b, /id="cont-flujoOcupacion"/, 'aquí se escribe «Último registro…»');
+  const ui = leer('OcupacionSieUI.html');
+  assert.match(ui, /b\.onclick = function \(\) \{ entrarFlujo_\('ocupacion'\); \}/);
+  assert.match(ui, /\(TIENDA_ACTIVA \? 'Menú' : 'Inicio'\)/, 'sin tienda, la flecha vuelve al inicio');
 });
 
 test('el servidor y la pantalla exponen las funciones que se llaman desde el navegador', () => {

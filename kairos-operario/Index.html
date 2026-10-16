@@ -525,12 +525,13 @@
         return renderPanel();
       }
       if (!OPERARIO) return renderElegirOperarios();
+      // La ocupación del almacén SIE no depende de la tienda: se abre también desde la pantalla de elegir tienda.
+      if (VISTA.nombre === 'ocupacion') return renderOcupacionOperario();
       if (!TIENDA_ACTIVA) return renderElegirTienda();
       if (VISTA.nombre === 'elegirTienda') return renderElegirTienda();
       if (VISTA.nombre === 'menu') return renderMenuFlujos();
       if (VISTA.nombre === 'cola') return renderCola();
       if (VISTA.nombre === 'revision') return renderRevisionesOperario();
-      if (VISTA.nombre === 'ocupacion') return renderOcupacionOperario();
       if (VISTA.nombre === 'revisionDetalle') return renderRevisionDetalle();
       if (VISTA.nombre === 'historial') return renderHistorialHoy();
       if (VISTA.nombre === 'detalle') return renderDetalle();
@@ -706,10 +707,16 @@
     }
 
     function renderElegirTienda() {
+      // Ocupación SIE (Mijas y Marbella): no pertenece a una tienda, así que se abre desde aquí sin elegir ninguna.
+      // Si su pantalla fallara, la elección de tienda sigue funcionando sin el botón.
+      var ocuBoton = '';
+      try { ocuBoton = OCU_botonMenu_(); } catch (e) { console.warn('Ocupación SIE: ' + e); }
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
         '<h1>Kairos · Operario</h1><p class="meta">' + escHtmlSie_(OPERARIO) + ' — ¿qué tienda?</p>' +
-        '<div class="grid-tiendas" id="gridTiendas">Cargando…</div>';
+        '<div class="grid-tiendas" id="gridTiendas">Cargando…</div>' +
+        (ocuBoton ? '<p class="meta" style="margin:16px 0 8px;">Sin elegir tienda</p><div class="grid-flujos">' + ocuBoton + '</div>' : '');
       sincronizarPickers_();
+      try { OCU_enlazarBoton_(); } catch (e) { console.warn('Ocupación SIE: ' + e); }
       google.script.run.withSuccessHandler(function (json) {
         const conteo = JSON.parse(json);
         document.getElementById('gridTiendas').innerHTML =
@@ -746,6 +753,8 @@
         return '<button class="btn-flujo ' + clase + '" id="' + id + '"><span class="avatar">' + icono + '</span>' +
           '<span class="flujo-info"><span>' + titulo + '</span><span class="contador-tienda" id="cont-' + id + '">…</span></span></button>';
       }
+      var ocuBoton = '';
+      try { ocuBoton = OCU_botonMenu_(); } catch (e) { console.warn('Ocupación SIE: ' + e); }
       document.getElementById('app').innerHTML = renderBrandHeaderHtml_() +
         '<h1>Kairos · Operario</h1>' +
         '<p class="meta">' + escHtmlSie_(OPERARIO) + ' · ' + (CFG_TIENDA_NOMBRE[TIENDA_ACTIVA] || TIENDA_ACTIVA) + ' — ¿qué vas a hacer?</p>' +
@@ -753,7 +762,7 @@
           boton('pedidos', '📦', 'Pedidos', 'flujoPedidos') +
           boton('refill', '🔄', 'Refill', 'flujoRefill') +
           boton('revision', '🔍', 'Revisión de stock', 'flujoRevision') +
-          boton('ocupacion', '📊', 'Ocupación SIE', 'flujoOcupacion') +
+          ocuBoton +
         '</div>' +
         '<div id="operarioBar"><div class="ob-acciones">' +
           '<button class="btn-ob btn-ob-tienda" id="verHistorial" type="button">📋 Historial de hoy</button>' +
@@ -765,7 +774,6 @@
       document.getElementById('flujoPedidos').onclick = function () { entrarFlujo_('pedidos'); };
       document.getElementById('flujoRefill').onclick = function () { entrarFlujo_('refill'); };
       document.getElementById('flujoRevision').onclick = function () { entrarFlujo_('revision'); };
-      document.getElementById('flujoOcupacion').onclick = function () { entrarFlujo_('ocupacion'); };
       document.getElementById('verHistorial').onclick = function () { VISTA = { nombre: 'historial', peticionId: null }; render(); };
       document.getElementById('cambiarTienda').onclick = function () { VISTA = { nombre: 'elegirTienda', peticionId: null }; render(); };
       document.getElementById('cambiarOperario').onclick = function () {
@@ -791,8 +799,8 @@
         const c = document.getElementById('cont-flujoRevision');
         if (c) c.textContent = n + (n === 1 ? ' pendiente' : ' pendientes');
       }).listarRevisionesTienda(TIENDA_ACTIVA);
-      // Si esta pantalla fallara, el menú sigue funcionando: solo se quedaría sin el rótulo «Último registro».
-      try { OCU_contadorMenu_(); } catch (e) { console.warn('Ocupación SIE: ' + e); }
+      // Si esta pantalla fallara, el menú sigue funcionando: solo se quedaría sin el botón o sin el rótulo «Último registro».
+      try { OCU_enlazarBoton_(); } catch (e) { console.warn('Ocupación SIE: ' + e); }
     }
 
     function renderCola() {
