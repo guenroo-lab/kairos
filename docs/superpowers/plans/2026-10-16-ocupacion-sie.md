@@ -7,6 +7,7 @@ probado. DESPLEGADOS con el «sí» de Pedro: el motor (@27), Kairos operario (v
 |---|---|---|---|
 | Motor `AKfycbw1ssf…` @27 | 16/10 | viva == local antes de subir; pull v27 == local; contra v26 solo `Api.js` nuevo y 3 líneas de `doGet` | `-V 26` |
 | Kairos operario `AKfycbzdmLGT…` @83 | 16/10 | v82 == git 7ac298e antes de subir; pull v83 == commit 2d4072a == árbol; contra v82 solo `Index.html` + `Ocupacion.js` + `OcupacionSieUI.html` | `-V 82` |
+| Kairos operario @84 (cambio pedido por Pedro: el botón también en la pantalla de elegir tienda) | 16/10 | v83 == commit 2d4072a antes; pull v84 == commit a9b174b; contra v83 solo `Index.html` y `OcupacionSieUI.html` | `-V 83` (o `-V 82` para quitar la función) |
 | Centinela `AKfycbwmhHW…` @81 | 16/10 | v80 == commit f1fae2e antes; subida = v80 + mis 4 ficheros del commit 12fe9c0; pull v81 == 12fe9c0; contra v80 solo cambian `OcupacionSie.gs`, `OcupacionSieUI.html`, `Config.gs`, `ShellUI.html` (el `CargasUI.html` ajeno no sube) | `-V 80` |
 
 El endpoint del motor no se pudo abrir desde aquí (SSO de Adeo): la primera prueba real de la llamada Kairos → motor es la
